@@ -1,0 +1,8 @@
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/
+
+docs/

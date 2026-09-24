@@ -6,3 +6,6 @@ Thumbs.db
 node_modules/
 
 docs/
+
+# Local diagnostics must never enter version control.
+/tmp/

@@ -1,36 +1,54 @@
 import type { FastifyInstance } from 'fastify';
-import { config } from '../config.js';
 import { maxApi } from './client.js';
+import { upsertUser } from '../users/service.js';
+import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
 
 export function registerMaxWebhook(app: FastifyInstance) {
   app.post('/webhook/max', async (request, reply) => {
-    // TODO: как только увидите реальные заголовки от MAX, проверить секрет/подпись здесь.
-    // Пока — просто лог, чтобы увидеть форму данных.
     app.log.info({ body: request.body }, 'MAX update received');
 
     const update = request.body as any;
 
     try {
       if (update?.update_type === 'message_created') {
+        // TODO: поля sender/chat_id — предположение по типовой структуре, сверить с реальным payload
         const chatId = update.message?.recipient?.chat_id ?? update.message?.chat_id;
-        const text = update.message?.body?.text ?? update.message?.text;
-        app.log.info({ chatId, text }, 'incoming text message');
+        const text = (update.message?.body?.text ?? update.message?.text ?? '').trim();
+        const senderId = update.message?.sender?.user_id ?? update.sender?.user_id;
+        const senderName = update.message?.sender?.name ?? update.sender?.name;
 
-        if (chatId) {
-          // Заглушка — сюда подключим Dialog Engine на следующем шаге
-          await maxApi.sendMessage(chatId, 'Привет! Скоро я научусь принимать вакансии 🙂');
+        if (chatId && senderId) {
+          await upsertUser(String(senderId), String(chatId), senderName);
+
+          if (text === '/новая_вакансия') {
+            await startFlow(chatId, 'new_vacancy');
+          } else if (text === '/отмена') {
+            await cancelFlow(chatId);
+          } else {
+            const handled = await handleAnswer(chatId, text);
+            if (!handled) {
+              await maxApi.sendMessage(chatId, 'Напишите /новая_вакансия, чтобы создать вакансию.');
+            }
+          }
         }
       }
 
       if (update?.update_type === 'message_callback') {
-        app.log.info({ payload: update.callback?.payload }, 'button pressed');
-        // TODO: обработка смены статуса воронки
+        // TODO: реальные пути для chat_id/payload/user — сверить на первом живом нажатии кнопки
+        const chatId = update.callback?.message?.recipient?.chat_id ?? update.callback?.chat_id;
+        const payload = update.callback?.payload;
+
+        if (chatId && payload) {
+          const handled = await handleAnswer(chatId, payload);
+          if (!handled) {
+            app.log.warn({ chatId, payload }, 'callback received but no active dialog session');
+          }
+        }
       }
     } catch (err) {
       app.log.error(err, 'failed to handle MAX update');
     }
 
-    // MAX ждёт быстрый 200 OK, иначе будет ретраить доставку
     reply.code(200).send({ ok: true });
   });
 }

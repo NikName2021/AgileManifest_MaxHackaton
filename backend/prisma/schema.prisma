@@ -66,3 +66,12 @@ model BenchmarkCache {
   @@id([regionCode, category])
   @@map("benchmark_cache")
 }
+
+model DialogSession {
+  chatId    String   @id @map("chat_id")
+  step      Int      @default(0)
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dialog_sessions")
+}

@@ -1,4 +1,5 @@
 import type { DialogFlow } from './types.js';
+import { publishVacancyCard } from '../vacancies/publish.js';
 import { db } from '../db.js';
 
 function notEmpty(raw: string) {
@@ -39,8 +40,8 @@ export const vacancyFlow: DialogFlow = {
     ],
 
     async onComplete(chatId, data) {
-    // TODO (Фаза 2, следующий шаг): здесь подключим Market Benchmark Client (раздел 8 ТЗ)
-    // и покажем работодателю бенчмарк перед сохранением. Пока сохраняем сразу.
+        // TODO (следующий шаг): подключить Market Benchmark Client (раздел 8 ТЗ)
+        // и показать работодателю бенчмарк перед сохранением. Пока сохраняем и публикуем сразу.
         const employer = await db.user.findFirst({ where: { chatId } });
         if (!employer) {
             return 'Не нашёл вас в базе — попробуйте написать /новая_вакансия ещё раз.';
@@ -55,26 +56,17 @@ export const vacancyFlow: DialogFlow = {
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,
-                description: data.requirements,
-                status: 'draft',
+                description: `${data.requirements}\n\nКонтакт: ${data.contact}`,
+                status: 'published',
             },
         });
 
-        const salaryText = vacancy.salaryMin && vacancy.salaryMax
-            ? `${vacancy.salaryMin}–${vacancy.salaryMax} ₽`
-            : 'не указана';
+        await publishVacancyCard(vacancy);
 
         return [
-            'Вакансия сохранена как черновик:',
-            '',
-            `**${vacancy.title}**`,
-            `Регион: ${vacancy.regionCode}`,
-            `График: ${vacancy.schedule}`,
-            `Зарплата: ${salaryText}`,
-            `Требования: ${vacancy.description}`,
-            `Контакт: ${data.contact}`,
-            '',
-            `ID вакансии: ${vacancy.id}. Публикацию карточки с кнопкой «Откликнуться» добавим следующим шагом.`,
+            'Вакансия сохранена и опубликована карточкой выше — с кнопкой «Откликнуться».',
+            'Как только кто-то откликнется, вы получите уведомление в этом чате.',
+            `ID вакансии: ${vacancy.id}.`,
         ].join('\n');
     },
 };

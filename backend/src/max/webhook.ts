@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { maxApi } from './client.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
+import { handleApplyClick } from '../application/service.js';
 
 export function registerMaxWebhook(app: FastifyInstance) {
   app.post('/webhook/max', async (request, reply) => {
@@ -37,8 +38,19 @@ export function registerMaxWebhook(app: FastifyInstance) {
         // TODO: реальные пути для chat_id/payload/user — сверить на первом живом нажатии кнопки
         const chatId = update.callback?.message?.recipient?.chat_id ?? update.callback?.chat_id;
         const payload = update.callback?.payload;
+        const senderId = update.callback?.user?.user_id ?? update.callback?.sender?.user_id;
+        const senderName = update.callback?.user?.name ?? update.callback?.sender?.name;
 
-        if (chatId && payload) {
+        if (chatId && senderId) {
+          await upsertUser(String(senderId), String(chatId), senderName);
+        }
+
+        if (chatId && payload?.startsWith('apply:')) {
+          const vacancyId = Number(payload.slice('apply:'.length));
+          if (Number.isFinite(vacancyId) && senderId) {
+            await handleApplyClick(chatId, String(senderId), vacancyId);
+          }
+        } else if (chatId && payload) {
           const handled = await handleAnswer(chatId, payload);
           if (!handled) {
             app.log.warn({ chatId, payload }, 'callback received but no active dialog session');

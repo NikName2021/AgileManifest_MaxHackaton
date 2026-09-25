@@ -26,12 +26,14 @@ function extractContactFromMessage(update: any): string | undefined {
 
 export function registerMaxWebhook(app: FastifyInstance) {
   app.post('/webhook/max', async (request, reply) => {
-    // Проверка секрета (раздел 7 ТЗ — "валидирует подпись/секрет"). Точный механизм, которым MAX
-    // подтверждает подлинность вебхука (заголовок/подпись), не подтверждён документацией на момент
-    // написания — поэтому используем гарантированно рабочий вариант: секрет зашит в сам URL вебхука
-    // при регистрации подписки (см. server.ts) и сверяется здесь как query-параметр.
+    // Проверка секрета (раздел 7 ТЗ — "валидирует подпись/секрет"). По официальной документации
+    // dev.max.ru (POST /subscriptions) MAX присылает секрет в заголовке X-Max-Bot-Api-Secret на
+    // каждом webhook-запросе — это подтверждённый, не угаданный механизм. Query-параметр в URL
+    // (см. server.ts) оставлен как запасной канал на случай, если прокси/туннель обрежет заголовок.
     if (config.maxWebhookSecret) {
-      const providedSecret = (request.query as any)?.secret;
+      const headerSecret = request.headers['x-max-bot-api-secret'];
+      const querySecret = (request.query as any)?.secret;
+      const providedSecret = headerSecret ?? querySecret;
       if (providedSecret !== config.maxWebhookSecret) {
         app.log.warn('MAX webhook: invalid or missing secret in request');
         return reply.code(401).send({ ok: false, error: 'invalid webhook secret' });
@@ -44,11 +46,13 @@ export function registerMaxWebhook(app: FastifyInstance) {
 
     try {
       if (update?.update_type === 'message_created') {
-        // TODO: поля sender/chat_id — предположение по типовой структуре, сверить с реальным payload
-        const chatId = toStringId(update.message?.recipient?.chat_id ?? update.message?.chat_id);
+        // chat_id/user_id: по документации Update-объект несёт chat_id/user и на верхнем уровне,
+        // и вложенно внутри message (message.recipient/message.sender) — пробуем оба варианта,
+        // так как какой из них реально используется для message_created, не подтверждено вживую.
+        const chatId = toStringId(update.message?.recipient?.chat_id ?? update.chat_id ?? update.message?.chat_id);
         const text = (update.message?.body?.text ?? update.message?.text ?? '').trim();
-        const senderId = update.message?.sender?.user_id ?? update.sender?.user_id;
-        const senderName = update.message?.sender?.name ?? update.sender?.name;
+        const senderId = update.message?.sender?.user_id ?? update.user?.user_id ?? update.sender?.user_id;
+        const senderName = update.message?.sender?.name ?? update.user?.name ?? update.sender?.name;
 
         if (chatId && senderId) {
           await upsertUser(String(senderId), String(chatId), senderName);
@@ -73,11 +77,12 @@ export function registerMaxWebhook(app: FastifyInstance) {
       }
 
       if (update?.update_type === 'message_callback') {
-        // TODO: реальные пути для chat_id/payload/user — сверить на первом живом нажатии кнопки
-        const chatId = toStringId(update.callback?.message?.recipient?.chat_id ?? update.callback?.chat_id);
+        // TODO: структура объекта callback (payload/callback_id) официальной документацией не
+        // подтверждена — chat_id/user_id пробуем и вложенно, и на верхнем уровне Update (см. выше).
+        const chatId = toStringId(update.callback?.message?.recipient?.chat_id ?? update.chat_id ?? update.callback?.chat_id);
         const payload = update.callback?.payload;
-        const senderId = update.callback?.user?.user_id ?? update.callback?.sender?.user_id;
-        const senderName = update.callback?.user?.name ?? update.callback?.sender?.name;
+        const senderId = update.callback?.user?.user_id ?? update.user?.user_id ?? update.callback?.sender?.user_id;
+        const senderName = update.callback?.user?.name ?? update.user?.name ?? update.callback?.sender?.name;
 
         if (chatId && senderId) {
           await upsertUser(String(senderId), String(chatId), senderName);

@@ -5,6 +5,7 @@ import { registerMaxWebhook } from './max/webhook.js';
 import { db } from './db.js';
 import { publishVacancyCard } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
+import { applyStatusChange } from './application/service.js';
 
 const app = Fastify({ logger: true });
 
@@ -123,7 +124,9 @@ app.patch('/api/applications/:id', async (request, reply) => {
     return reply.code(400).send({ error: 'status is required' });
   }
 
-  return db.application.update({ where: { id }, data: { status: body.status } });
+  // applyStatusChange общий с обработчиком кнопок в чате — кандидат получит уведомление
+  // в MAX и при смене статуса через API, не только через кнопки в чате работодателя.
+  return applyStatusChange(id, body.status);
 });
 
 app.get('/api/benchmark', async (request, reply) => {

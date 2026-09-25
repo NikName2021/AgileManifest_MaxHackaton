@@ -2,7 +2,20 @@ import type { FastifyInstance } from 'fastify';
 import { maxApi } from './client.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
-import { handleApplyClick } from '../application/service.js';
+import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
+
+// TODO: точная структура вложения для нажатия кнопки request_contact не подтверждена живым
+// тестом — предположение по типовому шаблону контакт-ботов. Если не сработает на живом MAX,
+// у кандидата всегда есть фолбэк — просто написать контакт текстом (обрабатывается тем же путём).
+function extractContactFromMessage(update: any): string | undefined {
+    const text = (update.message?.body?.text ?? update.message?.text ?? '').trim();
+    if (text) return text;
+
+    const attachments = update.message?.body?.attachments ?? [];
+    const contactAttachment = attachments.find((a: any) => a?.type === 'contact');
+    const phone = contactAttachment?.payload?.vcf_phone ?? contactAttachment?.payload?.phone;
+    return phone ? String(phone) : undefined;
+}
 
 export function registerMaxWebhook(app: FastifyInstance) {
   app.post('/webhook/max', async (request, reply) => {
@@ -26,9 +39,15 @@ export function registerMaxWebhook(app: FastifyInstance) {
           } else if (text === '/отмена') {
             await cancelFlow(chatId);
           } else {
-            const handled = await handleAnswer(chatId, text);
-            if (!handled) {
-              await maxApi.sendMessage(chatId, 'Напишите /новая_вакансия, чтобы создать вакансию.');
+            // Порядок важен: сперва диалог создания вакансии, потом ожидание контакта после
+            // отклика — это два независимых "состояния ожидания" для одного chatId.
+            const dialogHandled = await handleAnswer(chatId, text);
+            if (!dialogHandled) {
+              const contact = extractContactFromMessage(update);
+              const pendingHandled = await resolvePendingApplication(chatId, String(senderId), contact);
+              if (!pendingHandled) {
+                await maxApi.sendMessage(chatId, 'Напишите /новая_вакансия, чтобы создать вакансию.');
+              }
             }
           }
         }
@@ -49,6 +68,12 @@ export function registerMaxWebhook(app: FastifyInstance) {
           const vacancyId = Number(payload.slice('apply:'.length));
           if (Number.isFinite(vacancyId) && senderId) {
             await handleApplyClick(chatId, String(senderId), vacancyId);
+          }
+        } else if (chatId && payload?.startsWith('app_status:')) {
+          const [, applicationIdStr, status] = payload.split(':');
+          const applicationId = Number(applicationIdStr);
+          if (Number.isFinite(applicationId) && status) {
+            await handleStatusChangeFromChat(chatId, applicationId, status);
           }
         } else if (chatId && payload) {
           const handled = await handleAnswer(chatId, payload);

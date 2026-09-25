@@ -1,5 +1,6 @@
 import type { DialogFlow } from './types.js';
 import { publishVacancyCard } from '../vacancies/publish.js';
+import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
 
 function notEmpty(raw: string) {
@@ -40,8 +41,6 @@ export const vacancyFlow: DialogFlow = {
     ],
 
     async onComplete(chatId, data) {
-        // TODO (следующий шаг): подключить Market Benchmark Client (раздел 8 ТЗ)
-        // и показать работодателю бенчмарк перед сохранением. Пока сохраняем и публикуем сразу.
         const employer = await db.user.findFirst({ where: { chatId } });
         if (!employer) {
             return 'Не нашёл вас в базе — попробуйте написать /новая_вакансия ещё раз.';
@@ -51,7 +50,7 @@ export const vacancyFlow: DialogFlow = {
             data: {
                 employerUserId: employer.id,
                 title: data.title,
-                regionCode: data.region, // TODO: сопоставить со справочником регионов trudvsem при подключении бенчмарка
+                regionCode: data.region, // TODO: сопоставить со справочником регионов trudvsem
                 category: 'general',      // TODO: добавить шаг выбора категории, когда появится справочник
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
@@ -63,10 +62,15 @@ export const vacancyFlow: DialogFlow = {
 
         await publishVacancyCard(vacancy);
 
+        // Бенчмарк — best-effort: если trudvsem недоступен, просто не показываем блок, вакансию это не ломает
+        const benchmark = await getBenchmark(vacancy.regionCode, vacancy.title.toLowerCase().trim());
+        const benchmarkText = formatBenchmarkText(benchmark);
+
         return [
             'Вакансия сохранена и опубликована карточкой выше — с кнопкой «Откликнуться».',
             'Как только кто-то откликнется, вы получите уведомление в этом чате.',
+            benchmarkText,
             `ID вакансии: ${vacancy.id}.`,
-        ].join('\n');
+        ].filter(Boolean).join('\n\n');
     },
 };

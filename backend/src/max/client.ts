@@ -29,31 +29,35 @@ export interface InlineButton {
   url?: string;
 }
 
+export interface SendMessageResult {
+  message?: { body?: {mid?: string} };
+}
+
 export const maxApi = {
   getMe: () => maxRequest('/me'),
 
   registerCommands: (commands: { name: string; description: string }[]) =>
     maxRequest('/me/commands', { method: 'PATCH', body: JSON.stringify({ commands }) }),
 
-  sendMessage: (chatId: string, text: string, buttons?: InlineButton[][]) =>
-    maxRequest('/messages', {
-      method: 'POST',
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        format: 'markdown',
-        ...(buttons
-          ? {
-              attachments: [
-                {
-                  type: 'inline_keyboard',
-                  payload: { buttons },
-                },
-              ],
-            }
-          : {}),
+    sendMessage: (chatId: string, text: string, buttons?: InlineButton[][]) =>
+      maxRequest<SendMessageResult>('/messages', {
+        method: 'POST',
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          format: 'markdown',
+          ...(buttons
+            ? {
+                attachments: [
+                  {
+                    type: 'inline_keyboard',
+                    payload: { buttons },
+                  },
+                ],
+              }
+            : {}),
+        }),
       }),
-    }),
 
   // Продакшен-путь получения обновлений: подписка на вебхук.
   // Тело подтверждено документацией — url, update_types, secret.

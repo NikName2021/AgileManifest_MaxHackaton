@@ -1,0 +1,322 @@
+openapi: 3.0.3
+info:
+  title: MAX Hiring Assistant API
+  description: >
+    Собственный backend API ассистента сезонного найма (трек «Эффективный бизнес», MAX-хакатон).
+    Используется ботом (Bot Gateway) и, опционально, мини-приложением для работодателя.
+    MVP-уровень авторизации: отдельного auth-слоя нет, backend доверяет вызывающей стороне
+    (бот аутентифицирован в MAX по токену). См. раздел 6 и 12 ТЗ в docs/.
+  version: 0.1.0
+servers:
+  - url: http://localhost:3000
+    description: Локальная разработка / Docker Compose
+paths:
+  /health:
+    get:
+      summary: Проверка живости сервиса
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Сервис работает
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+
+  /api/vacancies:
+    get:
+      summary: Список вакансий (опционально — по работодателю)
+      operationId: listVacancies
+      parameters:
+        - name: employer_id
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список вакансий
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vacancy'
+    post:
+      summary: Создать вакансию (черновик)
+      operationId: createVacancy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VacancyInput'
+      responses:
+        '201':
+          description: Вакансия создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vacancy'
+        '400':
+          description: Не переданы обязательные поля
+
+  /api/vacancies/{id}:
+    get:
+      summary: Получить вакансию по id
+      operationId: getVacancy
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Вакансия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vacancy'
+        '404':
+          description: Вакансия не найдена
+
+  /api/vacancies/{id}/publish:
+    post:
+      summary: Опубликовать вакансию (сгенерировать и отправить карточку с кнопкой «Откликнуться»)
+      operationId: publishVacancy
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Вакансия опубликована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vacancy'
+        '404':
+          description: Вакансия не найдена
+
+  /api/vacancies/{id}/close:
+    post:
+      summary: Закрыть вакансию
+      operationId: closeVacancy
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Вакансия закрыта
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vacancy'
+        '404':
+          description: Вакансия не найдена
+
+  /api/vacancies/{id}/applications:
+    get:
+      summary: Список откликов по вакансии (воронка)
+      operationId: listVacancyApplications
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Список откликов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+
+  /api/applications:
+    post:
+      summary: Зафиксировать отклик кандидата
+      operationId: createApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationInput'
+      responses:
+        '201':
+          description: Отклик создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: Не переданы обязательные поля
+        '409':
+          description: Кандидат уже откликался на эту вакансию
+
+  /api/applications/{id}:
+    patch:
+      summary: Сменить статус отклика (воронка)
+      operationId: updateApplicationStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [new, contacted, invited, hired, rejected]
+      responses:
+        '200':
+          description: Статус обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+
+  /api/benchmark:
+    get:
+      summary: Рыночный бенчмарк по зарплате (кэш, потом trudvsem.ru «Работа России»)
+      operationId: getBenchmark
+      parameters:
+        - name: region_code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Бенчмарк
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Benchmark'
+        '400':
+          description: Не переданы обязательные параметры
+        '404':
+          description: Данных по бенчмарку нет
+
+components:
+  parameters:
+    VacancyId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+    Vacancy:
+      type: object
+      properties:
+        id:
+          type: integer
+        employerUserId:
+          type: integer
+        title:
+          type: string
+        regionCode:
+          type: string
+        category:
+          type: string
+        schedule:
+          type: string
+          enum: [seasonal, temporary, permanent]
+        salaryMin:
+          type: integer
+          nullable: true
+        salaryMax:
+          type: integer
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [draft, published, closed]
+        cardMessageId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    VacancyInput:
+      type: object
+      required: [employer_id, title]
+      properties:
+        employer_id:
+          type: integer
+        title:
+          type: string
+        region_code:
+          type: string
+        category:
+          type: string
+        schedule:
+          type: string
+          enum: [seasonal, temporary, permanent]
+        salary_min:
+          type: integer
+        salary_max:
+          type: integer
+        description:
+          type: string
+
+    Application:
+      type: object
+      properties:
+        id:
+          type: integer
+        vacancyId:
+          type: integer
+        candidateUserId:
+          type: integer
+        status:
+          type: string
+          enum: [new, contacted, invited, hired, rejected]
+        contact:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ApplicationInput:
+      type: object
+      required: [vacancy_id, candidate_user_id]
+      properties:
+        vacancy_id:
+          type: integer
+        candidate_user_id:
+          type: integer
+        contact:
+          type: string
+
+    Benchmark:
+      type: object
+      properties:
+        avgSalaryMin:
+          type: integer
+          nullable: true
+        avgSalaryMax:
+          type: integer
+          nullable: true
+        vacancyCount:
+          type: integer
+        isFresh:
+          type: boolean

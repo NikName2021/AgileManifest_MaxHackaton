@@ -1,0 +1,179 @@
+# DATA-API.yaml
+#
+# ВАЖНО (проверить перед сдачей): организаторы хакатона просят файл "DATA-API.yaml по заданной
+# структуре", но точный образец/шаблон в разобранном тексте кейса не был приведён дословно —
+# только перечень обязательных полей (версия схемы, идентификатор команды, базовый адрес,
+# обязательные проверки, HTTP-методы, параметры, роли, статус-коды, формат ответа), см.
+# docs/ТЗ — Ассистент сезонного найма (MAX).md, раздел 11. Ниже — состав на основе этого
+# перечня. Если организаторы прикладывали отдельный файл-шаблон/пример DATA-API.yaml к кейсу —
+# сверьте ключи и вложенность с ним и поправьте при необходимости.
+
+schema_version: "1.0"
+
+team:
+  # TODO: вписать реальный идентификатор/название команды перед сдачей
+  id: "REPLACE_WITH_TEAM_ID"
+  name: "REPLACE_WITH_TEAM_NAME"
+
+api:
+  # TODO: вписать реальный HTTPS-адрес backend на время проверки жюри
+  base_url: "https://REPLACE_WITH_PUBLIC_HTTPS_URL"
+  spec: "./openapi.yaml"
+
+  health_check:
+    method: GET
+    path: /health
+    expected_status: 200
+
+  auth:
+    type: none
+    note: >
+      MVP-уровень: backend доверяет вызывающей стороне (бот аутентифицирован в MAX по токену).
+      Отдельного слоя авторизации собственного API на текущем этапе нет — см. раздел 12 ТЗ
+      ("Безопасность и работа с данными").
+
+  roles:
+    - name: employer
+      description: Работодатель — создаёт и публикует вакансии, видит отклики и меняет их статус
+      entry_point: "личный чат с ботом, команда /новая_вакансия"
+    - name: candidate
+      description: Кандидат — откликается на вакансию по кнопке в карточке
+      entry_point: "кнопка «Откликнуться» на карточке вакансии в MAX"
+
+  endpoints:
+    - method: GET
+      path: /api/vacancies
+      role: employer
+      params:
+        - name: employer_id
+          in: query
+          required: false
+          type: integer
+      responses:
+        "200": "array of Vacancy"
+
+    - method: POST
+      path: /api/vacancies
+      role: employer
+      params:
+        - name: employer_id
+          in: body
+          required: true
+          type: integer
+        - name: title
+          in: body
+          required: true
+          type: string
+      responses:
+        "201": "Vacancy"
+        "400": "validation error"
+
+    - method: GET
+      path: /api/vacancies/{id}
+      role: employer
+      params:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        "200": "Vacancy"
+        "404": "not found"
+
+    - method: POST
+      path: /api/vacancies/{id}/publish
+      role: employer
+      params:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        "200": "Vacancy"
+        "404": "not found"
+
+    - method: POST
+      path: /api/vacancies/{id}/close
+      role: employer
+      params:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        "200": "Vacancy"
+        "404": "not found"
+
+    - method: GET
+      path: /api/vacancies/{id}/applications
+      role: employer
+      params:
+        - name: id
+          in: path
+          required: true
+          type: integer
+      responses:
+        "200": "array of Application"
+
+    - method: POST
+      path: /api/applications
+      role: candidate
+      params:
+        - name: vacancy_id
+          in: body
+          required: true
+          type: integer
+        - name: candidate_user_id
+          in: body
+          required: true
+          type: integer
+        - name: contact
+          in: body
+          required: false
+          type: string
+      responses:
+        "201": "Application"
+        "400": "validation error"
+        "409": "duplicate application"
+
+    - method: PATCH
+      path: /api/applications/{id}
+      role: employer
+      params:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: status
+          in: body
+          required: true
+          type: string
+          enum: [new, contacted, invited, hired, rejected]
+      responses:
+        "200": "Application"
+
+    - method: GET
+      path: /api/benchmark
+      role: employer
+      params:
+        - name: region_code
+          in: query
+          required: true
+          type: string
+        - name: category
+          in: query
+          required: true
+          type: string
+      responses:
+        "200": "Benchmark"
+        "400": "validation error"
+        "404": "no data"
+
+  response_format:
+    content_type: application/json
+    error_shape:
+      error: string
+
+test_data:
+  # TODO: положить тестовые данные (JSON/CSV) перед сдачей — см. раздел 11 ТЗ
+  path: "./test-data/"

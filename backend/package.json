@@ -1,0 +1,26 @@
+{
+  "name": "max-hiring-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env NODE_EXTRA_CA_CERTS=./russian_ca_bundle.pem tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "cross-env NODE_EXTRA_CA_CERTS=./russian_ca_bundle.pem node dist/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "cross-env": "^10.1.0",
+    "prisma": "^6.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

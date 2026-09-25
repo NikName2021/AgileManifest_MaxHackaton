@@ -58,6 +58,44 @@ docker compose up --build
 
 Отменить диалог на любом шаге — команда `/отмена`.
 
+## Переменные окружения (`backend/.env`, см. `backend/.env.example`)
+
+| Переменная | Обязательна | Назначение |
+|---|---|---|
+| `MAX_BOT_TOKEN` | да | Токен бота, выдаётся организаторами хакатона |
+| `MAX_API_BASE_URL` | нет (есть значение по умолчанию) | Базовый URL MAX Bot API — `https://platform-api2.max.ru` |
+| `MAX_WEBHOOK_SECRET` | нет | Секрет для проверки входящих вебхуков |
+| `PUBLIC_BASE_URL` | нет, но нужен для живого теста в MAX | Публичный HTTPS-адрес backend (например, ngrok-туннель) — если задан, бот при старте сам регистрирует вебхук-подписку в MAX на `<PUBLIC_BASE_URL>/webhook/max` |
+| `DATABASE_URL` | да | Строка подключения к Postgres |
+| `PORT` | нет (по умолчанию 3000) | Порт, на котором слушает backend |
+
+## Порты
+
+- `3000` — backend (Fastify), настраивается через `PORT`
+- `5434` — Postgres (проброшен наружу из контейнера `db`, внутри Docker-сети — стандартный `5432`)
+
+## Модель данных
+
+| Таблица | Ключевые поля | Назначение |
+|---|---|---|
+| `users` | `id`, `max_user_id`, `chat_id`, `display_name`, `phone` (nullable) | Все пользователи бота |
+| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `status` (draft/published/closed), `card_message_id`, `created_at` | Вакансии, созданные через бота |
+| `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
+| `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
+| `dialog_sessions` | `chat_id`, `step`, `data`, `updated_at` | Текущий шаг диалога создания вакансии (переживает рестарт backend) |
+| `pending_applications` | `chat_id`, `vacancy_id`, `created_at` | Ожидание контакта от кандидата после нажатия «Откликнуться», до сохранения отклика |
+
+## Остановка и перезапуск
+
+```
+docker compose down          # остановить контейнеры, данные в volume сохраняются
+docker compose down -v       # остановить и полностью стереть данные Postgres
+docker compose up -d         # запустить снова (без пересборки)
+docker compose up --build    # запустить с пересборкой образов
+```
+
+Для локальной разработки без Docker (`npm run dev`) — остановка обычным `Ctrl+C`, БД (запущенная через `docker compose up -d db`) отдельно останавливается той же командой `docker compose down`.
+
 ## Собственный API
 
 REST/JSON, без отдельного auth-слоя на MVP (см. `docs/ТЗ...`, раздел 12). Полный список ручек,

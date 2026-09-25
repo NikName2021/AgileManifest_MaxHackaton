@@ -68,6 +68,14 @@ model BenchmarkCache {
   @@map("benchmark_cache")
 }
 
+model PendingApplication {
+  chatId    String   @id @map("chat_id")
+  vacancyId Int      @map("vacancy_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("pending_applications")
+}
+
 model DialogSession {
   chatId    String   @id @map("chat_id")
   step      Int      @default(0)

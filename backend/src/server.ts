@@ -5,6 +5,7 @@ import { registerMaxWebhook } from './max/webhook.js';
 import { db } from './db.js';
 import { publishVacancyCard } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
+import { applyStatusChange } from './application/service.js';
 
 const app = Fastify({ logger: true });
 
@@ -123,7 +124,9 @@ app.patch('/api/applications/:id', async (request, reply) => {
     return reply.code(400).send({ error: 'status is required' });
   }
 
-  return db.application.update({ where: { id }, data: { status: body.status } });
+  // applyStatusChange общий с обработчиком кнопок в чате — кандидат получит уведомление
+  // в MAX и при смене статуса через API, не только через кнопки в чате работодателя.
+  return applyStatusChange(id, body.status);
 });
 
 app.get('/api/benchmark', async (request, reply) => {
@@ -173,6 +176,30 @@ async function start() {
       { name: 'отмена', description: 'Отменить текущий диалог' },
     ]);
     app.log.info({ me }, 'connected to MAX as bot');
+
+    if (config.publicBaseUrl) {
+      try {
+        const webhookUrl = `${config.publicBaseUrl}/webhook/max`;
+        // Идемпотентность: не плодим дублирующие подписки при каждом рестарте backend —
+        // TODO: поле с URL в ответе /subscriptions называется по документации, не проверено живым вызовом.
+        const existing = (await maxApi.listSubscriptions()) as { subscriptions?: { url?: string }[] };
+        const alreadySubscribed = existing?.subscriptions?.some((s) => s.url === webhookUrl);
+
+        if (!alreadySubscribed) {
+          await maxApi.createSubscription(webhookUrl, ['message_created', 'message_callback']);
+          app.log.info({ webhookUrl }, 'MAX webhook subscription registered');
+        } else {
+          app.log.info({ webhookUrl }, 'MAX webhook subscription already registered, skipping');
+        }
+      } catch (subErr) {
+        app.log.error(subErr, 'failed to register MAX webhook subscription');
+      }
+    } else {
+      app.log.warn(
+        'PUBLIC_BASE_URL is not set — MAX webhook subscription NOT registered, bot will not receive live updates. ' +
+          'Set PUBLIC_BASE_URL (e.g. an ngrok URL) before a live MAX test.'
+      );
+    }
   } catch (err) {
     app.log.error(err, 'failed to reach MAX API — проверьте MAX_BOT_TOKEN');
   }

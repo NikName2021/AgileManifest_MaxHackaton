@@ -79,7 +79,7 @@ docker compose up --build
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
 | `users` | `id`, `max_user_id`, `chat_id`, `display_name`, `phone` (nullable) | Все пользователи бота |
-| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `status` (draft/published/closed), `card_message_id`, `created_at` | Вакансии, созданные через бота |
+| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `status` (draft/published/closed), `card_message_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота |
 | `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
 | `dialog_sessions` | `chat_id`, `step`, `data`, `updated_at` | Текущий шаг диалога создания вакансии (переживает рестарт backend) |
@@ -112,8 +112,11 @@ REST/JSON, без отдельного auth-слоя на MVP (см. `docs/ТЗ.
 - Структура ответа MAX Bot API (`message_created`/`message_callback`) и trudvsem.ru API
   подтверждена по документации, но не полным набором живых вызовов — помечено `TODO` в коде
   там, где это существенно.
-- Контакт кандидата для отклика отдельно не запрашивается — работодатель видит его MAX-профиль
-  и связывается через чат.
+- Напоминание работодателю о вакансии без откликов проверяется раз в час (`CHECK_INTERVAL_MS`
+  в `backend/src/vacancies/reminders.ts`), а не мгновенно по истечении 48 часов — точность в пределах часа.
+- Ограничение частоты запросов к trudvsem — фиксированный минимальный интервал между вызовами
+  (`backend/src/trudvsem/rateLimiter.ts`), не основано на официально задокументированных лимитах —
+  они нигде не опубликованы.
 
 ## Статус
 
@@ -127,6 +130,8 @@ REST/JSON, без отдельного auth-слоя на MVP (см. `docs/ТЗ.
 - [x] Интеграция с trudvsem.ru (рыночный бенчмарк, кэш 24ч)
 - [x] Собственный REST API (`openapi.yaml`, `DATA-API.yaml`), тестовые данные
 - [x] `.dockerignore`
+- [x] Ограничение частоты запросов к trudvsem + напоминание работодателю о вакансии
+      без откликов дольше 48 часов
 - [ ] Живой тест сценария через реальный MAX-чат (ngrok/webhook), запись demo/скриншотов
 - [ ] PDF-презентация
 - [ ] Мини-приложение (Could Have, раздел 9 ТЗ) — по остатку времени

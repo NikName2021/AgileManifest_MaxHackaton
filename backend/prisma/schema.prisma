@@ -35,6 +35,7 @@ model Vacancy {
   status         String        @default("draft") // draft | published | closed
   cardMessageId  String?       @map("card_message_id")
   createdAt      DateTime      @default(now()) @map("created_at")
+  reminderSentAt DateTime?     @map("reminder_sent_at")
 
   applications   Application[]
 

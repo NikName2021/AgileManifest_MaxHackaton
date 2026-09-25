@@ -6,6 +6,7 @@ import { db } from './db.js';
 import { publishVacancyCard } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
 import { applyStatusChange } from './application/service.js';
+import { startStaleVacancyReminders } from './vacancies/reminders.js';
 
 const app = Fastify({ logger: true });
 
@@ -203,6 +204,8 @@ async function start() {
   } catch (err) {
     app.log.error(err, 'failed to reach MAX API — проверьте MAX_BOT_TOKEN');
   }
+
+  startStaleVacancyReminders();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }

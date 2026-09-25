@@ -176,6 +176,30 @@ async function start() {
       { name: 'отмена', description: 'Отменить текущий диалог' },
     ]);
     app.log.info({ me }, 'connected to MAX as bot');
+
+    if (config.publicBaseUrl) {
+      try {
+        const webhookUrl = `${config.publicBaseUrl}/webhook/max`;
+        // Идемпотентность: не плодим дублирующие подписки при каждом рестарте backend —
+        // TODO: поле с URL в ответе /subscriptions называется по документации, не проверено живым вызовом.
+        const existing = (await maxApi.listSubscriptions()) as { subscriptions?: { url?: string }[] };
+        const alreadySubscribed = existing?.subscriptions?.some((s) => s.url === webhookUrl);
+
+        if (!alreadySubscribed) {
+          await maxApi.createSubscription(webhookUrl, ['message_created', 'message_callback']);
+          app.log.info({ webhookUrl }, 'MAX webhook subscription registered');
+        } else {
+          app.log.info({ webhookUrl }, 'MAX webhook subscription already registered, skipping');
+        }
+      } catch (subErr) {
+        app.log.error(subErr, 'failed to register MAX webhook subscription');
+      }
+    } else {
+      app.log.warn(
+        'PUBLIC_BASE_URL is not set — MAX webhook subscription NOT registered, bot will not receive live updates. ' +
+          'Set PUBLIC_BASE_URL (e.g. an ngrok URL) before a live MAX test.'
+      );
+    }
   } catch (err) {
     app.log.error(err, 'failed to reach MAX API — проверьте MAX_BOT_TOKEN');
   }

@@ -1,8 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { maxApi } from './client.js';
+import { config } from '../config.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
 import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
+
+// MAX может присылать chat_id/user_id и числом, и строкой — в схеме БД это String,
+// поэтому всегда приводим к строке в одном месте, а не полагаемся на неявное приведение Prisma.
+function toStringId(raw: unknown): string | undefined {
+    return raw !== undefined && raw !== null ? String(raw) : undefined;
+}
 
 // TODO: точная структура вложения для нажатия кнопки request_contact не подтверждена живым
 // тестом — предположение по типовому шаблону контакт-ботов. Если не сработает на живом MAX,
@@ -19,6 +26,18 @@ function extractContactFromMessage(update: any): string | undefined {
 
 export function registerMaxWebhook(app: FastifyInstance) {
   app.post('/webhook/max', async (request, reply) => {
+    // Проверка секрета (раздел 7 ТЗ — "валидирует подпись/секрет"). Точный механизм, которым MAX
+    // подтверждает подлинность вебхука (заголовок/подпись), не подтверждён документацией на момент
+    // написания — поэтому используем гарантированно рабочий вариант: секрет зашит в сам URL вебхука
+    // при регистрации подписки (см. server.ts) и сверяется здесь как query-параметр.
+    if (config.maxWebhookSecret) {
+      const providedSecret = (request.query as any)?.secret;
+      if (providedSecret !== config.maxWebhookSecret) {
+        app.log.warn('MAX webhook: invalid or missing secret in request');
+        return reply.code(401).send({ ok: false, error: 'invalid webhook secret' });
+      }
+    }
+
     app.log.info({ body: request.body }, 'MAX update received');
 
     const update = request.body as any;
@@ -26,7 +45,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
     try {
       if (update?.update_type === 'message_created') {
         // TODO: поля sender/chat_id — предположение по типовой структуре, сверить с реальным payload
-        const chatId = update.message?.recipient?.chat_id ?? update.message?.chat_id;
+        const chatId = toStringId(update.message?.recipient?.chat_id ?? update.message?.chat_id);
         const text = (update.message?.body?.text ?? update.message?.text ?? '').trim();
         const senderId = update.message?.sender?.user_id ?? update.sender?.user_id;
         const senderName = update.message?.sender?.name ?? update.sender?.name;
@@ -55,7 +74,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
 
       if (update?.update_type === 'message_callback') {
         // TODO: реальные пути для chat_id/payload/user — сверить на первом живом нажатии кнопки
-        const chatId = update.callback?.message?.recipient?.chat_id ?? update.callback?.chat_id;
+        const chatId = toStringId(update.callback?.message?.recipient?.chat_id ?? update.callback?.chat_id);
         const payload = update.callback?.payload;
         const senderId = update.callback?.user?.user_id ?? update.callback?.sender?.user_id;
         const senderName = update.callback?.user?.name ?? update.callback?.sender?.name;

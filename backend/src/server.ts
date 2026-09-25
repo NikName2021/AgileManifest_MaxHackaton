@@ -180,7 +180,11 @@ async function start() {
 
     if (config.publicBaseUrl) {
       try {
-        const webhookUrl = `${config.publicBaseUrl}/webhook/max`;
+        // Секрет зашиваем в URL как query-параметр — см. комментарий в max/webhook.ts про то,
+        // почему это надёжнее, чем полагаться на непроверенный заголовок MAX.
+        const webhookUrl = config.maxWebhookSecret
+          ? `${config.publicBaseUrl}/webhook/max?secret=${encodeURIComponent(config.maxWebhookSecret)}`
+          : `${config.publicBaseUrl}/webhook/max`;
         // Идемпотентность: не плодим дублирующие подписки при каждом рестарте backend —
         // TODO: поле с URL в ответе /subscriptions называется по документации, не проверено живым вызовом.
         const existing = (await maxApi.listSubscriptions()) as { subscriptions?: { url?: string }[] };

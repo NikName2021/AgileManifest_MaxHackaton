@@ -10,8 +10,17 @@ const app = Fastify({ logger: true });
 
 registerMaxWebhook(app);
 
-// Служебный healthcheck — пригодится и для Docker, и для проверки, что backend жив
-app.get('/health', async () => ({ ok: true }));
+// Служебный healthcheck — пригодится и для Docker, и для проверки, что backend жив.
+// Проверяет не только сам процесс, но и реальную доступность БД (readiness, не просто liveness).
+app.get('/health', async (request, reply) => {
+  try {
+    await db.$queryRaw`SELECT 1`;
+    return { ok: true, db: 'up' };
+  } catch (err) {
+    request.log.error(err, 'health check: db unreachable');
+    return reply.code(503).send({ ok: false, db: 'down' });
+  }
+});
 
 // --- Собственный backend API (раздел 6 ТЗ) ---
 // MVP-уровень авторизации: доверяем telegram/MAX-контекст, отдельного auth-слоя нет.
@@ -128,6 +137,32 @@ app.get('/api/benchmark', async (request, reply) => {
   const benchmark = await getBenchmark(String(regionCode), String(category));
   if (!benchmark) return reply.code(404).send({ error: 'no benchmark data available' });
   return benchmark;
+});
+
+// Единый обработчик ошибок — чтобы наружу не утекал сырой стектрейс/формат Fastify,
+// и чтобы неожиданные ошибки (например нарушение внешнего ключа в Prisma) не роняли процесс,
+// а возвращали предсказуемый JSON. Часть "обработки краевых случаев" из Фазы 4 плана (раздел 16 ТЗ).
+app.setErrorHandler((err: any, request, reply) => {
+  request.log.error(err, 'unhandled request error');
+
+  // Валидация тела/параметров Fastify — 400 с понятным сообщением
+  if (err.validation) {
+    return reply.code(400).send({ error: 'validation failed', details: err.message });
+  }
+
+  // Частые коды ошибок Prisma
+  if (err.code === 'P2002') {
+    return reply.code(409).send({ error: 'conflict: duplicate record' });
+  }
+  if (err.code === 'P2003') {
+    return reply.code(400).send({ error: 'invalid reference: related record does not exist' });
+  }
+  if (err.code === 'P2025') {
+    return reply.code(404).send({ error: 'record not found' });
+  }
+
+  const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
+  return reply.code(status).send({ error: status === 500 ? 'internal server error' : err.message });
 });
 
 async function start() {

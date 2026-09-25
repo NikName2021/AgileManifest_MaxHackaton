@@ -29,8 +29,11 @@ export async function startFlow(chatId: string, flowName: string) {
 }
 
 export async function cancelFlow(chatId: string) {
-  await db.dialogSession.deleteMany({ where: { chatId } });
-  await maxApi.sendMessage(chatId, 'Ок, отменил текущий диалог.');
+  const deleted = await db.dialogSession.deleteMany({ where: { chatId } });
+  const text = deleted.count > 0
+    ? 'Ок, отменил текущий диалог.'
+    : 'Сейчас нет активного диалога — нечего отменять. Напишите /новая_вакансия, чтобы начать.';
+  await maxApi.sendMessage(chatId, text);
 }
 
 /**

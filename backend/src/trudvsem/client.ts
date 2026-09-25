@@ -1,3 +1,5 @@
+import { withTrudvsemRateLimit } from './rateLimiter.js';
+
 const BASE = 'https://opendata.trudvsem.ru/api/v1/vacancies';
 
 export interface TrudvsemVacancy {
@@ -18,7 +20,7 @@ export async function searchTrudvsemVacancies(query: string, limit = 100): Promi
     url.searchParams.set('text', query);
     url.searchParams.set('limit', String(limit));
 
-    const res = await fetch(url.toString());
+    const res = await withTrudvsemRateLimit(() => fetch(url.toString()));
     if (!res.ok) {
         throw new Error(`trudvsem API -> ${res.status}`);
     }

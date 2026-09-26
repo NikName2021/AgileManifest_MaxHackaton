@@ -8,6 +8,7 @@ import { Brand } from '../../shared/ui/Brand'
 import { authenticate, authUrl } from './auth'
 import { SessionContext, type Session } from './context'
 import { createVacancyRepository } from '../vacancies/api'
+import { createApplicationRepository } from '../applications/api'
 
 type Issue =
   | 'outside'
@@ -76,14 +77,21 @@ export function SessionGate({ children }: { children: ReactNode }) {
       try {
         const url = authUrl(config.apiBaseUrl, config.authPath, import.meta.env.PROD)
         const credentials = await authenticate(url, bridge.initData, controller.signal)
-        const vacancies = createVacancyRepository(config.apiBaseUrl, credentials.token, () => {
+        const expire = () => {
           update({ kind: 'issue', issue: 'unauthorized' })
-        })
+        }
+        const vacancies = createVacancyRepository(config.apiBaseUrl, credentials.token, expire)
+        const applications = createApplicationRepository(
+          config.apiBaseUrl,
+          credentials.token,
+          expire,
+        )
         update({
           kind: 'ready',
           session: {
             user: { id: credentials.userId, display_name: 'Мой кабинет' },
             vacancies,
+            applications,
             bridge,
             mode: 'max',
           },

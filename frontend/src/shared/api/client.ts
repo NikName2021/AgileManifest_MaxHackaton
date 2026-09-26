@@ -13,6 +13,20 @@ export class ApiError extends Error {
   }
 }
 
+export function authenticatedRequest(token: string, onUnauthorized: () => void) {
+  return async (url: string, options: RequestInit = {}): Promise<unknown> => {
+    try {
+      return await requestJson(url, {
+        ...options,
+        headers: { ...options.headers, Authorization: `Bearer ${token}` },
+      })
+    } catch (error) {
+      if (error instanceof ApiError && error.kind === 'unauthorized') onUnauthorized()
+      throw error
+    }
+  }
+}
+
 export async function requestJson(url: string, options: RequestInit = {}): Promise<unknown> {
   const timeout = AbortSignal.timeout(10000)
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout

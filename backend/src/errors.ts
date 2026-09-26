@@ -10,7 +10,14 @@ export type ErrorCode =
   | 'conflict'
   | 'upstream_error'
   | 'service_unavailable'
-  | 'internal_error';
+  | 'internal_error'
+  // Работодатель ещё не писал боту напрямую — публиковать карточку некуда. Отдельный код вместо
+  // общего upstream_error, чтобы frontend мог явно предложить открыть личный чат с ботом.
+  | 'employer_chat_missing'
+  // Публикация ушла в таймаут — неизвестно, дошла ли карточка до MAX. Вакансия остаётся
+  // published без cardMessageId; повторный вызов /publish безопасен (не создаёт дубликат) и
+  // либо подтвердит доставку, либо повторит отправку.
+  | 'card_delivery_unknown';
 
 export interface ErrorFields {
   [field: string]: string[];

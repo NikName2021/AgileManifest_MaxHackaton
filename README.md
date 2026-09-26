@@ -28,6 +28,7 @@ npm install
 cd ..
 docker compose up -d db
 cd backend
+npx prisma generate
 npm run prisma:migrate
 npm run dev
 ```
@@ -44,7 +45,10 @@ npm run dev
 docker compose up --build
 ```
 
-Поднимет и Postgres, и backend одной командой (сборка ≤5 минут — требование кейса).
+Поднимет и Postgres, и backend одной командой (сборка ≤5 минут — требование кейса). Backend при
+старте контейнера сам прогоняет непримененные Prisma-миграции (`npx prisma migrate deploy`), а
+`docker compose` ждёт готовности БД (healthcheck) перед стартом backend — вручную накатывать
+миграции в контейнере не нужно.
 
 ## Основной пользовательский сценарий (проверяется в MAX)
 
@@ -53,10 +57,12 @@ docker compose up --build
 3. Бот сохраняет вакансию, публикует карточку с кнопкой «Откликнуться» и показывает рыночный
    ориентир по зарплате (данные trudvsem.ru «Работа России», с кэшем на 24 часа).
 4. Кандидат нажимает «Откликнуться» на карточке — бот сохраняет отклик и уведомляет работодателя
-   в чате.
+   в чате. Если карточка переслана в чат/группу, где бота нет, на карточке есть вторая кнопка —
+   deep-link, открывающий приватный чат с ботом и продолжающий тот же сценарий отклика.
 5. Повторный отклик того же кандидата на ту же вакансию отклоняется (защита на уровне БД).
 
-Отменить диалог на любом шаге — команда `/отмена`.
+Отменить диалог на любом шаге — команда `/отмена` (сбрасывает и диалог создания вакансии, и
+ожидание контакта после «Откликнуться», если оно было активно).
 
 ## Переменные окружения (`backend/.env`, см. `backend/.env.example`)
 
@@ -64,10 +70,13 @@ docker compose up --build
 |---|---|---|
 | `MAX_BOT_TOKEN` | да | Токен бота, выдаётся организаторами хакатона |
 | `MAX_API_BASE_URL` | нет (есть значение по умолчанию) | Базовый URL MAX Bot API — `https://platform-api2.max.ru` |
-| `MAX_WEBHOOK_SECRET` | нет | Секрет для проверки входящих вебхуков |
+| `MAX_WEBHOOK_SECRET` | нет | Секрет для проверки входящих вебхуков (передаётся MAX в заголовке `X-Max-Bot-Api-Secret`) |
 | `PUBLIC_BASE_URL` | нет, но нужен для живого теста в MAX | Публичный HTTPS-адрес backend (например, ngrok-туннель) — если задан, бот при старте сам регистрирует вебхук-подписку в MAX на `<PUBLIC_BASE_URL>/webhook/max` |
 | `DATABASE_URL` | да | Строка подключения к Postgres |
 | `PORT` | нет (по умолчанию 3000) | Порт, на котором слушает backend |
+| `SESSION_SECRET` | нет (иначе выводится из `MAX_BOT_TOKEN`) | Секрет для подписи сессионных токенов мини-приложения |
+| `TEST_API_TOKEN` | нет, но нужен для проверки REST API жюри | Фиксированный bearer-токен для тестирования без реального MAX-логина (`Authorization: Bearer <TEST_API_TOKEN>`) |
+| `MAX_BOT_USERNAME` | нет (backend определяет сам через `/me`) | Username бота без `@` — нужен для deep-link кнопки на карточке вакансии |
 
 ## Порты
 
@@ -79,11 +88,16 @@ docker compose up --build
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
 | `users` | `id`, `max_user_id`, `chat_id`, `display_name`, `phone` (nullable) | Все пользователи бота |
-| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `status` (draft/published/closed), `card_message_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота |
-| `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
+| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
+| `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
 | `dialog_sessions` | `chat_id`, `step`, `data`, `updated_at` | Текущий шаг диалога создания вакансии (переживает рестарт backend) |
 | `pending_applications` | `chat_id`, `vacancy_id`, `created_at` | Ожидание контакта от кандидата после нажатия «Откликнуться», до сохранения отклика |
+
+`employer_chat_id` и `candidate_chat_id` — чат MAX, застывший один раз в момент публикации/отклика
+и используемый для всех будущих уведомлений по этой вакансии/отклику. Это отдельно от «текущего»
+`users.chat_id`, который обновляется на последний чат, откуда пользователь писал боту (нужен для
+самого диалога) — без разделения уведомление могло бы случайно уйти в другой чат/группу.
 
 ## Остановка и перезапуск
 
@@ -98,20 +112,26 @@ docker compose up --build    # запустить с пересборкой об
 
 ## Собственный API
 
-REST/JSON, без отдельного auth-слоя на MVP (см. `docs/ТЗ...`, раздел 12). Полный список ручек,
-схемы и коды ответов — в [`openapi.yaml`](openapi.yaml) и [`DATA-API.yaml`](DATA-API.yaml).
-Примеры запросов и пошаговый сценарий проверки напрямую через API (без MAX) — в
+REST/JSON, авторизация — bearer-токен (`Authorization: Bearer <token>`): либо сессия,
+выданная через `POST /api/auth/max` (проверка подписи `initData` мини-приложения MAX), либо
+фиксированный `TEST_API_TOKEN` из `.env` — для проверки жюри без реального MAX-логина.
+`GET /health` и `GET /api/benchmark` авторизации не требуют. Работодатель/кандидат
+определяются по токену, а не по полям тела запроса — эндпоинты возвращают только данные,
+принадлежащие вызывающему (403 на чужие вакансии/отклики). Полный список ручек, схемы и коды
+ответов — в [`openapi.yaml`](openapi.yaml) и [`DATA-API.yaml`](DATA-API.yaml). Примеры запросов
+и пошаговый сценарий проверки напрямую через API (без MAX) — в
 [`test-data/README.md`](test-data/README.md).
 
 ## Известные ограничения
 
 - Карточка вакансии публикуется в чат самого работодателя (для демо/пересылки кандидатам), а не
   в отдельную ленту вакансий для кандидатов — это отдельная задача за рамками текущего MVP.
+  Для отклика из пересланного чата есть deep-link кнопка (см. сценарий выше).
 - Регион вакансии — свободный текст от пользователя, без сопоставления со справочником кодов
   регионов trudvsem.ru; бенчмарк ищет только по названию должности, без фильтра по региону.
-- Структура ответа MAX Bot API (`message_created`/`message_callback`) и trudvsem.ru API
-  подтверждена по документации, но не полным набором живых вызовов — помечено `TODO` в коде
-  там, где это существенно.
+- Структура ответа MAX Bot API (`message_created`/`message_callback`/`bot_started`) и
+  trudvsem.ru API подтверждена по документации, но не полным набором живых вызовов — помечено
+  `TODO` в коде там, где это существенно.
 - Напоминание работодателю о вакансии без откликов проверяется раз в час (`CHECK_INTERVAL_MS`
   в `backend/src/vacancies/reminders.ts`), а не мгновенно по истечении 48 часов — точность в пределах часа.
 - Ограничение частоты запросов к trudvsem — фиксированный минимальный интервал между вызовами
@@ -122,13 +142,14 @@ REST/JSON, без отдельного auth-слоя на MVP (см. `docs/ТЗ.
 
 - [x] Скелет backend: Fastify-сервер, подключение к MAX Bot API подтверждено (`/me`)
 - [x] Схема БД (Prisma): users, vacancies, applications, benchmark_cache
-- [x] Docker-compose для Postgres + backend
+- [x] Docker-compose для Postgres + backend (healthcheck БД, миграции при старте контейнера)
 - [x] Приём вебхуков от MAX (эндпоинт есть; живой тест через реальный чат ещё не проводили)
 - [x] Диалог создания вакансии (Dialog Engine, 6 шагов)
-- [x] Публикация карточки вакансии с кнопкой «Откликнуться»
-- [x] Сценарий отклика кандидата и уведомление работодателя
+- [x] Публикация карточки вакансии с кнопкой «Откликнуться» (идемпотентно, с откатом при сбое)
+- [x] Сценарий отклика кандидата и уведомление работодателя, включая deep-link из чужого чата
 - [x] Интеграция с trudvsem.ru (рыночный бенчмарк, кэш 24ч)
 - [x] Собственный REST API (`openapi.yaml`, `DATA-API.yaml`), тестовые данные
+- [x] Авторизация REST API (initData MAX + сессии, `TEST_API_TOKEN` для жюри), owner-проверки
 - [x] `.dockerignore`
 - [x] Ограничение частоты запросов к trudvsem + напоминание работодателю о вакансии
       без откликов дольше 48 часов

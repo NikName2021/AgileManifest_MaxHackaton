@@ -3,18 +3,23 @@ info:
   title: MAX Hiring Assistant API
   description: >
     Собственный backend API ассистента сезонного найма (трек «Эффективный бизнес», MAX-хакатон).
-    Используется ботом (Bot Gateway) и, опционально, мини-приложением для работодателя.
-    MVP-уровень авторизации: отдельного auth-слоя нет, backend доверяет вызывающей стороне
-    (бот аутентифицирован в MAX по токену). См. раздел 6 и 12 ТЗ в docs/.
-  version: 0.1.0
+    Используется мини-приложением работодателя. Бот (Bot Gateway) обращается к бизнес-логике
+    напрямую, минуя HTTP API. Авторизация — bearer-токен: либо сессия, выданная через
+    POST /api/auth/max (проверка initData мини-приложения MAX), либо фиксированный
+    TEST_API_TOKEN для тестирования жюри без реального MAX-логина (см. раздел 12 ТЗ в docs/
+    и backend/.env.example). GET /health и GET /api/benchmark — без авторизации (публичные данные).
+  version: 0.2.0
 servers:
   - url: http://localhost:3000
     description: Локальная разработка / Docker Compose
+security:
+  - bearerAuth: []
 paths:
   /health:
     get:
       summary: Проверка живости сервиса
       operationId: healthCheck
+      security: []
       responses:
         '200':
           description: Сервис работает
@@ -26,17 +31,47 @@ paths:
                   ok:
                     type: boolean
                     example: true
+        '503':
+          description: БД недоступна
+
+  /api/auth/max:
+    post:
+      summary: Обменять initData мини-приложения MAX на сессионный токен
+      operationId: authWithMax
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [init_data]
+              properties:
+                init_data:
+                  type: string
+                  description: Сырая строка initData, переданная MAX мини-приложению
+      responses:
+        '200':
+          description: Сессия выдана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Bearer-токен для последующих запросов (Authorization Bearer <token>)
+                  user_id:
+                    type: integer
+        '400':
+          description: init_data не передан
+        '401':
+          description: Подпись initData неверна или истёк срок годности
 
   /api/vacancies:
     get:
-      summary: Список вакансий (опционально — по работодателю)
+      summary: Список собственных вакансий авторизованного работодателя
       operationId: listVacancies
-      parameters:
-        - name: employer_id
-          in: query
-          required: false
-          schema:
-            type: integer
       responses:
         '200':
           description: Список вакансий
@@ -46,8 +81,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Vacancy'
+        '401':
+          description: Не авторизован
     post:
-      summary: Создать вакансию (черновик)
+      summary: Создать вакансию (черновик) от имени авторизованного работодателя
       operationId: createVacancy
       requestBody:
         required: true
@@ -63,11 +100,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Vacancy'
         '400':
-          description: Не переданы обязательные поля
+          description: Ошибка валидации тела запроса
+        '401':
+          description: Не авторизован
 
   /api/vacancies/{id}:
     get:
-      summary: Получить вакансию по id
+      summary: Получить вакансию по id (только своя)
       operationId: getVacancy
       parameters:
         - $ref: '#/components/parameters/VacancyId'
@@ -78,12 +117,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Vacancy'
+        '401':
+          description: Не авторизован
+        '403':
+          description: Вакансия принадлежит другому работодателю
         '404':
           description: Вакансия не найдена
 
   /api/vacancies/{id}/publish:
     post:
-      summary: Опубликовать вакансию (сгенерировать и отправить карточку с кнопкой «Откликнуться»)
+      summary: >
+        Опубликовать вакансию (draft -> published): атомарный переход, сгенерировать и
+        отправить карточку с кнопкой «Откликнуться» в MAX. При сбое отправки статус
+        откатывается обратно в draft.
       operationId: publishVacancy
       parameters:
         - $ref: '#/components/parameters/VacancyId'
@@ -94,8 +140,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Vacancy'
+        '401':
+          description: Не авторизован
+        '403':
+          description: Вакансия принадлежит другому работодателю
         '404':
           description: Вакансия не найдена
+        '409':
+          description: Вакансия уже опубликована или закрыта
+        '502':
+          description: Не удалось отправить карточку в MAX (статус откатан в draft), повторите попытку
 
   /api/vacancies/{id}/close:
     post:
@@ -110,12 +164,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Vacancy'
+        '401':
+          description: Не авторизован
+        '403':
+          description: Вакансия принадлежит другому работодателю
         '404':
           description: Вакансия не найдена
 
   /api/vacancies/{id}/applications:
     get:
-      summary: Список откликов по вакансии (воронка)
+      summary: Список откликов по вакансии (воронка). Содержит контакты кандидатов — доступен только владельцу вакансии.
       operationId: listVacancyApplications
       parameters:
         - $ref: '#/components/parameters/VacancyId'
@@ -128,10 +186,16 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Application'
+        '401':
+          description: Не авторизован
+        '403':
+          description: Вакансия принадлежит другому работодателю
+        '404':
+          description: Вакансия не найдена
 
   /api/applications:
     post:
-      summary: Зафиксировать отклик кандидата
+      summary: Зафиксировать отклик авторизованного кандидата на опубликованную вакансию
       operationId: createApplication
       requestBody:
         required: true
@@ -141,19 +205,23 @@ paths:
               $ref: '#/components/schemas/ApplicationInput'
       responses:
         '201':
-          description: Отклик создан
+          description: Отклик создан (поле notified показывает, удалось ли уведомить работодателя в MAX)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Application'
         '400':
-          description: Не переданы обязательные поля
+          description: Ошибка валидации тела запроса
+        '401':
+          description: Не авторизован
+        '404':
+          description: Вакансия не найдена
         '409':
-          description: Кандидат уже откликался на эту вакансию
+          description: Вакансия не опубликована, либо кандидат уже откликался на неё
 
   /api/applications/{id}:
     patch:
-      summary: Сменить статус отклика (воронка)
+      summary: Сменить статус отклика (воронка) — только владелец вакансии
       operationId: updateApplicationStatus
       parameters:
         - name: id
@@ -174,16 +242,25 @@ paths:
                   enum: [new, contacted, invited, hired, rejected]
       responses:
         '200':
-          description: Статус обновлён
+          description: Статус обновлён (поле notified показывает, удалось ли уведомить кандидата в MAX)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Application'
+        '400':
+          description: Ошибка валидации тела запроса
+        '401':
+          description: Не авторизован
+        '403':
+          description: Вакансия принадлежит другому работодателю
+        '404':
+          description: Отклик не найден
 
   /api/benchmark:
     get:
       summary: Рыночный бенчмарк по зарплате (кэш, потом trudvsem.ru «Работа России»)
       operationId: getBenchmark
+      security: []
       parameters:
         - name: region_code
           in: query
@@ -208,6 +285,14 @@ paths:
           description: Данных по бенчмарку нет
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Токен из POST /api/auth/max, либо значение TEST_API_TOKEN (переменная окружения backend)
+        для тестирования без реального MAX-логина. Заголовок: Authorization: Bearer <token>.
+
   parameters:
     VacancyId:
       name: id
@@ -248,16 +333,22 @@ components:
         cardMessageId:
           type: string
           nullable: true
+        employerChatId:
+          type: string
+          nullable: true
+          description: >
+            Чат MAX, застывший в момент публикации/создания — именно сюда уходят все будущие
+            уведомления по этой вакансии, независимо от того, из какого чата работодатель
+            пишет боту позже.
         createdAt:
           type: string
           format: date-time
 
     VacancyInput:
       type: object
-      required: [employer_id, title]
+      required: [title]
+      description: employer_id больше не передаётся — работодатель определяется по Bearer-токену.
       properties:
-        employer_id:
-          type: integer
         title:
           type: string
         region_code:
@@ -269,10 +360,13 @@ components:
           enum: [seasonal, temporary, permanent]
         salary_min:
           type: integer
+          nullable: true
         salary_max:
           type: integer
+          nullable: true
         description:
           type: string
+          nullable: true
 
     Application:
       type: object
@@ -289,6 +383,16 @@ components:
         contact:
           type: string
           nullable: true
+        candidateChatId:
+          type: string
+          nullable: true
+          description: Чат MAX, застывший в момент отклика — сюда уходят уведомления о смене статуса.
+        notified:
+          type: boolean
+          description: >
+            Только в ответе POST /api/applications и PATCH /api/applications/{id} — удалось ли
+            отправить уведомление в MAX. false не означает ошибку запроса: данные уже сохранены,
+            просто сообщение в MAX не доставилось (см. notifyError в логах backend).
         createdAt:
           type: string
           format: date-time
@@ -298,14 +402,14 @@ components:
 
     ApplicationInput:
       type: object
-      required: [vacancy_id, candidate_user_id]
+      required: [vacancy_id]
+      description: candidate_user_id больше не передаётся — кандидат определяется по Bearer-токену.
       properties:
         vacancy_id:
           type: integer
-        candidate_user_id:
-          type: integer
         contact:
           type: string
+          nullable: true
 
     Benchmark:
       type: object

@@ -1,37 +1,35 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { getBotUsername } from '../max/botInfo.js';
-import { escapeMarkdown } from '../markdown.js';
+import { buildVacancyCardText } from './cardText.js';
 import type { Vacancy } from '@prisma/client';
 
 export class PublishError extends Error {
-    kind: 'not_found' | 'conflict';
-    constructor(kind: 'not_found' | 'conflict', message: string) {
+    kind: 'not_found' | 'conflict' | 'no_chat';
+    constructor(kind: 'not_found' | 'conflict' | 'no_chat', message: string) {
         super(message);
         this.kind = kind;
     }
 }
 
-export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
-    // Раньше при заполненном только одном конце вилки (например min без max) условие
-    // "salaryMin && salaryMax" было ложным целиком, и карточка показывала "по договорённости",
-    // хотя работодатель прямо указал число (раздел 2.5 хендоффа — "односторонняя вилка теряется").
-    const salaryText = vacancy.salaryMin && vacancy.salaryMax
-        ? `${vacancy.salaryMin}–${vacancy.salaryMax} ₽`
-        : vacancy.salaryMin
-          ? `от ${vacancy.salaryMin} ₽`
-          : vacancy.salaryMax
-            ? `до ${vacancy.salaryMax} ₽`
-            : 'по договорённости';
+// Таймаут (см. max/client.ts, AbortSignal.timeout) — единственный случай, когда мы НЕ знаем,
+// дошло ли сообщение до MAX: запрос мог как не уйти вовсе, так и уйти и просто не успеть
+// вернуть ответ. Любая другая ошибка (4xx/5xx с ответом, сетевой отказ до отправки) — это
+// подтверждённый отказ, для него откат в draft безопасен и не рискует задвоить карточку.
+function isAmbiguousDeliveryError(err: unknown): boolean {
+    return err instanceof Error && err.name === 'TimeoutError';
+}
 
-    const text = [
-        `**${escapeMarkdown(vacancy.title)}**`,
-        `Регион: ${escapeMarkdown(vacancy.regionCode)}`,
-        `График: ${escapeMarkdown(vacancy.schedule)}`,
-        `Зарплата: ${salaryText}`,
-        vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
-        vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
-    ].filter(Boolean).join('\n');
+export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
+    const text = buildVacancyCardText({
+        title: vacancy.title,
+        regionCode: vacancy.regionCode,
+        schedule: vacancy.schedule,
+        salaryMin: vacancy.salaryMin,
+        salaryMax: vacancy.salaryMax,
+        description: vacancy.description,
+        contactInfo: vacancy.contactInfo,
+    });
 
     const employer = await db.user.findUnique({ where: { id: vacancy.employerUserId } });
     // Целевой чат для карточки — застывший employerChatId вакансии, а не "текущий" chatId
@@ -41,7 +39,10 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
     // (плейсхолдер users.chatId для ещё не писавших боту пользователей мини-аппа) — тоже "нет чата".
     const targetChatId = vacancy.employerChatId || employer?.chatId;
     if (!targetChatId) {
-        throw new Error(`cannot publish vacancy ${vacancy.id}: no known chat to send the card to`);
+        // Типизированная ошибка (не просто Error) — server.ts отдаёт под неё отдельный код
+        // employer_chat_missing вместо общего upstream_error, чтобы frontend мог явно предложить
+        // работодателю сначала открыть личный чат с ботом (раздел 6 фидбека фронтенда).
+        throw new PublishError('no_chat', `cannot publish vacancy ${vacancy.id}: employer has no known chat with the bot yet`);
     }
 
     const buttons: InlineButton[][] = [
@@ -81,8 +82,18 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
     if (existing.status === 'closed') {
         throw new PublishError('conflict', 'vacancy is closed, cannot publish');
     }
+
     if (existing.status === 'published') {
-        throw new PublishError('conflict', 'vacancy already published');
+        // Уже published — но если карточка так и не подтвердилась (cardMessageId пуст, например
+        // прошлая попытка упала по таймауту), это не настоящий конфликт: это незавершённая
+        // публикация. Повторно пробуем отправить карточку на ТУ ЖЕ вакансию вместо 409, иначе
+        // повторный вызов после таймаута навсегда оставлял бы вакансию без карточки без способа
+        // это исправить, кроме ручного вмешательства в БД.
+        if (existing.cardMessageId) {
+            throw new PublishError('conflict', 'vacancy already published');
+        }
+        await publishVacancyCard(existing);
+        return db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
     }
 
     // Атомарный переход draft -> published: при параллельных запросах (двойной клик в мини-аппе,
@@ -93,6 +104,15 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
         data: { status: 'published' },
     });
     if (claim.count === 0) {
+        // Между нашим findUnique выше и этим updateMany кто-то другой мог уже забрать переход —
+        // перечитываем актуальное состояние вместо того, чтобы слепо считать это конфликтом: если
+        // это та же самая незавершённая публикация (published без cardMessageId), обрабатываем её
+        // так же, как явную ветку выше, а не заставляем клиента гадать, что делать с 409.
+        const current = await db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+        if (current.status === 'published' && !current.cardMessageId) {
+            await publishVacancyCard(current);
+            return db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+        }
         throw new PublishError('conflict', 'vacancy already published or not in draft state');
     }
 
@@ -101,8 +121,20 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
     try {
         await publishVacancyCard(vacancy);
     } catch (err) {
-        // Откатываем статус — не оставляем "published в БД", если карточка реально не ушла в MAX.
-        await db.vacancy.update({ where: { id: vacancyId }, data: { status: 'draft' } }).catch(() => {});
+        if (isAmbiguousDeliveryError(err)) {
+            // Неизвестно, дошло сообщение до MAX или нет (таймаут ответа) — НЕ откатываем в draft.
+            // Если сообщение всё же ушло, откат в draft + повторный publish отправили бы вторую
+            // карточку на ту же вакансию. Вакансия остаётся published без cardMessageId — следующий
+            // вызов publish попадёт в ветку выше и просто (безопасно) повторит отправку.
+            throw err;
+        }
+        // Подтверждённый отказ (не таймаут, например MAX ответил ошибкой) — откатываем, но ТОЛЬКО
+        // если вакансию тем временем не закрыли параллельно: раньше update был безусловным и мог
+        // тихо вернуть в draft вакансию, которую работодатель уже успел закрыть другим запросом.
+        await db.vacancy.updateMany({
+            where: { id: vacancyId, status: 'published' },
+            data: { status: 'draft' },
+        }).catch(() => {});
         throw err;
     }
 

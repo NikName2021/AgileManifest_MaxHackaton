@@ -28,6 +28,8 @@ async function maxRequest<T>(
       ...(init.headers ?? {}),
     },
     // Не даём одному зависшему запросу к MAX API повесить весь обработчик вебхука/джобу напоминаний.
+    // AbortSignal.timeout при срабатывании роняет fetch с ошибкой err.name === 'TimeoutError' —
+    // на это опирается publish.ts, чтобы отличить "точно не ушло" от "неизвестно, ушло или нет".
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
@@ -39,6 +41,27 @@ async function maxRequest<T>(
   // Некоторые методы (например DELETE) могут не возвращать тело — подстрахуемся
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
+}
+
+// MAX документирует лимит 2 сообщения в секунду на один чат (dev.max.ru/docs-api/methods/POST/messages) —
+// раньше в DECISIONS.md ошибочно говорилось, что лимит нигде не опубликован. Полноценная очередь
+// с retry/backoff по-прежнему отдельная задача (см. DECISIONS.md), но сам известный лимит дёшево
+// соблюсти прямо здесь: минимальный интервал между отправками в ОДИН И ТОТ ЖЕ чат. Между разными
+// чатами не сериализуем — лимит именно "на чат", а не глобальный.
+const MIN_MS_BETWEEN_MESSAGES_PER_CHAT = 550; // 2/сек = 500мс, +50мс запас
+const lastSentAtByChat = new Map<string, number>();
+
+async function throttlePerChat(chatId: string): Promise<void> {
+  const last = lastSentAtByChat.get(chatId);
+  if (last !== undefined) {
+    const elapsed = Date.now() - last;
+    if (elapsed < MIN_MS_BETWEEN_MESSAGES_PER_CHAT) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_MS_BETWEEN_MESSAGES_PER_CHAT - elapsed));
+    }
+  }
+  // Проставляем ДО реального запроса — параллельные вызовы на один chatId тоже должны
+  // выстроиться в очередь, а не пройти таймер одновременно по устаревшему значению last.
+  lastSentAtByChat.set(chatId, Date.now());
 }
 
 export interface InlineButton {
@@ -61,8 +84,9 @@ export const maxApi = {
   // ВАЖНО: согласно документации (dev.max.ru), chat_id/user_id для POST /messages
   // передаются как query-параметры URL, а не в теле запроса. Раньше здесь был баг —
   // chat_id клали в JSON body, из-за чего MAX не понимал, куда слать сообщение.
-  sendMessage: (chatId: string, text: string, buttons?: InlineButton[][]) =>
-    maxRequest<SendMessageResult>(
+  sendMessage: async (chatId: string, text: string, buttons?: InlineButton[][]) => {
+    await throttlePerChat(chatId);
+    return maxRequest<SendMessageResult>(
       '/messages',
       {
         method: 'POST',
@@ -82,7 +106,8 @@ export const maxApi = {
         }),
       },
       { chat_id: chatId },
-    ),
+    );
+  },
 
   // Подтверждение нажатия inline-кнопки (POST /answers). callback_id — query-параметр.
   // Без этого вызова MAX-клиент у пользователя показывает "часики" на кнопке до таймаута.

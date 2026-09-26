@@ -1,5 +1,6 @@
 import type { DialogFlow } from './types.js';
 import { publishVacancy } from '../vacancies/publish.js';
+import { buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
 
@@ -47,6 +48,50 @@ function parseSchedule(raw: string) {
     };
 }
 
+// Если собранные ответы дают карточку длиннее лимита MAX (4000 символов, см. cardText.ts) — не
+// блокируем весь 6-шаговый диалог и не роняем создание вакансии, а укорачиваем requirements
+// (единственное практически неограниченное по факту поле среди собранных в диалоге) до тех пор,
+// пока карточка не влезет. Работодатель всегда может уточнить/дописать текст позже через
+// PATCH /api/vacancies/:id (там та же самая проверка длины, см. validation.ts).
+function fitRequirementsToCardLimit(fields: {
+    title: string;
+    regionCode: string;
+    schedule: string;
+    salaryMin: number | null;
+    salaryMax: number | null;
+    requirements: string;
+    contactInfo: string;
+}): { requirements: string; truncated: boolean } {
+    const withFullText = buildVacancyCardText({
+        title: fields.title,
+        regionCode: fields.regionCode,
+        schedule: fields.schedule,
+        salaryMin: fields.salaryMin,
+        salaryMax: fields.salaryMax,
+        description: fields.requirements,
+        contactInfo: fields.contactInfo,
+    });
+    if (withFullText.length <= MAX_CARD_TEXT_LIMIT) {
+        return { requirements: fields.requirements, truncated: false };
+    }
+
+    let requirements = fields.requirements;
+    while (requirements.length > 0) {
+        const candidateText = buildVacancyCardText({
+            title: fields.title,
+            regionCode: fields.regionCode,
+            schedule: fields.schedule,
+            salaryMin: fields.salaryMin,
+            salaryMax: fields.salaryMax,
+            description: requirements,
+            contactInfo: fields.contactInfo,
+        });
+        if (candidateText.length <= MAX_CARD_TEXT_LIMIT) break;
+        requirements = requirements.slice(0, Math.max(0, requirements.length - 100));
+    }
+    return { requirements: requirements.trim(), truncated: true };
+}
+
 export const vacancyFlow: DialogFlow = {
     name: 'new_vacancy',
     steps: [
@@ -72,6 +117,16 @@ export const vacancyFlow: DialogFlow = {
             return 'Не нашёл вас в базе — попробуйте написать /новая_вакансия ещё раз.';
         }
 
+        const { requirements, truncated } = fitRequirementsToCardLimit({
+            title: data.title,
+            regionCode: data.region,
+            schedule: data.schedule,
+            salaryMin: data.salary?.min ?? null,
+            salaryMax: data.salary?.max ?? null,
+            requirements: data.requirements,
+            contactInfo: data.contact,
+        });
+
         const vacancy = await db.vacancy.create({
             data: {
                 employerUserId: employer.id,
@@ -81,7 +136,7 @@ export const vacancyFlow: DialogFlow = {
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,
-                description: data.requirements,
+                description: requirements,
                 // Контакт — отдельное поле (раздел 3.3 хендоффа), а не часть description, чтобы
                 // REST мог отдавать/принимать его как структурированное значение, а не парсить текст.
                 contactInfo: data.contact,
@@ -94,6 +149,9 @@ export const vacancyFlow: DialogFlow = {
         // Бенчмарк — best-effort: если trudvsem недоступен, просто не показываем блок, вакансию это не ломает
         const benchmark = await getBenchmark(vacancy.regionCode, vacancy.title.toLowerCase().trim());
         const benchmarkText = formatBenchmarkText(benchmark);
+        const truncatedNotice = truncated
+            ? 'Требования пришлось сократить — вместе с остальными полями карточка превышала лимит MAX в 4000 символов. Полный текст можно указать позже через мини-апп (PATCH вакансии).'
+            : undefined;
 
         try {
             await publishVacancy(vacancy.id);
@@ -102,13 +160,15 @@ export const vacancyFlow: DialogFlow = {
             return [
                 'Вакансия сохранена, но карточку с кнопкой «Откликнуться» отправить не получилось — попробуйте ещё раз чуть позже.',
                 `ID вакансии: ${vacancy.id}. Опубликовать повторно можно через POST /api/vacancies/${vacancy.id}/publish.`,
-            ].join('\n\n');
+                truncatedNotice,
+            ].filter(Boolean).join('\n\n');
         }
 
         return [
             'Вакансия сохранена и опубликована карточкой выше — с кнопкой «Откликнуться».',
             'Как только кто-то откликнется, вы получите уведомление в этом чате.',
             benchmarkText,
+            truncatedNotice,
             `ID вакансии: ${vacancy.id}.`,
         ].filter(Boolean).join('\n\n');
     },

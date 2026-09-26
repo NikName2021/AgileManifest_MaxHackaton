@@ -30,22 +30,27 @@ export async function checkStaleVacanciesOnce(): Promise<number> {
       continue;
     }
 
-    if (!vacancy.employer?.chatId) continue;
+    // Застывший employerChatId вакансии — приоритетнее "текущего" chatId работодателя из users
+    // (см. users/service.ts). Пустая строка (плейсхолдер для пользователей мини-аппа) — тоже "нет чата".
+    const targetChatId = vacancy.employerChatId || vacancy.employer?.chatId;
+    if (!targetChatId) continue; // некому слать — не помечаем как обработанную, вдруг chatId появится позже
 
     try {
       await maxApi.sendMessage(
-        vacancy.employer.chatId,
+        targetChatId,
         `Вакансия «${vacancy.title}» опубликована больше ${STALE_AFTER_HOURS} часов назад, но пока нет ни одного отклика.\n\n` +
           'Возможно, стоит расширить условия или пересмотреть вилку зарплаты — напишите /новая_вакансия, чтобы создать обновлённую версию.'
       );
       remindersSent += 1;
+      // Помечаем отправленной ТОЛЬКО при реальном успехе — раньше это делалось безусловно
+      // ("в любом случае"), из-за чего неудачная отправка выглядела в БД как удачная и напоминание
+      // больше никогда не повторялось, хотя фактически кандидат/работодатель его не получил.
+      await db.vacancy.update({ where: { id: vacancy.id }, data: { reminderSentAt: new Date() } });
     } catch (err) {
       // Не роняем весь цикл проверки из-за одного неотправленного сообщения (например, чат недоступен).
-      console.error('failed to send stale vacancy reminder', vacancy.id, err);
+      // Не помечаем reminderSentAt — следующий часовой прогон попробует отправить снова.
+      console.error('failed to send stale vacancy reminder, will retry next cycle', vacancy.id, err);
     }
-
-    // Помечаем как обработанную в любом случае, чтобы не пытаться слать повторно каждый час при ошибке.
-    await db.vacancy.update({ where: { id: vacancy.id }, data: { reminderSentAt: new Date() } });
   }
 
   return remindersSent;

@@ -345,6 +345,11 @@
   gap: 12px;
   margin: 0 0 24px;
 }
+.application-dates > div {
+  display: block;
+  border: 0;
+  padding: 0;
+}
 .application-dates dt {
   font-size: 11px;
   color: var(--muted);
@@ -352,6 +357,7 @@
 .application-dates dd {
   font-size: 12px;
   margin: 6px 0 0;
+  text-align: left;
 }
 .application-status-editor {
   border-top: 1px solid var(--border);
@@ -383,6 +389,9 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 22px;
+}
+.application-dialog-actions .primary-button:disabled {
+  opacity: 0.5;
 }
 .applications-demo button,
 .applications-toolbar button,

@@ -32,6 +32,9 @@ model Vacancy {
   salaryMin      Int?          @map("salary_min")
   salaryMax      Int?          @map("salary_max")
   description    String?
+  // Отдельное поле контакта работодателя (раздел 3.3 хендоффа) — раньше контакт дописывался
+  // прямо в description произвольным текстом, и REST не мог принять/вернуть его отдельно.
+  contactInfo    String?       @map("contact_info")
   status         String        @default("draft") // draft | published | closed
   cardMessageId  String?       @map("card_message_id")
   createdAt      DateTime      @default(now()) @map("created_at")

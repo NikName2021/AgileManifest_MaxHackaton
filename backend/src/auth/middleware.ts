@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../db.js';
 import { config } from '../config.js';
 import { verifySessionToken } from './session.js';
+import { sendError } from '../errors.js';
 
 // Фиксированный технический аккаунт для теста API жюри без реального MAX-логина
 // (раздел 11 ТЗ — "тестовые учётки"). Активен только если задан TEST_API_TOKEN.
@@ -17,8 +18,9 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   const header = request.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
   if (!token) {
-    reply.code(401).send({ error: 'missing Authorization: Bearer <token>' });
-    return;
+    // Единый конверт ошибки для всего API (см. errors.ts) — раньше здесь был сырой
+    // { error: string }, отдельный от формата остальных эндпоинтов в server.ts.
+    return sendError(reply, 401, 'unauthorized', 'missing Authorization: Bearer <token>');
   }
 
   if (config.testApiToken && token === config.testApiToken) {
@@ -33,8 +35,7 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
 
   const verified = verifySessionToken(token);
   if (!verified.ok) {
-    reply.code(401).send({ error: 'invalid or expired session' });
-    return;
+    return sendError(reply, 401, 'unauthorized', 'invalid or expired session');
   }
   request.sessionUserId = verified.userId;
 }

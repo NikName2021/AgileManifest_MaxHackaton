@@ -81,7 +81,10 @@ export const vacancyFlow: DialogFlow = {
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,
-                description: `${data.requirements}\n\nКонтакт: ${data.contact}`,
+                description: data.requirements,
+                // Контакт — отдельное поле (раздел 3.3 хендоффа), а не часть description, чтобы
+                // REST мог отдавать/принимать его как структурированное значение, а не парсить текст.
+                contactInfo: data.contact,
                 status: 'draft',
                 // Застываем сразу же — это тот самый чат, где идёт этот диалог, гарантированно верно.
                 employerChatId: chatId,

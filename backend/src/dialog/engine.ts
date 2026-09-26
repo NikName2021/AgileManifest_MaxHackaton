@@ -30,7 +30,7 @@ export async function startFlow(chatId: string, flowName: string) {
 
 export async function cancelFlow(chatId: string) {
   // Раньше /отмена чистила только DialogSession — если кандидат успел нажать "Откликнуться" и
-  // застрять на шаге "пришлите контакт" (PendingApplication), /отмена его не сбрасывала: следующее
+  // застрял на шаге "пришлите контакт" (PendingApplication), /отмена его не сбрасывала: следующее
   // сообщение кандидата в чате всё равно попадало в resolvePendingApplication как "контакт".
   const [deletedSession, deletedPending] = await Promise.all([
     db.dialogSession.deleteMany({ where: { chatId } }),
@@ -72,10 +72,24 @@ export async function handleAnswer(chatId: string, rawAnswer: string): Promise<b
     if (nextStep < flow.steps.length) {
         await db.dialogSession.update({ where: { chatId }, data: { step: nextStep, data } });
         await sendStepPrompt(chatId, flow, nextStep);
-    } else {
-        await db.dialogSession.deleteMany({ where: { chatId } });
+        return true;
+    }
+
+    // Последний шаг: сессию удаляем до onComplete, потому что все ответы уже собраны и повторно
+    // отвечать на них нечем — «продолжить с того же шага» здесь не имеет смысла. Но раньше
+    // ошибка в onComplete (например, БД моргнула на create вакансии) улетала в общий catch
+    // webhook.ts и пользователь оставался вообще без ответа бота, будто сообщение потерялось.
+    // Теперь при сбое явно говорим об этом и просим начать заново, а не молчим.
+    await db.dialogSession.deleteMany({ where: { chatId } });
+    try {
         const resultText = await flow.onComplete(chatId, data);
         await maxApi.sendMessage(chatId, resultText);
+    } catch (err) {
+        console.error('dialog onComplete failed', chatId, flow.name, err);
+        await maxApi.sendMessage(
+            chatId,
+            'Что-то пошло не так при сохранении вакансии. Попробуйте создать её заново командой /новая_вакансия.'
+        ).catch(() => {});
     }
 
     return true;

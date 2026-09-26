@@ -1,5 +1,6 @@
 import { db } from '../db.js';
 import { maxApi } from '../max/client.js';
+import { escapeMarkdown } from '../markdown.js';
 
 // "Should Have" из раздела 2 и раздела 16 ТЗ (Фаза 4 / "если останется время") —
 // напоминание работодателю о вакансии, которая опубликована давно, но не получила ни одного отклика.
@@ -38,7 +39,7 @@ export async function checkStaleVacanciesOnce(): Promise<number> {
     try {
       await maxApi.sendMessage(
         targetChatId,
-        `Вакансия «${vacancy.title}» опубликована больше ${STALE_AFTER_HOURS} часов назад, но пока нет ни одного отклика.\n\n` +
+        `Вакансия «${escapeMarkdown(vacancy.title)}» опубликована больше ${STALE_AFTER_HOURS} часов назад, но пока нет ни одного отклика.\n\n` +
           'Возможно, стоит расширить условия или пересмотреть вилку зарплаты — напишите /новая_вакансия, чтобы создать обновлённую версию.'
       );
       remindersSent += 1;

@@ -1,4 +1,3 @@
-import type { User } from '../../entities/hiring'
 import { ApiError, requestJson } from '../../shared/api/client'
 
 export function authUrl(base: string, path: string, production: boolean): string {
@@ -24,38 +23,36 @@ export function authUrl(base: string, path: string, production: boolean): string
   return `${url.origin}${url.pathname.replace(/\/$/, '')}${path}`
 }
 
-export function parseUser(body: unknown): User {
-  if (!body || typeof body !== 'object' || !('user' in body)) throw new ApiError('contract')
-  const user = body.user
-  if (!user || typeof user !== 'object') throw new ApiError('contract')
-  const value = user as Record<string, unknown>
+export interface AuthCredentials {
+  token: string
+  userId: number
+}
+
+export function parseCredentials(body: unknown): AuthCredentials {
+  if (!body || typeof body !== 'object') throw new ApiError('contract')
+  const value = body as Record<string, unknown>
   if (
-    typeof value.id !== 'string' ||
-    !value.id ||
-    typeof value.max_user_id !== 'string' ||
-    !value.max_user_id ||
-    typeof value.display_name !== 'string' ||
-    !value.display_name.trim() ||
-    !['employer', 'candidate'].includes(String(value.role))
+    typeof value.token !== 'string' ||
+    !value.token.trim() ||
+    typeof value.user_id !== 'number' ||
+    !Number.isSafeInteger(value.user_id) ||
+    value.user_id <= 0
   ) {
     throw new ApiError('contract')
   }
-  // Current workspace is for employers; role comes only from the verified backend response.
-  if (value.role !== 'employer') throw new ApiError('forbidden')
-  return {
-    id: value.id,
-    max_user_id: value.max_user_id,
-    display_name: value.display_name,
-    role: 'employer',
-  }
+  return { token: value.token, userId: value.user_id }
 }
 
 export async function authenticate(
   url: string,
   initData: string,
   signal: AbortSignal,
-): Promise<User> {
-  return parseUser(
-    await requestJson(url, { method: 'POST', body: JSON.stringify({ initData }), signal }),
+): Promise<AuthCredentials> {
+  return parseCredentials(
+    await requestJson(url, {
+      method: 'POST',
+      body: JSON.stringify({ init_data: initData }),
+      signal,
+    }),
   )
 }

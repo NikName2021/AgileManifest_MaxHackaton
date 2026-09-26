@@ -57,12 +57,8 @@ export function SettingsPage() {
         </div>
         <dl>
           <div>
-            <dt>Имя</dt>
-            <dd>{user.display_name}</dd>
-          </div>
-          <div>
-            <dt>Роль</dt>
-            <dd>Работодатель</dd>
+            <dt>Аккаунт</dt>
+            <dd>{mode === 'preview' ? 'Демонстрационный' : `№ ${user.id}`}</dd>
           </div>
           <div>
             <dt>Режим</dt>

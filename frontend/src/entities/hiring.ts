@@ -1,26 +1,23 @@
-// Domain names follow the supplied technical specification, not a verified API schema.
-export type UserRole = 'employer' | 'candidate'
+// The backend identifies users by numeric IDs and authorizes resources by ownership.
 export type VacancyStatus = 'draft' | 'published' | 'closed'
 export type ApplicationStatus = 'new' | 'contacted' | 'invited' | 'hired' | 'rejected'
 export interface User {
-  id: string
-  max_user_id: string
-  role: UserRole
+  id: number
   display_name: string
 }
 export interface Vacancy {
-  id: string
-  employer_user_id: string
+  id: number
   title: string
-  region_code: string
+  regionCode: string
   category: string
-  schedule: string
-  salary_min: number | null
-  salary_max: number | null
-  description: string
+  schedule: 'seasonal' | 'temporary' | 'permanent'
+  salaryMin: number | null
+  salaryMax: number | null
+  description: string | null
+  contactInfo: string | null
   status: VacancyStatus
-  card_message_id: string | null
-  created_at: string
+  cardMessageId: string | null
+  createdAt: string
 }
 export interface Application {
   id: string

@@ -1,9 +1,15 @@
 export class ApiError extends Error {
   readonly kind: 'unauthorized' | 'forbidden' | 'network' | 'server' | 'contract'
-  constructor(kind: ApiError['kind']) {
+  readonly status: number
+  readonly code: string
+  readonly fields: string[]
+  constructor(kind: ApiError['kind'], status = 0, code = '', fields: string[] = []) {
     super(kind)
     this.name = 'ApiError'
     this.kind = kind
+    this.status = status
+    this.code = code
+    this.fields = fields
   }
 }
 
@@ -16,10 +22,10 @@ export async function requestJson(url: string, options: RequestInit = {}): Promi
       ...options,
       headers: {
         Accept: 'application/json',
-        'Content-Type': 'application/json',
+        ...(options.body != null ? { 'Content-Type': 'application/json' } : {}),
         ...options.headers,
       },
-      credentials: 'include',
+      credentials: 'omit',
       cache: 'no-store',
       redirect: 'error',
       signal,
@@ -28,9 +34,17 @@ export async function requestJson(url: string, options: RequestInit = {}): Promi
     if (options.signal?.aborted) throw options.signal.reason
     throw new ApiError('network')
   }
-  if (response.status === 401) throw new ApiError('unauthorized')
-  if (response.status === 403) throw new ApiError('forbidden')
-  if (!response.ok) throw new ApiError('server')
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null)
+    const error = body && typeof body === 'object' && 'error' in body ? body.error : null
+    const details = error && typeof error === 'object' ? (error as Record<string, unknown>) : {}
+    throw new ApiError(
+      response.status === 401 ? 'unauthorized' : response.status === 403 ? 'forbidden' : 'server',
+      response.status,
+      typeof details.code === 'string' ? details.code : '',
+      details.fields && typeof details.fields === 'object' ? Object.keys(details.fields) : [],
+    )
+  }
   try {
     return await response.json()
   } catch {

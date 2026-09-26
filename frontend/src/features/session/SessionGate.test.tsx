@@ -27,12 +27,15 @@ const bridge: MaxBridge = {
   platform: 'web',
   BackButton: { show: vi.fn(), hide: vi.fn(), onClick: vi.fn(), offClick: vi.fn() },
 }
-const user = { id: '1', max_user_id: '123', display_name: 'Анна', role: 'employer' }
+const credentials = { token: 'session-fixture', user_id: 42 }
 function Content() {
   const session = useSession()
   return (
     <div>
       Рабочее пространство: {session.user.display_name}; {session.mode}
+      <button onClick={() => void session.vacancies.list().catch(() => {})}>
+        Загрузить вакансии
+      </button>
     </div>
   )
 }
@@ -41,9 +44,29 @@ beforeEach(() => {
   config.authPath = '/api/auth/max'
   window.WebApp = undefined
   vi.mocked(loadBridge).mockResolvedValue(bridge)
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ user }))))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(credentials))))
 })
 describe('launch and authorization states', () => {
+  it('removes private content when a business request rejects the bearer session', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(credentials)))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { code: 'unauthorized' } }), { status: 401 }),
+        ),
+    )
+    render(
+      <SessionGate>
+        <Content />
+      </SessionGate>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Загрузить вакансии' }))
+    expect(await screen.findByText('Нужно войти снова')).toBeInTheDocument()
+    expect(screen.queryByText(/Рабочее пространство:/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Открыть демо' })).not.toBeInTheDocument()
+  })
   it('shows loading before the verified workspace', async () => {
     render(
       <SessionGate>
@@ -51,7 +74,7 @@ describe('launch and authorization states', () => {
       </SessionGate>,
     )
     expect(screen.getByText('Подключаем рабочее пространство')).toBeInTheDocument()
-    expect(await screen.findByText('Рабочее пространство: Анна; max')).toBeInTheDocument()
+    expect(await screen.findByText('Рабочее пространство: Мой кабинет; max')).toBeInTheDocument()
   })
   it('requires explicit preview choice outside MAX without calling backend', async () => {
     vi.mocked(loadBridge).mockResolvedValue({ ...bridge, initData: '' })
@@ -62,7 +85,7 @@ describe('launch and authorization states', () => {
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Открыть демо' }))
     expect(
-      await screen.findByText('Рабочее пространство: Работодатель; preview'),
+      await screen.findByText('Рабочее пространство: Демо-кабинет; preview'),
     ).toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalled()
   })
@@ -108,7 +131,7 @@ describe('launch and authorization states', () => {
     )
     await screen.findByText('Не удалось подключиться к MAX')
     fireEvent.click(screen.getByRole('button', { name: 'Повторить подключение' }))
-    expect(await screen.findByText('Рабочее пространство: Анна; max')).toBeInTheDocument()
+    expect(await screen.findByText('Рабочее пространство: Мой кабинет; max')).toBeInTheDocument()
   })
   it('does not install a session after unmount', async () => {
     let finish!: (value: Response) => void
@@ -130,7 +153,7 @@ describe('launch and authorization states', () => {
     const options = vi.mocked(fetch).mock.calls[0][1]
     view.unmount()
     expect(options?.signal?.aborted).toBe(true)
-    finish(new Response(JSON.stringify({ user })))
+    finish(new Response(JSON.stringify(credentials)))
     expect(screen.queryByText(/Рабочее пространство:/)).not.toBeInTheDocument()
   })
 })

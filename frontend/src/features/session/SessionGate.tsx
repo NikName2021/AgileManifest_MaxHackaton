@@ -7,6 +7,7 @@ import { loadBridge } from '../../shared/max/bridge'
 import { Brand } from '../../shared/ui/Brand'
 import { authenticate, authUrl } from './auth'
 import { SessionContext, type Session } from './context'
+import { createVacancyRepository } from '../vacancies/api'
 
 type Issue =
   | 'outside'
@@ -36,10 +37,7 @@ const messages: Record<Issue, [string, string]> = {
     'Нужно войти снова',
     'Закройте мини-приложение и откройте его заново из бота в MAX.',
   ],
-  forbidden: [
-    'Пространство для работодателей',
-    'Для этого раздела нужен доступ работодателя. Соискатель может откликнуться на вакансию в боте.',
-  ],
+  forbidden: ['Вход недоступен', 'Сервис отклонил вход. Откройте мини-приложение заново из бота.'],
   network: ['Сервис не отвечает', 'Проверьте интернет и повторите попытку.'],
   server: [
     'Не удалось выполнить вход',
@@ -77,8 +75,19 @@ export function SessionGate({ children }: { children: ReactNode }) {
       }
       try {
         const url = authUrl(config.apiBaseUrl, config.authPath, import.meta.env.PROD)
-        const user = await authenticate(url, bridge.initData, controller.signal)
-        update({ kind: 'ready', session: { user, bridge, mode: 'max' } })
+        const credentials = await authenticate(url, bridge.initData, controller.signal)
+        const vacancies = createVacancyRepository(config.apiBaseUrl, credentials.token, () => {
+          update({ kind: 'issue', issue: 'unauthorized' })
+        })
+        update({
+          kind: 'ready',
+          session: {
+            user: { id: credentials.userId, display_name: 'Мой кабинет' },
+            vacancies,
+            bridge,
+            mode: 'max',
+          },
+        })
       } catch (error) {
         update({ kind: 'issue', issue: error instanceof ApiError ? error.kind : 'server' })
       }
@@ -90,8 +99,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
   async function openPreview() {
     if (!import.meta.env.DEV) return
     if (!config.allowPreview || window.WebApp?.initData) return
-    const { previewSession } = await import('../../mocks/session')
-    setState({ kind: 'ready', session: previewSession })
+    const { createPreviewSession } = await import('../../mocks/session')
+    setState({ kind: 'ready', session: createPreviewSession() })
   }
   if (state.kind === 'ready')
     return <SessionContext value={state.session}>{children}</SessionContext>

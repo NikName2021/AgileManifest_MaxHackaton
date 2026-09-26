@@ -32,14 +32,26 @@ export function Shell() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const main = useRef<HTMLElement>(null)
+  const inVacancy = pathname.startsWith('/vacancies/')
+  const backTo = pathname.endsWith('/edit')
+    ? pathname.replace(/\/edit$/, '')
+    : inVacancy
+      ? '/vacancies'
+      : '/'
+  const title =
+    pathname === '/vacancies/new'
+      ? 'Новая вакансия'
+      : inVacancy
+        ? 'Вакансия'
+        : (titles[pathname] ?? 'Страница не найдена')
   useEffect(() => {
-    document.title = `${titles[pathname] ?? 'Страница не найдена'} · Сезон`
+    document.title = `${title} · Сезон`
     main.current?.focus({ preventScroll: true })
     window.scrollTo({ top: 0, behavior: 'instant' })
     return bindBackButton(bridge, pathname !== '/', () => {
-      void navigate('/')
+      void navigate(backTo)
     })
-  }, [bridge, navigate, pathname])
+  }, [bridge, navigate, pathname, title, backTo])
   return (
     <div className="app-shell">
       <a href="#main-content" className="skip-link">
@@ -61,7 +73,7 @@ export function Shell() {
             <NavLink
               key={to}
               to={to}
-              end
+              end={to === '/'}
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
             >
               <Icon size={20} strokeWidth={1.7} />
@@ -85,7 +97,7 @@ export function Shell() {
       <div className="workspace">
         <header className="topbar">
           <div className="desktop-breadcrumb">
-            Сезон <span>/</span> <strong>{titles[pathname] ?? 'Страница не найдена'}</strong>
+            Сезон <span>/</span> <strong>{title}</strong>
           </div>
           <Link to="/" className="mobile-brand" aria-label="Сезон — на главную">
             <Brand />
@@ -107,14 +119,20 @@ export function Shell() {
         {mode === 'preview' && (
           <div className="preview-banner">
             <span className="preview-pill">ДЕМО</span>
-            <span>Предпросмотр интерфейса. Вакансии и отклики не загружаются.</span>
+            <span>
+              Данные только в памяти браузера, до перезагрузки. Сообщения в MAX не отправляются.
+            </span>
           </div>
         )}
         <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
           {pathname !== '/' && (
-            <Link className="back-link" to="/">
+            <Link className="back-link" to={backTo}>
               <ArrowLeft size={16} />
-              На главную
+              {backTo === '/'
+                ? 'На главную'
+                : backTo === '/vacancies'
+                  ? 'К вакансиям'
+                  : 'К черновику'}
             </Link>
           )}
           <Outlet />
@@ -128,7 +146,12 @@ export function Shell() {
       </div>
       <nav className="mobile-nav" aria-label="Навигация на телефоне">
         {navigation.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end className={({ isActive }) => (isActive ? 'active' : '')}>
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/'}
+            className={({ isActive }) => (isActive ? 'active' : '')}
+          >
             <Icon size={21} strokeWidth={1.8} />
             <span>{label}</span>
           </NavLink>

@@ -1,27 +1,30 @@
 import { describe, it, expect, vi } from 'vitest'
-import { authenticate, authUrl, parseUser } from './auth'
+import { authenticate, authUrl, parseCredentials } from './auth'
 
-const user = { id: '1', max_user_id: '123', role: 'employer', display_name: 'Анна' }
+const credentials = { token: 'session-fixture', user_id: 42 }
 describe('server-verified session', () => {
   it('accepts only the verified response and drops extra fields', () => {
-    expect(parseUser({ user: { ...user, phone: 'not retained' } })).toEqual(user)
+    expect(parseCredentials({ ...credentials, phone: 'not retained' })).toEqual({
+      token: credentials.token,
+      userId: 42,
+    })
   })
   it.each([
     null,
     {},
-    { user: {} },
-    { user: { ...user, id: 1 } },
-    { user: { ...user, display_name: '' } },
+    { ...credentials, user_id: '42' },
+    { ...credentials, user_id: 0 },
+    { ...credentials, token: '' },
   ])('rejects malformed responses: %j', (body) => {
-    expect(() => parseUser(body)).toThrow('contract')
+    expect(() => parseCredentials(body)).toThrow('contract')
   })
-  it('does not grant employer access to candidates', () => {
-    expect(() => parseUser({ user: { ...user, role: 'candidate' } })).toThrow('forbidden')
+  it('does not require a role field absent from the real backend', () => {
+    expect(parseCredentials(credentials).userId).toBe(42)
   })
-  it('sends raw initData in POST only and keeps cookie credentials', async () => {
+  it('sends init_data via POST without cookie credentials', async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ user }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify(credentials), { status: 200 }))
     vi.stubGlobal('fetch', fetcher)
     await expect(
       authenticate(
@@ -29,13 +32,13 @@ describe('server-verified session', () => {
         'signed-fixture',
         new AbortController().signal,
       ),
-    ).resolves.toEqual(user)
+    ).resolves.toEqual({ token: credentials.token, userId: 42 })
     expect(fetcher).toHaveBeenCalledWith(
       'https://api.example.test/api/auth/max',
       expect.objectContaining({
         method: 'POST',
-        body: '{"initData":"signed-fixture"}',
-        credentials: 'include',
+        body: '{"init_data":"signed-fixture"}',
+        credentials: 'omit',
         redirect: 'error',
         cache: 'no-store',
       }),

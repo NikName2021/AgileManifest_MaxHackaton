@@ -208,3 +208,4 @@ REST/JSON, авторизация — bearer-токен (`Authorization: Bearer 
 - `master` — общие материалы проекта (этот README, кейс, ТЗ, docker-compose, openapi/DATA-API)
 - `dev` — интеграционная ветка backend-кода
 - `feature/*` — отдельные фичи, вливаются в `dev` (например `feature/vacancy-dialog`)
+>>>>>>> 3d5d22202836f71786fea699fd0d62be3f936d47

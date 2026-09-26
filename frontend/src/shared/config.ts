@@ -1,6 +1,6 @@
 export const config = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL?.trim() ?? '',
-  authPath: import.meta.env.VITE_AUTH_PATH?.trim() ?? '',
+  authPath: import.meta.env.VITE_AUTH_PATH?.trim() || '/api/auth/max',
   botUrl: safeBotUrl(import.meta.env.VITE_BOT_URL),
   allowPreview: import.meta.env.DEV && (import.meta.env.VITE_ENABLE_DEV_MODE ?? 'true') === 'true',
 }

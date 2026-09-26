@@ -13,9 +13,16 @@ export class PublishError extends Error {
 }
 
 export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
+    // Раньше при заполненном только одном конце вилки (например min без max) условие
+    // "salaryMin && salaryMax" было ложным целиком, и карточка показывала "по договорённости",
+    // хотя работодатель прямо указал число (раздел 2.5 хендоффа — "односторонняя вилка теряется").
     const salaryText = vacancy.salaryMin && vacancy.salaryMax
         ? `${vacancy.salaryMin}–${vacancy.salaryMax} ₽`
-        : 'по договорённости';
+        : vacancy.salaryMin
+          ? `от ${vacancy.salaryMin} ₽`
+          : vacancy.salaryMax
+            ? `до ${vacancy.salaryMax} ₽`
+            : 'по договорённости';
 
     const text = [
         `**${escapeMarkdown(vacancy.title)}**`,

@@ -100,6 +100,9 @@ function VacancyDetails({ id }: { id: number }) {
       <div className="vacancy-detail-layout">
         <VacancyPreview vacancy={vacancy} />
         <aside className="vacancy-side-panel" aria-busy={busy}>
+          <Button asChild variant="secondary">
+            <Link to={`/applications?vacancy=${id}`}>Отклики на вакансию</Link>
+          </Button>
           {vacancy.status === 'draft' && (
             <>
               <span className="step-icon">

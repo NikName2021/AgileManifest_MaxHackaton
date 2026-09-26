@@ -36,6 +36,11 @@ function Content() {
       <button onClick={() => void session.vacancies.list().catch(() => {})}>
         Загрузить вакансии
       </button>
+      <button
+        onClick={() => void session.applications.list({ limit: 20, offset: 0 }).catch(() => {})}
+      >
+        Загрузить отклики
+      </button>
     </div>
   )
 }
@@ -47,26 +52,29 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(credentials))))
 })
 describe('launch and authorization states', () => {
-  it('removes private content when a business request rejects the bearer session', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(new Response(JSON.stringify(credentials)))
-        .mockResolvedValueOnce(
-          new Response(JSON.stringify({ error: { code: 'unauthorized' } }), { status: 401 }),
-        ),
-    )
-    render(
-      <SessionGate>
-        <Content />
-      </SessionGate>,
-    )
-    fireEvent.click(await screen.findByRole('button', { name: 'Загрузить вакансии' }))
-    expect(await screen.findByText('Нужно войти снова')).toBeInTheDocument()
-    expect(screen.queryByText(/Рабочее пространство:/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Открыть демо' })).not.toBeInTheDocument()
-  })
+  it.each(['Загрузить вакансии', 'Загрузить отклики'])(
+    'removes private content when %s rejects the bearer session',
+    async (action) => {
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(new Response(JSON.stringify(credentials)))
+          .mockResolvedValueOnce(
+            new Response(JSON.stringify({ error: { code: 'unauthorized' } }), { status: 401 }),
+          ),
+      )
+      render(
+        <SessionGate>
+          <Content />
+        </SessionGate>,
+      )
+      fireEvent.click(await screen.findByRole('button', { name: action }))
+      expect(await screen.findByText('Нужно войти снова')).toBeInTheDocument()
+      expect(screen.queryByText(/Рабочее пространство:/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Открыть демо' })).not.toBeInTheDocument()
+    },
+  )
   it('shows loading before the verified workspace', async () => {
     render(
       <SessionGate>

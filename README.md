@@ -88,7 +88,7 @@ docker compose up --build
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
 | `users` | `id`, `max_user_id`, `chat_id`, `display_name`, `phone` (nullable) | Все пользователи бота |
-| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
+| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `contact_info`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
 | `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
 | `dialog_sessions` | `chat_id`, `step`, `data`, `updated_at` | Текущий шаг диалога создания вакансии (переживает рестарт backend) |
@@ -98,6 +98,33 @@ docker compose up --build
 и используемый для всех будущих уведомлений по этой вакансии/отклику. Это отдельно от «текущего»
 `users.chat_id`, который обновляется на последний чат, откуда пользователь писал боту (нужен для
 самого диалога) — без разделения уведомление могло бы случайно уйти в другой чат/группу.
+
+`vacancies.contact_info` — контакт работодателя для откликнувшихся (телефон или юзернейм MAX),
+отдельное структурированное поле (раздел 3.3 хендоффа фронтенда), а не часть свободного текста
+`description` — раньше контакт дописывался прямо в описание и REST не мог отдать/принять его
+отдельно. Показывается отдельной строкой на карточке вакансии.
+
+## Решения по контракту (важно для фронтенда)
+
+По итогам разбора вопросов, присланных фронтенд-разработчиком по предыдущей версии API, приняты
+и зафиксированы такие решения:
+
+- **Роль пользователя.** Отдельного поля `role` в `users` нет. Любой авторизованный пользователь
+  может и создавать/публиковать вакансии (выступать работодателем), и откликаться на чужие
+  (выступать кандидатом) — в один и тот же момент. Доступ к конкретной записи определяется
+  владением (`employerUserId` у вакансии, `candidateUserId` у отклика), а не ролью аккаунта.
+  Если для финала понадобится разделение ролей — это отдельное расширение схемы, текущую
+  интеграцию оно не блокирует.
+- **Формат сессии.** `Authorization: Bearer <token>`, а не `HttpOnly`-cookie. Если существующий
+  адаптер фронтенда рассчитан на cookie — его нужно переключить на заголовок.
+- **Формат ошибок.** Единый на весь API конверт:
+  ```json
+  { "error": { "code": "validation_error", "message": "invalid request body", "fields": { "title": ["title is required"] } } }
+  ```
+  `code` — одно из: `unauthorized`, `forbidden`, `not_found`, `validation_error`, `conflict`,
+  `upstream_error`, `service_unavailable`, `internal_error`. `fields` присутствует только при
+  `validation_error`, когда ошибку можно привязать к конкретным полям. См. `backend/src/errors.ts`
+  и схему `Error` в `openapi.yaml`.
 
 ## Остановка и перезапуск
 
@@ -120,7 +147,14 @@ REST/JSON, авторизация — bearer-токен (`Authorization: Bearer 
 принадлежащие вызывающему (403 на чужие вакансии/отклики). Полный список ручек, схемы и коды
 ответов — в [`openapi.yaml`](openapi.yaml) и [`DATA-API.yaml`](DATA-API.yaml). Примеры запросов
 и пошаговый сценарий проверки напрямую через API (без MAX) — в
-[`test-data/README.md`](test-data/README.md).
+[`test-data/README.md`](test-data/README.md). Формат ошибок и остальные принятые решения по
+контракту — см. раздел «Решения по контракту» выше.
+
+Помимо CRUD по вакансиям и откликам из первой версии, в API есть:
+- `PATCH /api/vacancies/:id` — редактирование черновика (только в статусе `draft`, 409 иначе);
+- `GET /api/applications` — общий список откликов по всем вакансиям работодателя, с пагинацией
+  (`limit`/`offset`) и фильтром по `status`, в дополнение к `GET /api/vacancies/:id/applications`
+  (отклики по одной вакансии, без пагинации).
 
 ## Известные ограничения
 

@@ -8,7 +8,7 @@
 # перечня. Если организаторы прикладывали отдельный файл-шаблон/пример DATA-API.yaml к кейсу —
 # сверьте ключи и вложенность с ним и поправьте при необходимости.
 
-schema_version: "1.0"
+schema_version: "1.1"
 
 team:
   # TODO: вписать реальный идентификатор/название команды перед сдачей
@@ -32,14 +32,22 @@ api:
       POST /api/auth/max (проверка подписи initData MAX HMAC-SHA256, см. раздел 12 ТЗ), либо
       фиксированный TEST_API_TOKEN из backend/.env — для проверки жюри без реального MAX-логина.
       GET /health и GET /api/benchmark авторизации не требуют. Работодатель/кандидат определяются
-      по токену, а не по полям тела запроса (см. endpoints ниже).
+      по токену, а не по полям тела запроса (см. endpoints ниже). Сессия — Bearer-токен в
+      заголовке, НЕ HttpOnly cookie (осознанное решение по итогам вопросов фронтенда).
 
   roles:
     - name: employer
-      description: Работодатель — создаёт и публикует вакансии, видит отклики и меняет их статус
+      description: >
+        Работодатель — создаёт, редактирует (черновик), публикует и закрывает вакансии, видит
+        отклики (по одной вакансии или общим списком) и меняет их статус. Роль не хранится
+        отдельным полем в БД — любой авторизованный пользователь может выступать и работодателем,
+        и кандидатом; конкретное действие разрешено по владению записью (employerUserId), а не по
+        роли аккаунта.
       entry_point: "личный чат с ботом (/новая_вакансия) или мини-приложение, авторизованное через /api/auth/max"
     - name: candidate
-      description: Кандидат — откликается на вакансию по кнопке/deep link в карточке, либо через мини-приложение
+      description: >
+        Кандидат — откликается на вакансию по кнопке/deep link в карточке, либо через мини-приложение.
+        Так же не привязан к отдельной роли аккаунта — определяется владением (candidateUserId).
       entry_point: "кнопка «Откликнуться» на карточке вакансии в MAX, либо POST /api/applications из мини-приложения"
 
   endpoints:
@@ -54,7 +62,7 @@ api:
           type: string
       responses:
         "200": "{ token, user_id }"
-        "400": "validation error"
+        "400": "validation error (including duplicate initData parameter keys)"
         "401": "invalid or expired initData signature"
 
     - method: GET
@@ -75,6 +83,10 @@ api:
           in: body
           required: true
           type: string
+        - name: contact_info
+          in: body
+          required: false
+          type: string
       responses:
         "201": "Vacancy"
         "400": "validation error"
@@ -94,6 +106,57 @@ api:
         "401": "unauthorized"
         "403": "not owner"
         "404": "not found"
+
+    - method: PATCH
+      path: /api/vacancies/{id}
+      role: employer
+      auth: bearer
+      note: "Редактирование разрешено только для вакансии в статусе draft; хотя бы одно поле обязательно."
+      params:
+        - name: id
+          in: path
+          required: true
+          type: integer
+        - name: title
+          in: body
+          required: false
+          type: string
+        - name: region_code
+          in: body
+          required: false
+          type: string
+        - name: category
+          in: body
+          required: false
+          type: string
+        - name: schedule
+          in: body
+          required: false
+          type: string
+          enum: [seasonal, temporary, permanent]
+        - name: salary_min
+          in: body
+          required: false
+          type: integer
+        - name: salary_max
+          in: body
+          required: false
+          type: integer
+        - name: description
+          in: body
+          required: false
+          type: string
+        - name: contact_info
+          in: body
+          required: false
+          type: string
+      responses:
+        "200": "Vacancy"
+        "400": "validation error (empty body, or salary_min > salary_max)"
+        "401": "unauthorized"
+        "403": "not owner"
+        "404": "not found"
+        "409": "vacancy is not in draft status"
 
     - method: POST
       path: /api/vacancies/{id}/publish
@@ -131,16 +194,44 @@ api:
       path: /api/vacancies/{id}/applications
       role: employer
       auth: bearer
+      note: "Отклики по одной конкретной вакансии, без пагинации. Для общего списка по всем вакансиям см. GET /api/applications."
       params:
         - name: id
           in: path
           required: true
           type: integer
       responses:
-        "200": "array of Application"
+        "200": "array of Application (each includes nested candidate)"
         "401": "unauthorized"
         "403": "not owner"
         "404": "not found"
+
+    - method: GET
+      path: /api/applications
+      role: employer
+      auth: bearer
+      note: "Общий список откликов по всем вакансиям работодателя, с пагинацией и фильтром по статусу."
+      params:
+        - name: status
+          in: query
+          required: false
+          type: string
+          enum: [new, contacted, invited, hired, rejected]
+        - name: limit
+          in: query
+          required: false
+          type: integer
+          default: 50
+          max: 200
+        - name: offset
+          in: query
+          required: false
+          type: integer
+          default: 0
+      responses:
+        "200": "{ items: Application[], total, limit, offset }"
+        "400": "invalid query parameters"
+        "401": "unauthorized"
 
     - method: POST
       path: /api/applications
@@ -177,7 +268,8 @@ api:
           type: string
           enum: [new, contacted, invited, hired, rejected]
       responses:
-        "200": "Application (with notified: boolean)"
+        "200": "Application (with notified: boolean, unchanged: boolean)"
+        "400": "validation error"
         "401": "unauthorized"
         "403": "not owner"
         "404": "not found"
@@ -203,9 +295,13 @@ api:
   response_format:
     content_type: application/json
     error_shape:
-      error: string
-      details: "optional, present on 400 validation errors (zod error tree)"
+      error:
+        code: "string, one of: unauthorized | forbidden | not_found | validation_error | conflict | upstream_error | service_unavailable | internal_error"
+        message: "human-readable string (English, for debugging/logs)"
+        fields: "optional object, present only when code=validation_error and errors map to specific fields — { fieldName: [message, ...] }"
+    note: >
+      Единый конверт ошибки для ВСЕХ эндпоинтов без исключений (раньше формат отличался между
+      ручками) — см. backend/src/errors.ts и components.schemas.Error в openapi.yaml.
 
 test_data:
-  # TODO: положить тестовые данные (JSON/CSV) перед сдачей — см. раздел 11 ТЗ
   path: "./test-data/"

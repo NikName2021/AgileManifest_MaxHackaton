@@ -268,13 +268,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Вакансия уже опубликована или закрыта
+          description: >
+            Вакансия уже опубликована (карточка подтверждена), или закрыта, либо
+            code=employer_chat_missing — работодатель ещё не писал боту напрямую, публиковать
+            карточку некуда (нужно сначала открыть личный чат с ботом).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '502':
-          description: Не удалось отправить карточку в MAX (статус откатан в draft), повторите попытку
+          description: >
+            Не удалось отправить карточку в MAX. code=upstream_error — подтверждённый отказ,
+            статус откатан обратно в draft, безопасно повторить публикацию. code=card_delivery_unknown
+            — истёк таймаут ответа MAX, неизвестно, ушла ли карточка; вакансия ОСТАЁТСЯ published
+            без cardMessageId (не откатывается специально, чтобы избежать дубля карточки) —
+            повторный вызов publish безопасен и либо подтвердит доставку, либо повторит отправку.
           content:
             application/json:
               schema:
@@ -578,6 +586,8 @@ components:
                 - upstream_error
                 - service_unavailable
                 - internal_error
+                - employer_chat_missing
+                - card_delivery_unknown
             message:
               type: string
               description: Человекочитаемое сообщение (на английском, для логов/дебага, не для показа конечному пользователю как есть)
@@ -656,7 +666,12 @@ components:
     VacancyInput:
       type: object
       required: [title]
-      description: employer_id больше не передаётся — работодатель определяется по Bearer-токену.
+      description: >
+        employer_id больше не передаётся — работодатель определяется по Bearer-токену.
+        title+region_code+schedule+зарплата+description+contact_info собираются в текст карточки
+        MAX (после markdown-экранирования) — итоговая длина не должна превышать 4000 символов
+        (документированный лимит MAX на сообщение), иначе 400 validation_error с полем description.
+        salary_min/salary_max ограничены диапазоном Postgres Int (максимум 2147483647).
       properties:
         title:
           type: string
@@ -684,7 +699,11 @@ components:
       type: object
       description: >
         Все поля необязательны (частичное обновление), но хотя бы одно должно присутствовать —
-        пустое тело отклоняется 400. Разрешено только для вакансии в статусе draft.
+        пустое тело отклоняется 400. Разрешено только для вакансии в статусе draft. salary_min<=
+        salary_max и лимит длины итоговой карточки (4000 символов, см. VacancyInput) проверяются
+        на СЛИЯНИИ переданных полей с уже сохранёнными значениями — например PATCH только с
+        salary_min при уже сохранённом salary_max корректно проверится против него, а не пройдёт
+        валидацию вслепую.
       minProperties: 1
       properties:
         title:

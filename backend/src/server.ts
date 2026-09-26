@@ -2,11 +2,22 @@ import Fastify from 'fastify';
 import { config } from './config.js';
 import { maxApi } from './max/client.js';
 import { registerMaxWebhook } from './max/webhook.js';
+import { setBotUsername } from './max/botInfo.js';
 import { db } from './db.js';
-import { publishVacancyCard } from './vacancies/publish.js';
+import { publishVacancy, PublishError } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
-import { applyStatusChange } from './application/service.js';
+import { applyStatusChange, funnelButtons } from './application/service.js';
 import { startStaleVacancyReminders } from './vacancies/reminders.js';
+import { requireAuth } from './auth/middleware.js';
+import { verifyMaxInitData } from './auth/maxInitData.js';
+import { issueSessionToken } from './auth/session.js';
+import { findOrCreateUserByMaxId } from './users/service.js';
+import {
+  createVacancySchema,
+  createApplicationSchema,
+  updateApplicationStatusSchema,
+  authMaxSchema,
+} from './validation.js';
 
 const app = Fastify({ logger: true });
 
@@ -25,26 +36,45 @@ app.get('/health', async (request, reply) => {
 });
 
 // --- Собственный backend API (раздел 6 ТЗ) ---
-// MVP-уровень авторизации: доверяем telegram/MAX-контекст, отдельного auth-слоя нет.
-// TODO: перед публичной сдачей — минимальная проверка токена для мини-приложения (см. раздел 6 ТЗ).
+// Мутирующие эндпоинты и всё, что читает чужие данные (например список откликов с контактами
+// кандидатов), защищены requireAuth (см. auth/middleware.ts). Мини-апп получает сессионный токен
+// через POST /api/auth/max (initData -> проверка HMAC-подписи -> собственная сессия), а жюри может
+// тестировать API без реального MAX-логина через TEST_API_TOKEN из .env.
 
-app.get('/api/vacancies', async (request) => {
-  const employerId = (request.query as any)?.employer_id;
+app.post('/api/auth/max', async (request, reply) => {
+  const parsed = authMaxSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: 'validation failed', details: parsed.error.flatten() });
+  }
+
+  const verified = verifyMaxInitData(parsed.data.init_data);
+  if (!verified.ok) {
+    return reply.code(401).send({ error: verified.error });
+  }
+
+  const user = await findOrCreateUserByMaxId(verified.data.user.id, verified.data.user.name);
+  const token = issueSessionToken(user.id);
+  return { token, user_id: user.id };
+});
+
+app.get('/api/vacancies', { preHandler: requireAuth }, async (request) => {
   return db.vacancy.findMany({
-    where: employerId ? { employerUserId: Number(employerId) } : undefined,
+    where: { employerUserId: request.sessionUserId },
     orderBy: { createdAt: 'desc' },
   });
 });
 
-app.post('/api/vacancies', async (request, reply) => {
-  const body = request.body as any;
-  if (!body?.employer_id || !body?.title) {
-    return reply.code(400).send({ error: 'employer_id and title are required' });
+app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) => {
+  const parsed = createVacancySchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: 'validation failed', details: parsed.error.flatten() });
   }
+  const body = parsed.data;
 
+  const employer = await db.user.findUnique({ where: { id: request.sessionUserId! } });
   const vacancy = await db.vacancy.create({
     data: {
-      employerUserId: Number(body.employer_id),
+      employerUserId: request.sessionUserId!,
       title: body.title,
       regionCode: body.region_code ?? '',
       category: body.category ?? 'general',
@@ -53,39 +83,67 @@ app.post('/api/vacancies', async (request, reply) => {
       salaryMax: body.salary_max ?? null,
       description: body.description ?? null,
       status: 'draft',
+      // Лучшее известное на момент создания через REST/мини-апп. Может быть пустой строкой у
+      // пользователей мини-аппа, ещё не писавших боту напрямую (см. findOrCreateUserByMaxId) —
+      // тогда публикация (см. publish.ts) осмысленно упадёт, пока пользователь не откроет чат с ботом.
+      employerChatId: employer?.chatId || null,
     },
   });
 
   return reply.code(201).send(vacancy);
 });
 
-app.get('/api/vacancies/:id', async (request, reply) => {
+app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply) => {
   const id = Number((request.params as any).id);
   const vacancy = await db.vacancy.findUnique({ where: { id } });
   if (!vacancy) return reply.code(404).send({ error: 'vacancy not found' });
+  if (vacancy.employerUserId !== request.sessionUserId) {
+    return reply.code(403).send({ error: 'not your vacancy' });
+  }
   return vacancy;
 });
 
-app.post('/api/vacancies/:id/publish', async (request, reply) => {
+app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (request, reply) => {
   const id = Number((request.params as any).id);
   const existing = await db.vacancy.findUnique({ where: { id } });
   if (!existing) return reply.code(404).send({ error: 'vacancy not found' });
+  if (existing.employerUserId !== request.sessionUserId) {
+    return reply.code(403).send({ error: 'not your vacancy' });
+  }
 
-  const vacancy = await db.vacancy.update({ where: { id }, data: { status: 'published' } });
-  await publishVacancyCard(vacancy);
-  return vacancy;
+  try {
+    const vacancy = await publishVacancy(id);
+    return vacancy;
+  } catch (err) {
+    if (err instanceof PublishError) {
+      return reply.code(err.kind === 'not_found' ? 404 : 409).send({ error: err.message });
+    }
+    request.log.error(err, 'failed to publish vacancy card, rolled back to draft');
+    return reply.code(502).send({ error: 'failed to publish vacancy card to MAX, please retry' });
+  }
 });
 
-app.post('/api/vacancies/:id/close', async (request, reply) => {
+app.post('/api/vacancies/:id/close', { preHandler: requireAuth }, async (request, reply) => {
   const id = Number((request.params as any).id);
   const existing = await db.vacancy.findUnique({ where: { id } });
   if (!existing) return reply.code(404).send({ error: 'vacancy not found' });
+  if (existing.employerUserId !== request.sessionUserId) {
+    return reply.code(403).send({ error: 'not your vacancy' });
+  }
 
   return db.vacancy.update({ where: { id }, data: { status: 'closed' } });
 });
 
-app.get('/api/vacancies/:id/applications', async (request, reply) => {
+app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (request, reply) => {
   const vacancyId = Number((request.params as any).id);
+  const vacancy = await db.vacancy.findUnique({ where: { id: vacancyId } });
+  if (!vacancy) return reply.code(404).send({ error: 'vacancy not found' });
+  if (vacancy.employerUserId !== request.sessionUserId) {
+    // Список откликов содержит контакты кандидатов (телефон и т.п.) — раньше отдавался без
+    // какой-либо проверки, кто спрашивает.
+    return reply.code(403).send({ error: 'not your vacancy' });
+  }
+
   return db.application.findMany({
     where: { vacancyId },
     include: { candidate: true },
@@ -93,22 +151,33 @@ app.get('/api/vacancies/:id/applications', async (request, reply) => {
   });
 });
 
-app.post('/api/applications', async (request, reply) => {
-  const body = request.body as any;
-  if (!body?.vacancy_id || !body?.candidate_user_id) {
-    return reply.code(400).send({ error: 'vacancy_id and candidate_user_id are required' });
+app.post('/api/applications', { preHandler: requireAuth }, async (request, reply) => {
+  const parsed = createApplicationSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: 'validation failed', details: parsed.error.flatten() });
+  }
+  const body = parsed.data;
+
+  const vacancy = await db.vacancy.findUnique({ where: { id: body.vacancy_id }, include: { employer: true } });
+  if (!vacancy) return reply.code(404).send({ error: 'vacancy not found' });
+  if (vacancy.status !== 'published') {
+    return reply.code(409).send({ error: 'vacancy is not published, cannot apply' });
   }
 
+  const candidate = await db.user.findUnique({ where: { id: request.sessionUserId! } });
+  if (!candidate) return reply.code(404).send({ error: 'candidate not found' });
+
+  let application;
   try {
-    const application = await db.application.create({
+    application = await db.application.create({
       data: {
-        vacancyId: Number(body.vacancy_id),
-        candidateUserId: Number(body.candidate_user_id),
+        vacancyId: vacancy.id,
+        candidateUserId: candidate.id,
         status: 'new',
         contact: body.contact ?? null,
+        candidateChatId: candidate.chatId || null,
       },
     });
-    return reply.code(201).send(application);
   } catch (err: any) {
     // Уникальный constraint (vacancy_id, candidate_user_id) — см. миграцию add_application_unique
     if (err?.code === 'P2002') {
@@ -116,18 +185,45 @@ app.post('/api/applications', async (request, reply) => {
     }
     throw err;
   }
+
+  // Отклик через REST (мини-апп) — раньше здесь вообще не было уведомления работодателя,
+  // хотя ровно та же ситуация через бот-диалог его получает.
+  const targetChatId = vacancy.employerChatId || vacancy.employer.chatId;
+  let notified = false;
+  if (targetChatId) {
+    try {
+      await maxApi.sendMessage(
+        targetChatId,
+        `Новый отклик на вакансию «${vacancy.title}» (через мини-приложение):\nКандидат: ${candidate.displayName ?? 'без имени в MAX'}\nКонтакт: ${application.contact ?? 'не указан'}`,
+        funnelButtons(application.id)
+      );
+      notified = true;
+    } catch (err) {
+      // Отклик уже сохранён — сбой уведомления не должен превращать успешное создание в ошибку.
+      request.log.error(err, 'failed to notify employer about new application via REST');
+    }
+  }
+
+  return reply.code(201).send({ ...application, notified });
 });
 
-app.patch('/api/applications/:id', async (request, reply) => {
+app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, reply) => {
   const id = Number((request.params as any).id);
-  const body = request.body as any;
-  if (!body?.status) {
-    return reply.code(400).send({ error: 'status is required' });
+  const parsed = updateApplicationStatusSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: 'validation failed', details: parsed.error.flatten() });
+  }
+
+  const application = await db.application.findUnique({ where: { id }, include: { vacancy: true } });
+  if (!application) return reply.code(404).send({ error: 'application not found' });
+  if (application.vacancy.employerUserId !== request.sessionUserId) {
+    return reply.code(403).send({ error: 'not your vacancy' });
   }
 
   // applyStatusChange общий с обработчиком кнопок в чате — кандидат получит уведомление
   // в MAX и при смене статуса через API, не только через кнопки в чате работодателя.
-  return applyStatusChange(id, body.status);
+  const result = await applyStatusChange(id, parsed.data.status);
+  return reply.send({ ...result.application, notified: result.notified });
 });
 
 app.get('/api/benchmark', async (request, reply) => {
@@ -172,6 +268,9 @@ app.setErrorHandler((err: any, request, reply) => {
 async function start() {
   try {
     const me = await maxApi.getMe();
+    // MAX_BOT_USERNAME из .env — явный приоритет над автоопределением, на случай если поле
+    // в ответе /me называется иначе, чем мы предполагаем (см. TODO ниже).
+    setBotUsername(config.botUsernameOverride ?? (me as any)?.username); // TODO: сверить имя поля с реальным ответом /me
     await maxApi.registerCommands([
       { name: 'новая_вакансия', description: 'Создать вакансию' },
       { name: 'отмена', description: 'Отменить текущий диалог' },
@@ -180,18 +279,18 @@ async function start() {
 
     if (config.publicBaseUrl) {
       try {
-        // Секрет зашиваем в URL как query-параметр — см. комментарий в max/webhook.ts про то,
-        // почему это надёжнее, чем полагаться на непроверенный заголовок MAX.
-        const webhookUrl = config.maxWebhookSecret
-          ? `${config.publicBaseUrl}/webhook/max?secret=${encodeURIComponent(config.maxWebhookSecret)}`
-          : `${config.publicBaseUrl}/webhook/max`;
+        // Секрет больше НЕ зашиваем в URL query-параметром — по документации dev.max.ru MAX
+        // присылает его исключительно в заголовке X-Max-Bot-Api-Secret на каждом вызове вебхука
+        // (см. max/webhook.ts), а держать секрет в URL было небезопасно: он утекал бы в лог строки
+        // ниже и в любые логи прокси/туннеля, через которые проходит регистрация подписки.
+        const webhookUrl = `${config.publicBaseUrl}/webhook/max`;
         // Идемпотентность: не плодим дублирующие подписки при каждом рестарте backend —
         // TODO: поле с URL в ответе /subscriptions называется по документации, не проверено живым вызовом.
         const existing = (await maxApi.listSubscriptions()) as { subscriptions?: { url?: string }[] };
         const alreadySubscribed = existing?.subscriptions?.some((s) => s.url === webhookUrl);
 
         if (!alreadySubscribed) {
-          await maxApi.createSubscription(webhookUrl, ['message_created', 'message_callback']);
+          await maxApi.createSubscription(webhookUrl, ['message_created', 'message_callback', 'bot_started']);
           app.log.info({ webhookUrl }, 'MAX webhook subscription registered');
         } else {
           app.log.info({ webhookUrl }, 'MAX webhook subscription already registered, skipping');

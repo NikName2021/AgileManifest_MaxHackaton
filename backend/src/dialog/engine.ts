@@ -29,8 +29,14 @@ export async function startFlow(chatId: string, flowName: string) {
 }
 
 export async function cancelFlow(chatId: string) {
-  const deleted = await db.dialogSession.deleteMany({ where: { chatId } });
-  const text = deleted.count > 0
+  // Раньше /отмена чистила только DialogSession — если кандидат успел нажать "Откликнуться" и
+  // застрять на шаге "пришлите контакт" (PendingApplication), /отмена его не сбрасывала: следующее
+  // сообщение кандидата в чате всё равно попадало в resolvePendingApplication как "контакт".
+  const [deletedSession, deletedPending] = await Promise.all([
+    db.dialogSession.deleteMany({ where: { chatId } }),
+    db.pendingApplication.deleteMany({ where: { chatId } }),
+  ]);
+  const text = (deletedSession.count > 0 || deletedPending.count > 0)
     ? 'Ок, отменил текущий диалог.'
     : 'Сейчас нет активного диалога — нечего отменять. Напишите /новая_вакансия, чтобы начать.';
   await maxApi.sendMessage(chatId, text);

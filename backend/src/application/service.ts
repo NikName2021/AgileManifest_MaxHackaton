@@ -1,5 +1,6 @@
 import { db } from '../db.js';
-import { maxApi } from '../max/client.js';
+import { maxApi, type InlineButton } from '../max/client.js';
+import type { Application, User, Vacancy } from '@prisma/client';
 
 const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
 
@@ -29,15 +30,15 @@ function statusMessageForCandidate(status: string, vacancyTitle: string): string
     return undefined;
 }
 
-function funnelButtons(applicationId: number) {
+export function funnelButtons(applicationId: number): InlineButton[][] {
     return [
         [
-            { type: 'callback' as const, text: 'На связи', payload: `app_status:${applicationId}:contacted` },
-            { type: 'callback' as const, text: 'Пригласить', payload: `app_status:${applicationId}:invited` },
+            { type: 'callback', text: 'На связи', payload: `app_status:${applicationId}:contacted` },
+            { type: 'callback', text: 'Пригласить', payload: `app_status:${applicationId}:invited` },
         ],
         [
-            { type: 'callback' as const, text: 'Нанять', payload: `app_status:${applicationId}:hired` },
-            { type: 'callback' as const, text: 'Отказать', payload: `app_status:${applicationId}:rejected` },
+            { type: 'callback', text: 'Нанять', payload: `app_status:${applicationId}:hired` },
+            { type: 'callback', text: 'Отказать', payload: `app_status:${applicationId}:rejected` },
         ],
     ];
 }
@@ -54,6 +55,13 @@ export async function handleApplyClick(candidateChatId: string, candidateMaxUser
     const vacancy = await db.vacancy.findUnique({ where: { id: vacancyId } });
     if (!vacancy) {
         await maxApi.sendMessage(candidateChatId, 'Эта вакансия больше не доступна.');
+        return;
+    }
+
+    // Нельзя откликаться на черновик или закрытую вакансию — карточка могла быть переслана уже
+    // после того, как работодатель закрыл вакансию, либо это вообще ещё не опубликованный черновик.
+    if (vacancy.status !== 'published') {
+        await maxApi.sendMessage(candidateChatId, 'Эта вакансия сейчас недоступна для отклика (закрыта или ещё не опубликована).');
         return;
     }
 
@@ -100,10 +108,9 @@ export async function resolvePendingApplication(
         return true; // сообщение адресовано этому флоу, просто переспрашиваем, сессию не рвём
     }
 
-    await db.pendingApplication.delete({ where: { chatId } });
-
     const candidate = await db.user.findUnique({ where: { maxUserId: candidateMaxUserId } });
     if (!candidate) {
+        // Не трогаем pendingApplication — пользователь всё ещё может донастроить свою учётку и повторить.
         await maxApi.sendMessage(chatId, 'Не получилось оформить отклик, попробуйте ещё раз через кнопку «Откликнуться».');
         return true;
     }
@@ -113,10 +120,14 @@ export async function resolvePendingApplication(
         include: { employer: true },
     });
     if (!vacancy) {
+        await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});
         await maxApi.sendMessage(chatId, 'Эта вакансия больше не доступна.');
         return true;
     }
 
+    // Важен порядок: сначала пытаемся создать отклик, и только при успехе (или при подтверждённом
+    // дубликате P2002) чистим pendingApplication. Раньше запись удалялась ДО create — если create
+    // падал по любой другой причине, кандидат молча терял состояние "жду контакт".
     let application;
     try {
         application = await db.application.create({
@@ -125,26 +136,39 @@ export async function resolvePendingApplication(
                 candidateUserId: candidate.id,
                 status: 'new',
                 contact,
+                // Чат, где реально прошёл отклик — гарантированно верный адрес для уведомлений кандидату.
+                candidateChatId: chatId,
             },
         });
     } catch (err: any) {
         if (err?.code === 'P2002') {
+            await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});
             await maxApi.sendMessage(chatId, 'Вы уже откликались на эту вакансию.');
             return true;
         }
-        throw err;
+        console.error('failed to create application', err);
+        await maxApi.sendMessage(chatId, 'Не получилось сохранить отклик, попробуйте отправить контакт ещё раз через минуту.');
+        return true;
     }
+
+    await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});
 
     await maxApi.sendMessage(
         chatId,
         `Отклик отправлен! Работодатель получит ваш контакт и свяжется по вакансии «${vacancy.title}».`
     );
 
-    await maxApi.sendMessage(
-        vacancy.employer.chatId,
-        `Новый отклик на вакансию «${vacancy.title}»:\nКандидат: ${candidate.displayName ?? 'без имени в MAX'}\nКонтакт: ${contact}`,
-        funnelButtons(application.id)
-    );
+    const employerChatId = vacancy.employerChatId || vacancy.employer.chatId;
+    try {
+        await maxApi.sendMessage(
+            employerChatId,
+            `Новый отклик на вакансию «${vacancy.title}»:\nКандидат: ${candidate.displayName ?? 'без имени в MAX'}\nКонтакт: ${contact}`,
+            funnelButtons(application.id)
+        );
+    } catch (err) {
+        // Отклик уже сохранён — сбой уведомления работодателя не должен выглядеть как сбой всего флоу.
+        console.error('failed to notify employer about new application (chat flow)', vacancy.id, err);
+    }
 
     return true;
 }
@@ -160,17 +184,30 @@ export async function handleStatusChangeFromChat(employerChatId: string, applica
     });
     if (!application) return;
 
-    // Менять статус может только работодатель этой конкретной вакансии
-    if (application.vacancy.employer.chatId !== employerChatId) return;
+    // Менять статус может только работодатель этой конкретной вакансии. Сверяем с застывшим
+    // employerChatId вакансии (а не с "текущим" chatId работодателя из users) — иначе после
+    // того как работодатель напишет боту из группового чата, users.chatId сменится и эта
+    // проверка либо неожиданно перестанет пускать владельца, либо (без остальных фиксов) пустит кого-то ещё.
+    const ownerChatId = application.vacancy.employerChatId || application.vacancy.employer.chatId;
+    if (ownerChatId !== employerChatId) return;
 
-    await applyStatusChange(applicationId, status);
-    await maxApi.sendMessage(employerChatId, `Статус обновлён: ${statusLabel(status)}.`);
+    const result = await applyStatusChange(applicationId, status);
+    const suffix = result.notified ? '' : ' (не удалось уведомить кандидата — сообщите ему лично)';
+    await maxApi.sendMessage(employerChatId, `Статус обновлён: ${statusLabel(status)}.${suffix}`);
+}
+
+export interface ApplyStatusChangeResult {
+    application: Application & { vacancy: Vacancy; candidate: User };
+    notified: boolean;
+    notifyError?: string;
 }
 
 // --- Воронка: смена статуса из собственного REST API (раздел 6 ТЗ) ---
 // Общая точка для чата и API, чтобы кандидат получал уведомление в обоих случаях.
-
-export async function applyStatusChange(applicationId: number, status: string) {
+// Мутация статуса и уведомление кандидата — два разных результата: если сообщение в MAX не
+// доставилось (сеть, чат недоступен), это не должно откатывать уже сохранённый статус или
+// превращать успешный запрос в 500 — вызывающий код сам решает, как сообщить про notified:false.
+export async function applyStatusChange(applicationId: number, status: string): Promise<ApplyStatusChangeResult> {
     const application = await db.application.update({
         where: { id: applicationId },
         data: { status },
@@ -178,9 +215,17 @@ export async function applyStatusChange(applicationId: number, status: string) {
     });
 
     const candidateText = statusMessageForCandidate(status, application.vacancy.title);
-    if (candidateText) {
-        await maxApi.sendMessage(application.candidate.chatId, candidateText);
+    const targetChatId = application.candidateChatId || application.candidate.chatId;
+
+    if (!candidateText || !targetChatId) {
+        return { application, notified: false };
     }
 
-    return application;
+    try {
+        await maxApi.sendMessage(targetChatId, candidateText);
+        return { application, notified: true };
+    } catch (err: any) {
+        console.error('failed to notify candidate about status change', applicationId, err);
+        return { application, notified: false, notifyError: err?.message ?? String(err) };
+    }
 }

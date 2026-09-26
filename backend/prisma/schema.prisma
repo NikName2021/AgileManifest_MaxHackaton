@@ -36,6 +36,10 @@ model Vacancy {
   cardMessageId  String?       @map("card_message_id")
   createdAt      DateTime      @default(now()) @map("created_at")
   reminderSentAt DateTime?     @map("reminder_sent_at")
+  // Чат, где родилась вакансия (или где её опубликовали через REST) — застывает один раз,
+  // уведомления воронки идут именно сюда, а не в "текущий" chatId работодателя из users,
+  // который может перезаписаться, если работодатель потом напишет боту из группового чата.
+  employerChatId String?       @map("employer_chat_id")
 
   applications   Application[]
 
@@ -50,6 +54,9 @@ model Application {
   candidate       User     @relation("CandidateApplications", fields: [candidateUserId], references: [id])
   status          String   @default("new") // new | contacted | invited | hired | rejected
   contact         String?
+  // Чат, где кандидат реально прошёл отклик (открыт через deep link — гарантированно личный).
+  // Уведомления о смене статуса шлём сюда, а не в "текущий" chatId кандидата из users.
+  candidateChatId String?  @map("candidate_chat_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

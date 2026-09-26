@@ -296,12 +296,22 @@ api:
     content_type: application/json
     error_shape:
       error:
-        code: "string, one of: unauthorized | forbidden | not_found | validation_error | conflict | upstream_error | service_unavailable | internal_error"
+        code: "string, one of: unauthorized | forbidden | not_found | validation_error | conflict | upstream_error | service_unavailable | internal_error | employer_chat_missing | card_delivery_unknown"
         message: "human-readable string (English, for debugging/logs)"
         fields: "optional object, present only when code=validation_error and errors map to specific fields — { fieldName: [message, ...] }"
     note: >
       Единый конверт ошибки для ВСЕХ эндпоинтов без исключений (раньше формат отличался между
       ручками) — см. backend/src/errors.ts и components.schemas.Error в openapi.yaml.
+      employer_chat_missing (409, POST /api/vacancies/{id}/publish) — работодатель ещё не писал
+      боту напрямую, publish некуда слать карточку. card_delivery_unknown (502, тот же эндпоинт) —
+      таймаут ответа MAX, неизвестно, ушла ли карточка; вакансия остаётся published без
+      cardMessageId, повторный publish безопасен (не создаёт дубликат).
+
+  cors:
+    note: >
+      FRONTEND_ORIGIN (env, через запятую) — origin(ы) frontend, разрешённые для CORS-запросов с
+      заголовком Authorization. Методы GET/POST/PATCH/OPTIONS, заголовки Authorization и
+      Content-Type. Не задан — разрешён любой origin (dev/жюри).
 
 test_data:
   path: "./test-data/"

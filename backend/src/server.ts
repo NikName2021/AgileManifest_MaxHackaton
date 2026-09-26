@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import { config } from './config.js';
 import { maxApi } from './max/client.js';
 import { registerMaxWebhook } from './max/webhook.js';
@@ -17,6 +18,7 @@ import { sendError, zodFieldErrors } from './errors.js';
 import {
   createVacancySchema,
   updateVacancySchema,
+  checkMergedVacancyConstraints,
   createApplicationSchema,
   updateApplicationStatusSchema,
   listApplicationsQuerySchema,
@@ -24,6 +26,20 @@ import {
 } from './validation.js';
 
 const app = Fastify({ logger: true });
+
+// CORS (раздел 1 фидбека фронтенда): frontend и API — разные origin (mini-app во встроенном
+// WebView MAX может грузиться с отдельного хостинга), поэтому браузерные fetch-запросы с
+// Authorization-заголовком не пройдут без явного CORS. FRONTEND_ORIGIN — список через запятую;
+// если не задан, разрешаем всё (`origin: true`) для локальной разработки/жюри без готового
+// прод-адреса фронта — перед реальной сдачей лучше сузить до конкретного origin в .env.
+const allowedOrigins = config.frontendOrigin
+  ? config.frontendOrigin.split(',').map((s) => s.trim()).filter(Boolean)
+  : true;
+app.register(cors, {
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+});
 
 // Требуемые подписки на вебхук — вынесено сюда, чтобы сверять их и при регистрации (start(),
 // ниже), и при возможном будущем переиспользовании списка.
@@ -143,20 +159,50 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
   }
 
   const body = parsed.data;
-  const vacancy = await db.vacancy.update({
-    where: { id },
+
+  // salary_min<=salary_max и длина карточки проверяются на СЛИЯНИИ уже сохранённых полей с
+  // частичным телом запроса, а не только на переданных полях — раньше PATCH только с salary_min
+  // проходил проверку, даже если новый min становился больше уже сохранённого max (раздел 5
+  // фидбека фронтенда: "диапазон 50 000–60 000, запрос только с salary_min: 70000 проходит").
+  const merged = {
+    title: body.title ?? existing.title,
+    region_code: body.region_code ?? existing.regionCode,
+    schedule: body.schedule ?? existing.schedule,
+    salary_min: body.salary_min !== undefined ? body.salary_min : existing.salaryMin,
+    salary_max: body.salary_max !== undefined ? body.salary_max : existing.salaryMax,
+    description: body.description !== undefined ? body.description : existing.description,
+    contact_info: body.contact_info !== undefined ? body.contact_info : existing.contactInfo,
+  };
+  const constraintCheck = checkMergedVacancyConstraints(merged);
+  if (!constraintCheck.ok) {
+    return sendError(reply, 400, 'validation_error', 'invalid request body', {
+      [constraintCheck.field]: [constraintCheck.message],
+    });
+  }
+
+  // Атомарная проверка+обновление одним запросом (раздел 2 фидбека фронтенда): раньше между
+  // findUnique-проверкой статуса выше и update ниже вакансию мог успеть забрать параллельный
+  // publish — окно гонки, пусть и маленькое. updateMany с тем же условием status:'draft' в WHERE
+  // либо применяет изменение атомарно, либо (count===0) означает, что статус уже сменился
+  // между чтением и записью — тогда отдаём тот же 409, что и при первичной проверке.
+  const updateResult = await db.vacancy.updateMany({
+    where: { id, status: 'draft' },
     data: {
-      ...(body.title !== undefined ? { title: body.title } : {}),
-      ...(body.region_code !== undefined ? { regionCode: body.region_code } : {}),
+      title: merged.title,
+      regionCode: merged.region_code,
       ...(body.category !== undefined ? { category: body.category } : {}),
-      ...(body.schedule !== undefined ? { schedule: body.schedule } : {}),
-      ...(body.salary_min !== undefined ? { salaryMin: body.salary_min } : {}),
-      ...(body.salary_max !== undefined ? { salaryMax: body.salary_max } : {}),
-      ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.contact_info !== undefined ? { contactInfo: body.contact_info } : {}),
+      schedule: merged.schedule,
+      salaryMin: merged.salary_min,
+      salaryMax: merged.salary_max,
+      description: merged.description,
+      contactInfo: merged.contact_info,
     },
   });
+  if (updateResult.count === 0) {
+    return sendError(reply, 409, 'conflict', 'only a draft vacancy can be edited');
+  }
 
+  const vacancy = await db.vacancy.findUniqueOrThrow({ where: { id } });
   return vacancy;
 });
 
@@ -173,7 +219,28 @@ app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (reque
     return vacancy;
   } catch (err) {
     if (err instanceof PublishError) {
-      return sendError(reply, err.kind === 'not_found' ? 404 : 409, err.kind === 'not_found' ? 'not_found' : 'conflict', err.message);
+      if (err.kind === 'not_found') {
+        return sendError(reply, 404, 'not_found', err.message);
+      }
+      if (err.kind === 'no_chat') {
+        // Отдельный код вместо общего upstream_error (раздел 6 фидбека фронтенда) — frontend
+        // может по этому коду явно предложить работодателю открыть личный чат с ботом, вместо
+        // непонятного "сервис недоступен".
+        return sendError(reply, 409, 'employer_chat_missing', err.message);
+      }
+      return sendError(reply, 409, 'conflict', err.message);
+    }
+    if ((err as any)?.name === 'TimeoutError') {
+      // Таймаут ответа MAX — неизвестно, ушла карточка или нет. Вакансия НЕ откатывается в
+      // draft (см. publish.ts) именно чтобы повторный вызов publish не создал вторую карточку —
+      // явно говорим об этом клиенту, а не отдаём тот же upstream_error, что и на подтверждённый отказ.
+      request.log.error(err, 'MAX did not confirm card delivery before timeout; vacancy stays published for a safe retry');
+      return sendError(
+        reply,
+        502,
+        'card_delivery_unknown',
+        'MAX did not confirm the card was delivered before the request timed out. The vacancy stays published; call publish again to retry — this will not create a duplicate card.'
+      );
     }
     request.log.error(err, 'failed to publish vacancy card, rolled back to draft');
     return sendError(reply, 502, 'upstream_error', 'failed to publish vacancy card to MAX, please retry');

@@ -28,4 +28,8 @@ export const config = {
   // Токен для тестового доступа к /api/* без реального MAX-аккаунта — для проверки жюри
   // (раздел 11 ТЗ, "тестовые учётки"). Если не задан — тестовый вход отключён.
   testApiToken: process.env.TEST_API_TOKEN,
+  // Origin(ы) frontend для CORS, через запятую (см. server.ts) — раздел 1 фидбека фронтенда:
+  // браузерный fetch с заголовком Authorization с ДРУГОГО origin не пройдёт без явного CORS.
+  // Не задан — разрешаем любой origin (dev/жюри), задан — сужаем до перечисленных.
+  frontendOrigin: process.env.FRONTEND_ORIGIN,
 };

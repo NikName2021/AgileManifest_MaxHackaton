@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { getBotUsername } from '../max/botInfo.js';
+import { escapeMarkdown } from '../markdown.js';
 import type { Vacancy } from '@prisma/client';
 
 export class PublishError extends Error {
@@ -9,13 +10,6 @@ export class PublishError extends Error {
         super(message);
         this.kind = kind;
     }
-}
-
-// MAX парсит text как markdown (format: 'markdown') — экранируем спецсимволы из пользовательского
-// ввода (название/регион/описание вакансии), иначе они могут случайно сломать разметку карточки
-// или (в крайнем случае) исказить смысл через самодельные **жирный**/[ссылка](...) конструкции.
-function escapeMarkdown(text: string): string {
-    return text.replace(/([\\`*_\[\]()~>#+\-=|{}.!])/g, '\\$1');
 }
 
 export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
@@ -29,6 +23,7 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         `График: ${escapeMarkdown(vacancy.schedule)}`,
         `Зарплата: ${salaryText}`,
         vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
+        vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
     ].filter(Boolean).join('\n');
 
     const employer = await db.user.findUnique({ where: { id: vacancy.employerUserId } });

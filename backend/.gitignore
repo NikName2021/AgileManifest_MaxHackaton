@@ -1,0 +1,18 @@
+# зависимости и сборка
+node_modules/
+dist/
+
+# секреты 
+.env
+.env.local
+.env.*.local
+
+# логи, кэш, системные файлы
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# редакторы
+.vscode/
+.idea/

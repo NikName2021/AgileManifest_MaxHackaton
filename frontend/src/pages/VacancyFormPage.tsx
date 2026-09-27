@@ -4,6 +4,7 @@ import { Button } from '@maxhub/max-ui'
 import { ArrowRight, Check, FilePenLine, Send } from 'lucide-react'
 import type { Vacancy } from '../entities/hiring'
 import { useSession } from '../features/session/context'
+import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
 import {
   fieldLabels,
   formValues,
@@ -249,6 +250,7 @@ function VacancyEditor({ vacancy }: { vacancy?: Vacancy }) {
                 Если сумма пока не определена, оставьте оба поля пустыми. Период оплаты — за час,
                 смену или месяц — укажите в описании.
               </p>
+              <SalaryBenchmark position={values.title} region={values.region_code} />
               {field('description', {
                 multiline: true,
                 limit: 4000,

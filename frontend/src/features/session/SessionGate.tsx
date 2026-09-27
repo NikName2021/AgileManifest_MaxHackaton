@@ -10,6 +10,7 @@ import { authenticate, authUrl } from './auth'
 import { SessionContext, type Session } from './context'
 import { createVacancyRepository } from '../vacancies/api'
 import { createApplicationRepository } from '../applications/api'
+import { createBenchmarkRepository } from '../benchmark/api'
 
 type Issue =
   | 'outside'
@@ -93,6 +94,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
             user: { id: credentials.userId, display_name: 'Мой кабинет' },
             vacancies,
             applications,
+            benchmark: createBenchmarkRepository(config.apiBaseUrl),
             bridge,
             mode: 'max',
           },

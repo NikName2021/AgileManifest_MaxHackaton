@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useBeforeUnload, useBlocker, useParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { ArrowUpRight, CheckCircle2, Copy, Pencil, Send } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Clock3, Copy, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
 import { cardTextLength } from '../features/vacancies/model'
@@ -220,7 +220,11 @@ function VacancyDetails({ id }: { id: number }) {
           {vacancy.status === 'published' && (
             <>
               <span className="step-icon">
-                <CheckCircle2 size={25} />
+                {vacancy.cardMessageId || mode === 'preview' ? (
+                  <CheckCircle2 size={25} />
+                ) : (
+                  <Clock3 size={25} />
+                )}
               </span>
               <h2>
                 {mode === 'preview'
@@ -242,6 +246,9 @@ function VacancyDetails({ id }: { id: number }) {
                     Сначала проверьте чат с ботом. Если карточка уже там, повторно отправлять её не
                     нужно.
                   </p>
+                  <Button variant="secondary" disabled={busy} onClick={() => void refresh()}>
+                    {busy ? 'Проверяем…' : 'Проверить состояние'}
+                  </Button>
                   <label className="publication-check">
                     <input
                       type="checkbox"
@@ -324,13 +331,12 @@ function VacancyDetails({ id }: { id: number }) {
               неизвестен.
             </p>
           )}
-          {(Boolean(failure) ||
-            needsRefresh ||
-            (vacancy.status === 'published' && !vacancy.cardMessageId)) && (
-            <Button variant="secondary" disabled={busy} onClick={() => void refresh()}>
-              {busy ? 'Проверяем…' : 'Проверить состояние'}
-            </Button>
-          )}
+          {(Boolean(failure) || needsRefresh) &&
+            !(vacancy.status === 'published' && !vacancy.cardMessageId) && (
+              <Button variant="secondary" disabled={busy} onClick={() => void refresh()}>
+                {busy ? 'Проверяем…' : 'Проверить состояние'}
+              </Button>
+            )}
           {blocker.state === 'blocked' && (
             <p role="status">Дождитесь завершения запроса перед выходом.</p>
           )}

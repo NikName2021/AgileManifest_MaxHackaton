@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
+import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
 
 // Общие zod-схемы для REST API (раздел 6 ТЗ) — раньше валидация была ручной ("if (!body?.x)"),
 // пропускала неверные типы (например строку вместо числа в salary_min) и не давала внятных
@@ -61,15 +61,18 @@ function checkCardLength(data: {
   description?: string | null;
   contact_info?: string | null;
 }, ctx: z.RefinementCtx) {
-  const length = buildVacancyCardText({
+  // VacancyCardFields ждёт "число или null" / "строка или null" (см. cardText.ts) — приводим
+  // необязательное zod-поле (может быть undefined) к null здесь, один раз, вместо того чтобы
+  // VacancyCardFields сам был одновременно optional и nullable.
+  const length = vacancyCardTextLength({
     title: data.title,
     regionCode: data.region_code ?? '',
     schedule: data.schedule ?? 'temporary',
-    salaryMin: data.salary_min,
-    salaryMax: data.salary_max,
-    description: data.description,
-    contactInfo: data.contact_info,
-  }).length;
+    salaryMin: data.salary_min ?? null,
+    salaryMax: data.salary_max ?? null,
+    description: data.description ?? null,
+    contactInfo: data.contact_info ?? null,
+  });
   if (length > MAX_CARD_TEXT_LIMIT) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -138,15 +141,15 @@ export function checkMergedVacancyConstraints(merged: {
     return { ok: false, field: 'salary_min', message: 'salary_min must be less than or equal to salary_max' };
   }
 
-  const length = buildVacancyCardText({
+  const length = vacancyCardTextLength({
     title: merged.title,
     regionCode: merged.region_code ?? '',
     schedule: merged.schedule ?? 'temporary',
-    salaryMin: merged.salary_min,
-    salaryMax: merged.salary_max,
-    description: merged.description,
-    contactInfo: merged.contact_info,
-  }).length;
+    salaryMin: merged.salary_min ?? null,
+    salaryMax: merged.salary_max ?? null,
+    description: merged.description ?? null,
+    contactInfo: merged.contact_info ?? null,
+  });
   if (length > MAX_CARD_TEXT_LIMIT) {
     return {
       ok: false,

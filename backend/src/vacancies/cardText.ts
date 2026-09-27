@@ -6,22 +6,27 @@ import { escapeMarkdown } from '../markdown.js';
 // превысить лимит даже при валидном description (раздел 4 фидбека фронтенда).
 export const MAX_CARD_TEXT_LIMIT = 4000;
 
+// Поля либо всегда заданы (title/regionCode/schedule), либо явно "число или ничего" /
+// "строка или ничего" (`| null`, без `?`) — вызывающая сторона обязана привести отсутствующее
+// значение к null сама (`data.salary_min ?? null`), а не оставлять его undefined. Раньше часть
+// полей была одновременно optional и nullable (`salaryMin?: number | null`), что дублировало
+// один и тот же смысл двумя разными способами без причины.
 export interface VacancyCardFields {
   title: string;
   regionCode: string;
   schedule: string;
-  salaryMin?: number | null;
-  salaryMax?: number | null;
-  description?: string | null;
-  contactInfo?: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  description: string | null;
+  contactInfo: string | null;
 }
 
 // Раньше здесь были truthy-проверки (`vacancy.salaryMin && vacancy.salaryMax`) — API разрешает
 // 0 как валидную сумму (zod: nonnegative), а `0` truthy-проверкой воспринимался как "нет суммы"
 // и карточка молча показывала "по договорённости" вместо реального нуля.
-function formatSalary(min?: number | null, max?: number | null): string {
-  const hasMin = min !== null && min !== undefined;
-  const hasMax = max !== null && max !== undefined;
+function formatSalary(min: number | null, max: number | null): string {
+  const hasMin = min !== null;
+  const hasMax = max !== null;
   if (hasMin && hasMax) return `${min}–${max} ₽`;
   if (hasMin) return `от ${min} ₽`;
   if (hasMax) return `до ${max} ₽`;

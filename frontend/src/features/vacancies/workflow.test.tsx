@@ -75,6 +75,141 @@ async function seed(session: Session) {
   })
 }
 describe('employer vacancy workflow', () => {
+  it('shows confirmed delivery when a read resolves a lost response and clears the obsolete error', async () => {
+    const session = createPreviewSession()
+    session.mode = 'max'
+    const row = await seed(session)
+    vi.spyOn(session.vacancies, 'get')
+      .mockResolvedValueOnce(row)
+      .mockResolvedValue({ ...row, status: 'published', cardMessageId: 'confirmed-after-timeout' })
+    const publish = vi
+      .spyOn(session.vacancies, 'publish')
+      .mockRejectedValue(new ApiError('network'))
+    start(session, `/vacancies/${row.id}`)
+    fireEvent.click(await screen.findByRole('button', { name: 'Опубликовать' }))
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Подтвердить публикацию',
+      }),
+    )
+    await screen.findByText(/Проверка подтвердила отправку карточки/)
+    expect(screen.getByRole('heading', { name: 'Вакансия опубликована' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(publish).toHaveBeenCalledOnce()
+  })
+  it('requires checking the chat and explicit confirmation, re-reads the vacancy and prevents duplicate resends', async () => {
+    const session = createPreviewSession()
+    session.mode = 'max'
+    const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
+    const get = vi.spyOn(session.vacancies, 'get').mockResolvedValue(row)
+    let resolve!: (value: Vacancy) => void
+    const publish = vi.spyOn(session.vacancies, 'publish').mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        }),
+    )
+    const router = start(session, `/vacancies/${row.id}`)
+    await screen.findByRole('heading', { name: 'Отправка не подтверждена' })
+    expect(screen.getByRole('button', { name: 'Повторить отправку' })).toBeDisabled()
+    expect(publish).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('checkbox', { name: /Я проверил чат/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить отправку' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('может появиться дубль')
+    expect(publish).not.toHaveBeenCalled()
+    const confirm = within(dialog).getByRole('button', { name: 'Отправить повторно' })
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+    await waitFor(() => expect(publish).toHaveBeenCalledOnce())
+    expect(get).toHaveBeenCalledTimes(2)
+    await act(() => router.navigate('/vacancies'))
+    expect(router.state.location.pathname).toBe(`/vacancies/${row.id}`)
+    await act(() => resolve({ ...row, cardMessageId: 'confirmed-card' }))
+    await screen.findByRole('heading', { name: 'Вакансия опубликована' })
+    expect(screen.queryByRole('button', { name: 'Повторить отправку' })).not.toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/vacancies/${row.id}`)
+  })
+  it.each(['confirmed', 'closed', 'draft'] as const)(
+    'cancels resend if the preflight read reports %s',
+    async (state) => {
+      const session = createPreviewSession()
+      const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
+      vi.spyOn(session.vacancies, 'get')
+        .mockResolvedValueOnce(row)
+        .mockResolvedValue({
+          ...row,
+          status: state === 'confirmed' ? 'published' : state,
+          cardMessageId: state === 'confirmed' ? 'already-sent' : null,
+        })
+      const publish = vi.spyOn(session.vacancies, 'publish')
+      start(session, `/vacancies/${row.id}`)
+      fireEvent.click(await screen.findByRole('checkbox', { name: /Я проверил чат/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Повторить отправку' }))
+      fireEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', {
+          name: 'Отправить повторно',
+        }),
+      )
+      await screen.findByText(
+        state === 'confirmed'
+          ? /Повторная отправка не понадобилась/
+          : /Повторная отправка отменена/,
+      )
+      expect(publish).not.toHaveBeenCalled()
+    },
+  )
+  it('locks resend after a failed state check and restores it only after a successful read and renewed chat check', async () => {
+    const session = createPreviewSession()
+    const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
+    const get = vi
+      .spyOn(session.vacancies, 'get')
+      .mockResolvedValueOnce(row)
+      .mockRejectedValueOnce(new ApiError('network'))
+      .mockResolvedValue(row)
+    const publish = vi.spyOn(session.vacancies, 'publish')
+    start(session, `/vacancies/${row.id}`)
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Я проверил чат/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить отправку' }))
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Отправить повторно' }),
+    )
+    await screen.findByRole('alert')
+    expect(screen.getByRole('checkbox')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Повторить отправку' })).toBeDisabled()
+    expect(publish).not.toHaveBeenCalled()
+    expect(get).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить состояние' }))
+    await waitFor(() => expect(screen.getByRole('checkbox')).toBeEnabled())
+    expect(screen.getByRole('checkbox')).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Повторить отправку' })).toBeDisabled()
+    expect(publish).not.toHaveBeenCalled()
+  })
+  it('reconciles a lost publish response without automatically retrying delivery', async () => {
+    const session = createPreviewSession()
+    session.mode = 'max'
+    const row = await seed(session)
+    vi.spyOn(session.vacancies, 'get')
+      .mockResolvedValueOnce(row)
+      .mockResolvedValue({ ...row, status: 'published', cardMessageId: null })
+    const publish = vi
+      .spyOn(session.vacancies, 'publish')
+      .mockRejectedValue(new ApiError('server', 502, 'card_delivery_unknown'))
+    start(session, `/vacancies/${row.id}`)
+    fireEvent.click(await screen.findByRole('button', { name: 'Опубликовать' }))
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Подтвердить публикацию',
+      }),
+    )
+    await screen.findByRole('heading', { name: 'Отправка не подтверждена' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Она могла прийти в чат')
+    expect(publish).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Повторить отправку' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить состояние' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(publish).toHaveBeenCalledOnce()
+  })
   it.each(['draft', 'published', 'closed'] as const)(
     'copies a %s vacancy only after saving, without touching its identity, status or applications',
     async (status) => {
@@ -330,7 +465,9 @@ describe('employer vacancy workflow', () => {
       cardMessageId: null,
     })
     start(session, `/vacancies/${row.id}`)
-    expect(await screen.findByRole('heading', { name: 'Проверяем карточку' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Отправка не подтверждена' }),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Карточка отправлена в чат с ботом.')).not.toBeInTheDocument()
   })
   it('shows a resource permission error without hiding the whole session', async () => {

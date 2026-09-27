@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useBeforeUnload, useBlocker, useParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, CheckCircle2, Copy, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
@@ -28,12 +28,29 @@ function VacancyDetails({ id }: { id: number }) {
   const { vacancies, mode } = useSession()
   const load = useCallback((signal: AbortSignal) => vacancies.get(id, signal), [id, vacancies])
   const { result, reload, replace } = useResource(load, String(id))
-  const [confirm, setConfirm] = useState<'publish' | 'close' | null>(null)
+  const [confirm, setConfirm] = useState<'publish' | 'resend' | 'close' | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<unknown>()
   const [needsRefresh, setNeedsRefresh] = useState(false)
+  const [checkedChat, setCheckedChat] = useState(false)
+  const [notice, setNotice] = useState('')
   const lock = useRef(false),
     mounted = useRef(true)
+  const blocker = useBlocker(() => lock.current)
+  useBeforeUnload(
+    useCallback(
+      (event) => {
+        if (busy) {
+          event.preventDefault()
+          event.returnValue = ''
+        }
+      },
+      [busy],
+    ),
+  )
+  useEffect(() => {
+    if (!busy && blocker.state === 'blocked') blocker.reset()
+  }, [busy, blocker])
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -43,17 +60,56 @@ function VacancyDetails({ id }: { id: number }) {
 
   async function refresh() {
     if (lock.current) return
-    setFailure(undefined)
-    setNeedsRefresh(false)
-    reload()
-  }
-  async function mutate(action: 'publish' | 'close') {
-    if (lock.current) return
     lock.current = true
     setBusy(true)
+    setCheckedChat(false)
+    setNotice('')
     setFailure(undefined)
     try {
-      const updated = await vacancies[action](id)
+      const current = await vacancies.get(id)
+      if (mounted.current) {
+        replace(current)
+        setNeedsRefresh(false)
+      }
+    } catch (error) {
+      if (mounted.current) {
+        setFailure(error)
+        setNeedsRefresh(true)
+      }
+    } finally {
+      lock.current = false
+      if (mounted.current) setBusy(false)
+    }
+  }
+  async function mutate(action: 'publish' | 'resend' | 'close') {
+    if (lock.current || needsRefresh || (action === 'resend' && !checkedChat)) return
+    lock.current = true
+    setBusy(true)
+    setCheckedChat(false)
+    setNotice('')
+    setFailure(undefined)
+    let attemptedWrite = false
+    try {
+      if (action === 'resend') {
+        const current = await vacancies.get(id)
+        if (!mounted.current) return
+        replace(current)
+        if (
+          current.status !== 'published' ||
+          current.cardMessageId ||
+          cardTextLength(current) > 4000
+        ) {
+          setConfirm(null)
+          setNotice(
+            current.cardMessageId && current.status === 'published'
+              ? 'Отправка карточки уже подтверждена. Повторная отправка не понадобилась.'
+              : 'Состояние вакансии изменилось или карточка слишком длинная. Повторная отправка отменена; проверьте актуальные данные.',
+          )
+          return
+        }
+      }
+      attemptedWrite = true
+      const updated = await vacancies[action === 'resend' ? 'publish' : action](id)
       if (mounted.current) {
         replace(updated)
         setConfirm(null)
@@ -64,11 +120,16 @@ function VacancyDetails({ id }: { id: number }) {
       setFailure(error)
       setNeedsRefresh(true)
       // In particular, 409 and lost responses require reconciliation before another POST.
+      if (!attemptedWrite) return
       try {
         const current = await vacancies.get(id)
         if (mounted.current) {
           replace(current)
           setNeedsRefresh(false)
+          if (action !== 'close' && current.status === 'published' && current.cardMessageId) {
+            setFailure(undefined)
+            setNotice('Проверка подтвердила отправку карточки. Повторная отправка не требуется.')
+          }
         }
       } catch {
         /* Keep actions locked until a successful explicit refresh. */
@@ -95,9 +156,18 @@ function VacancyDetails({ id }: { id: number }) {
             {new Date(vacancy.createdAt).toLocaleDateString('ru-RU')}
           </p>
         </div>
-        <VacancyStatusBadge status={vacancy.status} />
+        {mode === 'max' && vacancy.status === 'published' && !vacancy.cardMessageId ? (
+          <span className="vacancy-status draft">Карточка не подтверждена</span>
+        ) : (
+          <VacancyStatusBadge status={vacancy.status} />
+        )}
       </div>
-      {Boolean(failure) && <VacancyFailure error={failure} retry={() => void refresh()} />}
+      {Boolean(failure) && <VacancyFailure error={failure} />}
+      {notice && (
+        <div className="vacancy-notice" role="status">
+          <p>{notice}</p>
+        </div>
+      )}
       <div className="vacancy-detail-layout">
         <div className="vacancy-detail-main">
           <VacancyPreview vacancy={vacancy} />
@@ -157,7 +227,7 @@ function VacancyDetails({ id }: { id: number }) {
                   ? 'Демо-публикация готова'
                   : vacancy.cardMessageId
                     ? 'Вакансия опубликована'
-                    : 'Проверяем карточку'}
+                    : 'Отправка не подтверждена'}
               </h2>
               <p>
                 {mode === 'preview'
@@ -167,9 +237,33 @@ function VacancyDetails({ id }: { id: number }) {
                     : 'Сервис сохранил статус публикации, но не вернул подтверждение карточки. Проверьте чат с ботом и обновите данные.'}
               </p>
               {!vacancy.cardMessageId && (
-                <Button variant="secondary" onClick={() => void refresh()}>
-                  Обновить данные
-                </Button>
+                <div className="publication-recovery">
+                  <p>
+                    Сначала проверьте чат с ботом. Если карточка уже там, повторно отправлять её не
+                    нужно.
+                  </p>
+                  <label className="publication-check">
+                    <input
+                      type="checkbox"
+                      checked={checkedChat}
+                      disabled={busy || needsRefresh}
+                      onChange={(event) => setCheckedChat(event.target.checked)}
+                    />
+                    <span>Я проверил чат с ботом — карточки нет</span>
+                  </label>
+                  <Button
+                    variant="secondary"
+                    disabled={busy || needsRefresh || !checkedChat || tooLong}
+                    onClick={() => setConfirm('resend')}
+                  >
+                    Повторить отправку
+                  </Button>
+                  {tooLong && (
+                    <p role="status">
+                      Карточка длиннее 4 000 символов. Создайте исправленную копию вакансии.
+                    </p>
+                  )}
+                </div>
               )}
               <p>
                 Для новых условий создайте новую вакансию. Опубликованную карточку изменить нельзя.
@@ -230,22 +324,46 @@ function VacancyDetails({ id }: { id: number }) {
               неизвестен.
             </p>
           )}
+          {(Boolean(failure) ||
+            needsRefresh ||
+            (vacancy.status === 'published' && !vacancy.cardMessageId)) && (
+            <Button variant="secondary" disabled={busy} onClick={() => void refresh()}>
+              {busy ? 'Проверяем…' : 'Проверить состояние'}
+            </Button>
+          )}
+          {blocker.state === 'blocked' && (
+            <p role="status">Дождитесь завершения запроса перед выходом.</p>
+          )}
         </aside>
       </div>
       {confirm && (
         <ConfirmDialog
-          title={confirm === 'publish' ? 'Опубликовать вакансию?' : 'Закрыть вакансию?'}
-          confirm={confirm === 'publish' ? 'Подтвердить публикацию' : 'Да, закрыть'}
+          title={
+            confirm === 'resend'
+              ? 'Повторить отправку карточки?'
+              : confirm === 'publish'
+                ? 'Опубликовать вакансию?'
+                : 'Закрыть вакансию?'
+          }
+          confirm={
+            confirm === 'resend'
+              ? 'Отправить повторно'
+              : confirm === 'publish'
+                ? 'Подтвердить публикацию'
+                : 'Да, закрыть'
+          }
           busy={busy}
           onCancel={() => setConfirm(null)}
           onConfirm={() => void mutate(confirm)}
         >
           <p>
-            {confirm === 'publish'
-              ? mode === 'preview'
-                ? 'Демо изменит статус только в этом браузере. Карточка в MAX не отправится.'
-                : 'Бот отправит карточку с описанием и контактами в ваш чат. Редактирование станет недоступно.'
-              : 'Новые отклики больше не будут приниматься. Это действие нельзя отменить; сама вакансия останется в списке.'}
+            {confirm === 'resend'
+              ? 'Вы подтвердили, что карточки нет в чате. Бот попробует отправить её снова для этой же вакансии. Если первая отправка всё же дошла, в чате может появиться дубль.'
+              : confirm === 'publish'
+                ? mode === 'preview'
+                  ? 'Демо изменит статус только в этом браузере. Карточка в MAX не отправится.'
+                  : 'Бот отправит карточку с описанием и контактами в ваш чат. Редактирование станет недоступно.'
+                : 'Новые отклики больше не будут приниматься. Это действие нельзя отменить; сама вакансия останется в списке.'}
           </p>
         </ConfirmDialog>
       )}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
@@ -77,7 +77,34 @@ function chooseStatus(value: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Изменить статус' }))
 }
 
+afterEach(() => vi.useRealTimers())
 describe('employer applications workflow', () => {
+  it('defers return refresh while a candidate dialog is open and retains the current filter', async () => {
+    const session = await seeded()
+    const list = vi.spyOn(session.applications, 'list')
+    const router = start(session, '/applications?status=new')
+    const dialog = await openFirst()
+    fireEvent.change(dialog.getByLabelText('Новый этап'), { target: { value: 'invited' } })
+    const before = list.mock.calls.length
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    vi.useFakeTimers()
+    fireEvent.focus(window)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    expect(list).toHaveBeenCalledTimes(before)
+    expect(dialog.getByLabelText('Новый этап')).toHaveValue('invited')
+    fireEvent.click(dialog.getByRole('button', { name: 'Закрыть карточку кандидата' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    expect(list).toHaveBeenCalledTimes(before + 1)
+    expect(list).toHaveBeenLastCalledWith(
+      { limit: 20, offset: 0, status: 'new' },
+      expect.any(AbortSignal),
+    )
+    expect(router.state.location.search).toBe('?status=new')
+  })
   it('loads demo only by explicit choice, paginates and resets the page on filtering without network', async () => {
     const fetcher = vi.fn()
     vi.stubGlobal('fetch', fetcher)

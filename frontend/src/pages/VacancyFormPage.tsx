@@ -19,19 +19,19 @@ import { useResource } from '../shared/api/useResource'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import { NotFoundPage } from './NotFoundPage'
 
-export function VacancyFormPage() {
+export function VacancyFormPage({ copy = false }: { copy?: boolean }) {
   const { id } = useParams()
   if (id && (!/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) < 1))
     return <NotFoundPage />
-  return id ? <EditVacancy id={Number(id)} /> : <VacancyEditor key="new" />
+  return id ? <ExistingVacancy id={Number(id)} copy={copy} /> : <VacancyEditor key="new" />
 }
-function EditVacancy({ id }: { id: number }) {
+function ExistingVacancy({ id, copy }: { id: number; copy: boolean }) {
   const { vacancies } = useSession()
   const load = useCallback((signal: AbortSignal) => vacancies.get(id, signal), [id, vacancies])
   const { result, reload } = useResource(load, String(id))
   if (result.state === 'loading') return <VacancyLoading />
   if (result.state === 'error') return <VacancyFailure error={result.error} retry={reload} />
-  if (result.data.status !== 'draft')
+  if (!copy && result.data.status !== 'draft')
     return (
       <section className="vacancy-empty">
         <h1>Редактирование недоступно</h1>
@@ -41,12 +41,18 @@ function EditVacancy({ id }: { id: number }) {
         </Link>
       </section>
     )
-  return <VacancyEditor key={id} vacancy={result.data} />
+  return copy ? (
+    <VacancyEditor key={`copy-${id}`} source={result.data} />
+  ) : (
+    <VacancyEditor key={`edit-${id}`} vacancy={result.data} />
+  )
 }
-function VacancyEditor({ vacancy }: { vacancy?: Vacancy }) {
+function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacancy }) {
   const { vacancies } = useSession()
   const navigate = useNavigate()
-  const [initial] = useState(() => formValues(vacancy))
+  const returnId = vacancy?.id ?? source?.id
+  // Copy only editable fields; identity, publication and applications belong to the source.
+  const [initial] = useState(() => formValues(vacancy ?? source))
   const [values, setValues] = useState(initial)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [failure, setFailure] = useState<unknown>()
@@ -62,7 +68,7 @@ function VacancyEditor({ vacancy }: { vacancy?: Vacancy }) {
       mounted.current = false
     }
   }, [])
-  const dirty = JSON.stringify(initial) !== JSON.stringify(values)
+  const dirty = Boolean(source) || JSON.stringify(initial) !== JSON.stringify(values)
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       !saved.current &&
@@ -178,10 +184,23 @@ function VacancyEditor({ vacancy }: { vacancy?: Vacancy }) {
       <div className="page-heading">
         <div>
           <div className="eyebrow">ШАГ 1 · РАССКАЖИТЕ О РАБОТЕ</div>
-          <h1>{vacancy ? 'Редактировать черновик' : 'Новая вакансия'}</h1>
+          <h1>
+            {vacancy ? 'Редактировать черновик' : source ? 'Копия вакансии' : 'Новая вакансия'}
+          </h1>
           <p>Сначала детали. Публикацию подтвердите на следующем экране.</p>
         </div>
       </div>
+      {source && (
+        <div className="vacancy-notice vacancy-copy-note">
+          <p>
+            На основе вакансии № {source.id}: <strong>{source.title}</strong>.
+          </p>
+          <p>
+            Копия пока не сохранена. Проверьте даты, оплату и контакт, затем сохраните новый
+            черновик. Отклики не переносятся; исходная вакансия не изменится.
+          </p>
+        </div>
+      )}
       <div className="vacancy-editor-layout">
         <form
           className="vacancy-form"
@@ -290,7 +309,7 @@ function VacancyEditor({ vacancy }: { vacancy?: Vacancy }) {
               {busy ? 'Сохраняем…' : 'Сохранить и проверить'}
               <ArrowRight size={18} />
             </Button>
-            <Link className="text-action" to={vacancy ? `/vacancies/${vacancy.id}` : '/vacancies'}>
+            <Link className="text-action" to={returnId ? `/vacancies/${returnId}` : '/vacancies'}>
               Отмена
             </Link>
           </div>

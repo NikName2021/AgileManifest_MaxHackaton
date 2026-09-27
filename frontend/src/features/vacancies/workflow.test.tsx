@@ -8,6 +8,7 @@ import { VacanciesPage } from '../../pages/VacanciesPage'
 import { VacancyFormPage } from '../../pages/VacancyFormPage'
 import { VacancyPage } from '../../pages/VacancyPage'
 import { ApiError } from '../../shared/api/client'
+import type { Vacancy } from '../../entities/hiring'
 
 vi.mock('@maxhub/max-ui', () => ({
   Button: ({
@@ -47,6 +48,7 @@ function start(session = createPreviewSession(), path = '/vacancies') {
       { path: '/vacancies/new', element: <VacancyFormPage /> },
       { path: '/vacancies/:id', element: <VacancyPage /> },
       { path: '/vacancies/:id/edit', element: <VacancyFormPage /> },
+      { path: '/vacancies/:id/copy', element: <VacancyFormPage copy /> },
     ],
     { initialEntries: [path] },
   )
@@ -73,6 +75,128 @@ async function seed(session: Session) {
   })
 }
 describe('employer vacancy workflow', () => {
+  it.each(['draft', 'published', 'closed'] as const)(
+    'copies a %s vacancy only after saving, without touching its identity, status or applications',
+    async (status) => {
+      const session = createPreviewSession()
+      const row = await seed(session)
+      if (status !== 'draft') await session.vacancies.publish(row.id)
+      if (status === 'closed') await session.vacancies.close(row.id)
+      const original = await session.vacancies.get(row.id)
+      const create = vi.spyOn(session.vacancies, 'create')
+      const update = vi.spyOn(session.vacancies, 'update')
+      const publish = vi.spyOn(session.vacancies, 'publish')
+      const applicationList = vi.spyOn(session.applications, 'forVacancy')
+      start(session, `/vacancies/${row.id}`)
+      fireEvent.click(await screen.findByRole('link', { name: 'Создать копию' }))
+      await screen.findByRole('heading', { name: 'Копия вакансии' })
+      expect(screen.getByLabelText(/Название вакансии/)).toHaveValue('Повар')
+      expect(screen.getByLabelText(/Город или регион/)).toHaveValue('Тула')
+      expect(screen.getByLabelText(/Сфера деятельности/)).toHaveValue('Общепит')
+      expect(screen.getByLabelText(/Тип занятости/)).toHaveValue('seasonal')
+      expect(screen.getByLabelText(/Зарплата от/)).toHaveValue('50000')
+      expect(screen.getByLabelText(/Зарплата до/)).toHaveValue('')
+      expect(screen.getByLabelText(/Описание работы/)).toHaveValue('За месяц')
+      expect(screen.getByLabelText(/Контакт для связи/)).toHaveValue('Связаться в MAX')
+      expect(create).not.toHaveBeenCalled()
+      type('Название вакансии', 'Повар на новый сезон')
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+      await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
+      expect(create).toHaveBeenCalledOnce()
+      expect(create.mock.calls[0][0]).toEqual({
+        title: 'Повар на новый сезон',
+        region_code: 'Тула',
+        category: 'Общепит',
+        schedule: 'seasonal',
+        salary_min: 50000,
+        salary_max: null,
+        description: 'За месяц',
+        contact_info: 'Связаться в MAX',
+      })
+      expect(update).not.toHaveBeenCalled()
+      expect(publish).not.toHaveBeenCalled()
+      expect(applicationList).not.toHaveBeenCalled()
+      expect(await session.vacancies.get(row.id)).toEqual(original)
+      expect(await session.vacancies.get(row.id + 1)).toMatchObject({
+        status: 'draft',
+        cardMessageId: null,
+      })
+    },
+  )
+  it('protects an unsaved copy and lets the employer discard it without creating a record', async () => {
+    const session = createPreviewSession()
+    const row = await seed(session)
+    const create = vi.spyOn(session.vacancies, 'create')
+    const router = start(session, `/vacancies/${row.id}/copy`)
+    await screen.findByRole('heading', { name: 'Копия вакансии' })
+    // The editor mounts after the source resolves; flush the router's blocker registration.
+    await act(async () => {
+      await Promise.resolve()
+    })
+    fireEvent.click(screen.getByRole('link', { name: 'Отмена' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(router.state.location.pathname).toBe(`/vacancies/${row.id}/copy`)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Выйти без сохранения' }))
+    await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
+    expect(create).not.toHaveBeenCalled()
+    expect(await session.vacancies.list()).toHaveLength(1)
+  })
+  it.each([403, 404])(
+    'does not open a blank copy or write data when the source returns %s',
+    async (status) => {
+      const session = createPreviewSession()
+      vi.spyOn(session.vacancies, 'get').mockRejectedValue(
+        new ApiError(status === 403 ? 'forbidden' : 'server', status),
+      )
+      const create = vi.spyOn(session.vacancies, 'create')
+      start(session, '/vacancies/99/copy')
+      await screen.findByRole('alert')
+      expect(screen.queryByLabelText(/Название вакансии/)).not.toBeInTheDocument()
+      expect(create).not.toHaveBeenCalled()
+    },
+  )
+  it('ignores the old source if navigation changes while its request is pending', async () => {
+    const session = createPreviewSession()
+    const first = await seed(session)
+    const second = await seed(session)
+    await session.vacancies.update(second.id, {
+      title: 'Другая вакансия',
+      region_code: 'Москва',
+      category: 'Общепит',
+      schedule: 'temporary',
+      salary_min: null,
+      salary_max: 60000,
+      description: null,
+      contact_info: null,
+    })
+    let resolve!: (value: Vacancy) => void
+    const get = vi.spyOn(session.vacancies, 'get').mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        }),
+    )
+    const router = start(session, `/vacancies/${first.id}/copy`)
+    await act(() => router.navigate(`/vacancies/${second.id}/copy`))
+    await screen.findByRole('heading', { name: 'Копия вакансии' })
+    await act(() => resolve(first))
+    expect(screen.getByLabelText(/Название вакансии/)).toHaveValue('Другая вакансия')
+    expect(screen.getByLabelText(/Зарплата от/)).toHaveValue('')
+    expect(screen.getByLabelText(/Зарплата до/)).toHaveValue('60000')
+    expect(get.mock.calls[0][1]?.aborted).toBe(true)
+  })
+  it('blocks duplicate creation after an uncertain save of a copied vacancy', async () => {
+    const session = createPreviewSession()
+    const row = await seed(session)
+    const create = vi.spyOn(session.vacancies, 'create').mockRejectedValue(new ApiError('network'))
+    start(session, `/vacancies/${row.id}/copy`)
+    await screen.findByRole('heading', { name: 'Копия вакансии' })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+    await screen.findByText(/Сохранение не подтверждено/)
+    expect(screen.getByRole('button', { name: 'Сохранить и проверить' })).toBeDisabled()
+    expect(create).toHaveBeenCalledOnce()
+    expect(screen.getByLabelText(/Название вакансии/)).toHaveValue('Повар')
+  })
   it('keeps salary checking optional, preserves pay inputs and allows saving after a benchmark failure', async () => {
     const session = createPreviewSession()
     const benchmark = vi

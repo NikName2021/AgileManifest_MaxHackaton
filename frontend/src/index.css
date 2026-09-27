@@ -86,6 +86,11 @@ svg {
   color-scheme: dark;
 }
 .max-root {
+  --family-base: 'Segoe UI', Arial, sans-serif;
+  --size-border-radius-button-large: 6px;
+  --size-border-radius-button-medium: 6px;
+  --size-border-radius-button-small: 6px;
+  --size-border-radius-button-xsmall: 6px;
   min-height: 100dvh;
   font-family: inherit;
   background: var(--bg);
@@ -172,12 +177,6 @@ a.primary-button {
 }
 [data-theme='dark'] .max-logo-on-light {
   display: none;
-}
-.max-symbol {
-  display: block;
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
 }
 .app-shell {
   min-height: 100dvh;

@@ -279,7 +279,7 @@
   max-height: calc(100dvh - 40px);
   padding: 28px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   box-shadow: 0 24px 90px #0004;

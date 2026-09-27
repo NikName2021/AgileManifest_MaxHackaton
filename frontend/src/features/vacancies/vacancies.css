@@ -84,6 +84,9 @@
 .vacancy-list-card:last-child {
   border-bottom: 0;
 }
+.vacancy-list-card:focus-visible {
+  outline-offset: -3px;
+}
 .vacancy-list-card:hover {
   background: var(--subtle);
 }
@@ -464,7 +467,7 @@
   width: min(460px, calc(100vw - 32px));
   padding: 28px;
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 8px;
   color: var(--text);
   background: var(--surface);
   box-shadow: 0 20px 80px #0003;

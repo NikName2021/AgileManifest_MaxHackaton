@@ -12,7 +12,7 @@ services:
       - "3000:3000"
     networks:
       - monitoring
-      - result_year
+      - max_hackathon
     depends_on:
       - loki
       - victoriametrics
@@ -43,7 +43,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - monitoring
-      - result_year
+      - max_hackathon
     depends_on:
       - loki
 
@@ -71,7 +71,7 @@ services:
       - vmagent-data:/vmagent-remotewrite-data
     networks:
       - monitoring
-      - result_year
+      - max_hackathon
     depends_on:
       - victoriametrics
 
@@ -83,7 +83,7 @@ services:
     expose:
       - "9113"
     networks:
-      - result_year
+      - max_hackathon
       - monitoring
 
   postgres-exporter:
@@ -96,19 +96,9 @@ services:
     expose:
       - "9187"
     networks:
-      - result_year
+      - max_hackathon
       - monitoring
 
-  redis-exporter:
-    image: oliver006/redis_exporter:v1.84.0
-    restart: unless-stopped
-    environment:
-      REDIS_ADDR: redis://redis:6379
-    expose:
-      - "9121"
-    networks:
-      - result_year
-      - monitoring
 
 volumes:
   grafana-data:
@@ -120,5 +110,6 @@ volumes:
 networks:
   monitoring:
     internal: true
-  result_year:
+  max_hackathon:
+    name: ${APP_NETWORK:-max_hackathon}
     external: true

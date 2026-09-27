@@ -19,21 +19,23 @@
 
 ## Быстрый старт (локальная разработка)
 
-```
-git clone <ссылка на репозиторий>
-cd МаксХак
+Нужны Node.js 22.22.2+ и Docker Compose 2.24+.
+
+```sh
+cp .env.example .env
+cp backend/.env.example backend/.env
+# В backend/.env заполнить MAX_BOT_TOKEN; DATABASE_URL должен соответствовать
+# POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DATABASE и POSTGRES_PORT из .env.
+docker compose up -d postgres
 cd backend
-cp .env.example .env   # вписать MAX_BOT_TOKEN (выдаётся организаторами хакатона)
-npm install
-cd ..
-docker compose up -d db
-cd backend
-npx prisma generate
+npm ci
+npm run prisma:generate
 npm run prisma:migrate
 npm run dev
 ```
 
-Сервер поднимется на `http://localhost:3000`, в логе должно появиться `connected to MAX as bot`.
+Backend вне Docker слушает `http://localhost:3000`. Для frontend отдельно выполните
+`npm ci` и `npm run dev` в каталоге `frontend`.
 
 ### Про сертификат `backend/russian_ca_bundle.pem`
 
@@ -41,14 +43,57 @@ npm run dev
 
 ### Полный стек в Docker
 
-```
-docker compose up --build
+```sh
+docker compose up --build --wait
 ```
 
-Поднимет и Postgres, и backend одной командой (сборка ≤5 минут — требование кейса). Backend при
-старте контейнера сам прогоняет непримененные Prisma-миграции (`npx prisma migrate deploy`), а
-`docker compose` ждёт готовности БД (healthcheck) перед стартом backend — вручную накатывать
-миграции в контейнере не нужно.
+Из чистого checkout запускаются PostgreSQL, backend и frontend на `http://localhost`.
+По умолчанию используется локальный режим без подключения к MAX: настройки из
+`docker/config/backend.local.env` содержат тестовый токен и недоступный локальный адрес API.
+Ошибка подключения к MAX в логе в этом режиме ожидаема; API, БД и интерфейс доступны,
+но вход через MAX и отправка сообщений не работают.
+
+Для настоящего бота скопируйте `backend/.env.example` в `backend/.env`, заполните токен,
+`MAX_WEBHOOK_SECRET`, `SESSION_SECRET`, `PUBLIC_BASE_URL` и при необходимости `FRONTEND_ORIGIN`.
+Значения этого файла перекрывают локальные настройки. `DATABASE_URL` и `PORT` внутри
+контейнера задаёт Compose: БД доступна по имени `postgres`, backend слушает порт 3000.
+Корневой `.env` настраивает PostgreSQL, `HTTP_PORT` (по умолчанию 80), `POSTGRES_PORT`
+(по умолчанию 5446), `NGINX_FILE` и имя сети `APP_NETWORK` (по умолчанию `max_hackathon`).
+Логин, пароль и имя БД должны быть URL-safe, поскольку Compose собирает из них `DATABASE_URL`.
+Не меняйте реквизиты существующего тома БД без соответствующих изменений в PostgreSQL.
+
+Сеть создаётся автоматически. Backend применяет сохранённые Prisma-миграции и запускается
+от пользователя `node`; frontend стартует после успешного `/health` с проверкой БД.
+Nginx обслуживает SPA и передаёт `/api/*`, `/webhook/max`, `/health` в backend.
+Для нескольких независимых стеков задайте разные `-p`, `APP_NETWORK`, `HTTP_PORT` и `POSTGRES_PORT`.
+
+Production запускается отдельно:
+
+```sh
+# Подготовить корневой .env с реквизитами БД и backend/.env с настройками настоящего бота.
+docker compose --env-file .env -f docker-compose.prod.yaml up --build --wait
+```
+
+Production не использует локальный тестовый токен: `backend/.env` обязателен.
+Путь к нему можно переопределить через `BACKEND_ENV_FILE`. Конфигурация HTTPS остаётся
+в ведении окружения развёртывания; этот Compose не настраивает TLS.
+
+### Мониторинг
+
+Сначала запустите приложение, затем подготовьте `monitoring/.env` из примера. При запуске
+передавайте также корневой `.env`, чтобы экспортер PostgreSQL использовал те же реквизиты:
+
+```sh
+cp monitoring/.env.example monitoring/.env
+# Задать пароль Grafana в monitoring/.env.
+docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring -f monitoring/docker-compose.yaml up -d
+```
+
+Для production используйте `monitoring/docker-compose.prod.yaml` и задайте параметры Grafana
+из `monitoring/.env.example`. Оба варианта подключаются к сети `APP_NETWORK`, созданной приложением.
+Собираются логи контейнеров, метрики Nginx, PostgreSQL и компонентов мониторинга. Redis и сбор
+несуществующего backend `/metrics` удалены; метрики приложения можно добавить после реализации
+этого эндпоинта. Перед остановкой приложения с удалением сети сначала остановите мониторинг.
 
 ## Основной пользовательский сценарий (проверяется в MAX)
 
@@ -81,8 +126,9 @@ docker compose up --build
 
 ## Порты
 
-- `3000` — backend (Fastify), настраивается через `PORT`
-- `5434` — Postgres (проброшен наружу из контейнера `db`, внутри Docker-сети — стандартный `5432`)
+- `80` — frontend, API и вебхук через Nginx (`HTTP_PORT`).
+- `3000` — backend внутри Docker-сети; для запуска вне Docker настраивается через `PORT`.
+- `5446` — PostgreSQL на хосте (`POSTGRES_PORT`), внутри Docker-сети — `5432`.
 
 ## Модель данных
 

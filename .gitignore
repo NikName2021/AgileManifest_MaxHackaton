@@ -9,3 +9,6 @@ docs/
 
 # Local diagnostics must never enter version control.
 /tmp/
+
+.env
+monitoring/.env

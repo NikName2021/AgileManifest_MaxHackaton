@@ -40,6 +40,9 @@ export function sendError(
 }
 
 // Превращает результат zod safeParse (ok: false) в fields в духе { fieldName: ["сообщение", ...] }.
+// Не просто смена типа: flat.fieldErrors — Record<string, string[] | undefined> (zod кладёт ключ
+// для КАЖДОГО поля схемы, даже без ошибок, со значением undefined) — цикл ниже реально фильтрует
+// эти undefined/пустые записи, а не просто приводит один эквивалентный тип к другому.
 export function zodFieldErrors(flat: { fieldErrors: Record<string, string[] | undefined> }): ErrorFields {
   const fields: ErrorFields = {};
   for (const [key, messages] of Object.entries(flat.fieldErrors)) {

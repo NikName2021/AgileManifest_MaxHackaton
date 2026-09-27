@@ -22,23 +22,21 @@ const MAX_INIT_DATA_AGE_SECONDS = 24 * 3600;
 // dataCheckString — все параметры initData (кроме hash), отсортированные по ключу,
 // в виде "key=value", склеенные через \n.
 export function verifyMaxInitData(initData: string): { ok: true; data: ParsedInitData } | { ok: false; error: string } {
-  // Отклоняем повторяющиеся параметры до любого дальнейшего разбора (раздел 1.1 хендоффа) —
-  // URLSearchParams.get() молча возвращает только первое значение для повторяющегося ключа,
-  // из-за чего dataCheckString ниже мог бы быть построен не из тех значений, что реально
-  // участвовали в подписи на стороне MAX. Безопаснее явно отказать, чем гадать.
-  const rawKeys = initData
-    .split('&')
-    .filter(Boolean)
-    .map((pair) => pair.split('=')[0]);
-  if (new Set(rawKeys).size !== rawKeys.length) {
-    return { ok: false, error: 'duplicate parameter in initData' };
-  }
-
   let params: URLSearchParams;
   try {
     params = new URLSearchParams(initData);
   } catch {
     return { ok: false, error: 'malformed initData' };
+  }
+
+  // Отклоняем повторяющиеся параметры до любого дальнейшего разбора (раздел 1.1 хендоффа).
+  // params.keys() отдаёт ВСЕ ключи, включая повторы — в отличие от params.get(key), который для
+  // повторяющегося ключа молча возвращает только первое значение, из-за чего dataCheckString ниже
+  // мог бы быть построен не из тех значений, что реально участвовали в подписи на стороне MAX.
+  // Безопаснее явно отказать, чем гадать.
+  const rawKeys = Array.from(params.keys());
+  if (new Set(rawKeys).size !== rawKeys.length) {
+    return { ok: false, error: 'duplicate parameter in initData' };
   }
 
   const hash = params.get('hash');

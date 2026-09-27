@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { cardTextLength, formValues, formatSalary, validateForm } from './model'
+import { cardTextLength, errorText, formValues, formatSalary, validateForm } from './model'
+import { ApiError } from '../../shared/api/client'
 import type { Vacancy } from '../../entities/hiring'
 
 describe('vacancy form validation', () => {
+  it('distinguishes missing bot chat from a conflict and unknown card delivery', () => {
+    expect(errorText(new ApiError('server', 409, 'employer_chat_missing'))).toContain(
+      'Сначала начните личный чат',
+    )
+    expect(errorText(new ApiError('server', 502, 'card_delivery_unknown'))).toContain(
+      'Она могла прийти в чат',
+    )
+    expect(errorText(new ApiError('server', 409, 'conflict'))).toContain(
+      'Статус вакансии уже изменился',
+    )
+  })
   it('rejects a blank title, decimals, negative and overflowing salaries', () => {
     for (const value of ['-1', '1.5', '1e4', '2147483648', 'abc']) {
       expect(

@@ -1,3 +1,22 @@
+.publication-recovery {
+  display: grid;
+  gap: 16px;
+}
+.publication-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.publication-check input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 2px 0;
+  accent-color: var(--accent);
+}
 .vacancy-copy-note {
   margin-bottom: 24px;
   overflow-wrap: anywhere;

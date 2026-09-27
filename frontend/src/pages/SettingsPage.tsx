@@ -13,9 +13,9 @@ export function SettingsPage() {
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ВАШЕ ПРОСТРАНСТВО</div>
-          <h1>Пусть будет удобно</h1>
-          <p>Настройте внешний вид под себя.</p>
+          <div className="eyebrow">Кабинет работодателя</div>
+          <h1>Настройки</h1>
+          <p>Оформление приложения и данные входа.</p>
         </div>
       </div>
       <section className="settings-panel">

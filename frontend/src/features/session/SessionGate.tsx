@@ -5,6 +5,7 @@ import { config } from '../../shared/config'
 import { ApiError } from '../../shared/api/client'
 import { loadBridge } from '../../shared/max/bridge'
 import { Brand } from '../../shared/ui/Brand'
+import { MaxLogo } from '../../shared/ui/MaxLogo'
 import { authenticate, authUrl } from './auth'
 import { SessionContext, type Session } from './context'
 import { createVacancyRepository } from '../vacancies/api'
@@ -23,7 +24,7 @@ type State =
   { kind: 'loading' } | { kind: 'issue'; issue: Issue } | { kind: 'ready'; session: Session }
 const messages: Record<Issue, [string, string]> = {
   outside: [
-    'Ваша команда начинается здесь',
+    'Вход в кабинет работодателя',
     'Откройте «Сезон» из бота в MAX, чтобы перейти в рабочее пространство работодателя.',
   ],
   bridge: [
@@ -123,8 +124,26 @@ export function SessionGate({ children }: { children: ReactNode }) {
       <div className="entry-brand">
         <Brand />
       </div>
+      <div className="entry-intro">
+        <MaxLogo />
+        <h2>
+          Сезонный найм.
+          <br />В вашем мессенджере.
+        </h2>
+        <p>Публикуйте вакансии, получайте контакты кандидатов и ведите подбор в одном кабинете.</p>
+        <ul>
+          <li>
+            <span>01</span>Вакансии и условия работы
+          </li>
+          <li>
+            <span>02</span>Отклики из чатов MAX
+          </li>
+          <li>
+            <span>03</span>Контакты и этапы найма
+          </li>
+        </ul>
+      </div>
       <section className="entry-card" aria-busy={isLoading}>
-        <div className="eyebrow">ЛЮДИ ДЛЯ ВАШЕГО ДЕЛА</div>
         <div className={`entry-symbol ${isLoading ? 'is-loading' : ''}`}>
           {isLoading ? (
             <RefreshCw size={34} />
@@ -165,7 +184,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
           </div>
         )}
       </section>
-      <p className="entry-footer">Сезонный найм · В одном рабочем пространстве</p>
+      <p className="entry-footer">
+        Сезон · Сервис подбора персонала для сезонной и временной работы
+      </p>
     </main>
   )
 }

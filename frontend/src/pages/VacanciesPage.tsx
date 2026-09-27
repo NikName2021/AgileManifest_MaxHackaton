@@ -41,9 +41,9 @@ export function VacanciesPage() {
     <>
       <div className="page-heading vacancies-heading">
         <div>
-          <div className="eyebrow">ЛЮДИ ДЛЯ ВАШЕГО ДЕЛА</div>
+          <div className="eyebrow">Кабинет работодателя</div>
           <h1>Мои вакансии</h1>
-          <p>От первого черновика до собранной команды.</p>
+          <p>Создавайте, публикуйте и закрывайте вакансии.</p>
         </div>
         <Button asChild className="primary-button">
           <Link to="/vacancies/new">

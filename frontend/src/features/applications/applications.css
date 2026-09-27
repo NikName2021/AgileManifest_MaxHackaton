@@ -9,8 +9,8 @@
   flex-wrap: wrap;
   gap: 12px 24px;
   padding: 16px 20px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   margin: 24px 0;
 }
 .applications-demo p {
@@ -128,26 +128,32 @@
 .applications-list {
   list-style: none;
   display: grid;
-  gap: 12px;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
   margin: 0;
   padding: 0;
 }
 .application-row {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: center;
   gap: 18px;
-  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 12px;
-  padding: 22px;
+  padding: 22px 24px;
+}
+.applications-list > li:last-child .application-row {
+  border-bottom: 0;
 }
 .candidate-avatar {
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: 50%;
   color: var(--accent-text);
   background: var(--accent-soft);
   font-size: 19px;
@@ -180,9 +186,9 @@
   text-overflow: ellipsis;
 }
 .application-row-meta {
-  display: grid;
-  justify-items: end;
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
 }
 .application-row-meta time {
   font-size: 11px;
@@ -282,7 +288,7 @@
   overflow-wrap: anywhere;
 }
 .application-dialog::backdrop {
-  background: #14231bcc;
+  background: #0d001abf;
 }
 .application-dialog-heading {
   display: flex;
@@ -400,7 +406,7 @@
 .application-dialog button {
   font-family: inherit;
 }
-@media (max-width: 600px) {
+@media (max-width: 760px) {
   .applications-heading {
     flex-direction: column;
     align-items: start;

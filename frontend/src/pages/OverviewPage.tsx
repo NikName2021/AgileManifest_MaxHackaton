@@ -1,144 +1,199 @@
+import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import {
-  ArrowRight,
-  ArrowUpRight,
-  BriefcaseBusiness,
-  Check,
-  CheckCheck,
-  FilePenLine,
-  MessageCircle,
-  Send,
-  Sprout,
-  UsersRound,
-} from 'lucide-react'
+import { ArrowRight, Plus, RefreshCw } from 'lucide-react'
+import { useSession } from '../features/session/context'
+import { useResource } from '../shared/api/useResource'
+import { VacancyFailure, VacancyLoading, VacancyStatusBadge } from '../features/vacancies/VacancyUi'
+import { formatSalary, scheduleLabels } from '../features/vacancies/model'
+import { MaxLogo } from '../shared/ui/MaxLogo'
+import { config } from '../shared/config'
 
-const steps = [
-  {
-    icon: FilePenLine,
-    title: 'Расскажите о работе',
-    text: 'Должность, график и условия — всё, что нужно будущему сотруднику.',
-  },
-  {
-    icon: Send,
-    title: 'Поделитесь вакансией',
-    text: 'Отправьте карточку в локальные чаты и сообщества в MAX.',
-  },
-  {
-    icon: UsersRound,
-    title: 'Соберите команду',
-    text: 'Получайте отклики в боте и ведите кандидатов до выхода на работу.',
-  },
-]
 export function OverviewPage() {
+  const { vacancies, applications } = useSession()
+  const vacancyData = useResource(vacancies.list, 'overview-vacancies')
+  const loadCounts = useCallback(
+    async (signal: AbortSignal) => {
+      const [all, fresh] = await Promise.all([
+        applications.list({ limit: 1, offset: 0 }, signal),
+        applications.list({ limit: 1, offset: 0, status: 'new' }, signal),
+      ])
+      return { all: all.total, fresh: fresh.total }
+    },
+    [applications],
+  )
+  const counts = useResource(loadCounts, 'overview-applications')
+  const rows = vacancyData.result.state === 'ready' ? vacancyData.result.data : []
+  const recent = [...rows]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id - a.id)
+    .slice(0, 3)
+  const metrics = [
+    {
+      label: 'Активные вакансии',
+      value:
+        vacancyData.result.state === 'ready'
+          ? rows.filter((v) => v.status === 'published').length
+          : '—',
+      href: '/vacancies?status=published',
+      hint: 'Опубликованы в MAX',
+    },
+    {
+      label: 'Новые отклики',
+      value: counts.result.state === 'ready' ? counts.result.data.fresh : '—',
+      href: '/applications?status=new',
+      hint: 'Ожидают вашего ответа',
+    },
+    {
+      label: 'Всего откликов',
+      value: counts.result.state === 'ready' ? counts.result.data.all : '—',
+      href: '/applications',
+      hint: 'По всем вашим вакансиям',
+    },
+    {
+      label: 'Черновики',
+      value:
+        vacancyData.result.state === 'ready'
+          ? rows.filter((v) => v.status === 'draft').length
+          : '—',
+      href: '/vacancies?status=draft',
+      hint: 'Можно продолжить работу',
+    },
+  ]
   return (
     <>
-      <div className="page-heading">
+      <div className="page-heading dashboard-heading">
         <div>
-          <div className="eyebrow">ВАШ НОВЫЙ РАБОЧИЙ СЕЗОН</div>
-          <h1>
-            Хорошая команда.
-            <br className="mobile-break" /> Простое начало.
-          </h1>
-          <p>Вакансии, отклики и общение — ближе друг к другу.</p>
+          <span className="eyebrow">Кабинет работодателя</span>
+          <h1>Обзор найма</h1>
+          <p>Вакансии и кандидаты, с которыми вы работаете.</p>
         </div>
-        <span className="heading-badge">
-          <Sprout size={16} />
-          Сезонный найм
-        </span>
+        <Button asChild className="primary-button" iconBefore={<Plus size={18} />}>
+          <Link to="/vacancies/new">Создать вакансию</Link>
+        </Button>
       </div>
-      <section className="welcome-panel" aria-labelledby="welcome-title">
-        <div className="welcome-copy">
-          <span className="hero-label">
-            <span />
-            МАЛОМУ БИЗНЕСУ — БОЛЬШЕ ВОЗМОЖНОСТЕЙ
-          </span>
-          <h2 id="welcome-title">
-            Найдите людей.
+      <section className="metric-strip" aria-label="Сводка найма">
+        {metrics.map((metric) => (
+          <Link className="metric" key={metric.label} to={metric.href}>
+            <span>
+              {metric.label}
+              <ArrowRight size={16} />
+            </span>
+            <strong>{metric.value}</strong>
+            <small>{metric.hint}</small>
+          </Link>
+        ))}
+      </section>
+      {counts.result.state === 'error' && (
+        <div className="dashboard-warning" role="status">
+          Не удалось загрузить количество откликов.
+          <button onClick={counts.reload}>Повторить</button>
+        </div>
+      )}
+      <div className="dashboard-layout">
+        <section className="dashboard-vacancies" aria-labelledby="recent-title">
+          <div className="section-title">
+            <h2 id="recent-title">Последние вакансии</h2>
+            <Link to="/vacancies">
+              Все вакансии <ArrowRight size={15} />
+            </Link>
+          </div>
+          {vacancyData.result.state === 'loading' && <VacancyLoading />}
+          {vacancyData.result.state === 'error' && (
+            <VacancyFailure error={vacancyData.result.error} retry={vacancyData.reload} />
+          )}
+          {vacancyData.result.state === 'ready' &&
+            (recent.length ? (
+              <div className="recent-list">
+                {recent.map((v) => (
+                  <Link className="recent-vacancy" to={`/vacancies/${v.id}`} key={v.id}>
+                    <div>
+                      <VacancyStatusBadge status={v.status} />
+                      <h3>{v.title}</h3>
+                      <p>
+                        {v.regionCode || 'Регион не указан'} <span>·</span>{' '}
+                        {scheduleLabels[v.schedule]}
+                      </p>
+                    </div>
+                    <div>
+                      <strong>{formatSalary(v.salaryMin, v.salaryMax)}</strong>
+                      <span className="recent-action">
+                        Открыть <ArrowRight size={15} />
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="dashboard-empty">
+                <span className="empty-index" aria-hidden="true">
+                  01
+                </span>
+                <h3>Добавьте первую вакансию</h3>
+                <p>
+                  Укажите должность и условия. Сначала сохраните черновик, затем проверьте и
+                  опубликуйте его.
+                </p>
+                <Link className="text-action" to="/vacancies/new">
+                  Создать черновик <ArrowRight size={16} />
+                </Link>
+              </div>
+            ))}
+          <button
+            className="dashboard-refresh"
+            onClick={() => {
+              vacancyData.reload()
+              counts.reload()
+            }}
+            disabled={vacancyData.result.state === 'loading' || counts.result.state === 'loading'}
+          >
+            <RefreshCw size={14} />
+            Обновить данные
+          </button>
+        </section>
+        <aside className="max-connect">
+          <MaxLogo />
+          <h2>
+            Кандидаты — в MAX.
             <br />
-            Займитесь делом.
+            Управление — здесь.
           </h2>
           <p>
-            От первой вакансии до нового сотрудника.
-            <br />
-            Сезон поможет держать найм под рукой.
+            Бот принимает отклики и отправляет уведомления. В кабинете доступны контакты кандидатов
+            и этапы найма.
           </p>
-          <Button asChild className="primary-button" size="large">
-            <Link to="/vacancies">
-              Мои вакансии <ArrowRight size={18} />
-            </Link>
-          </Button>
-          <Link className="hero-secondary" to="/guide">
-            Как работает Сезон <ArrowUpRight size={15} />
+          {config.botUrl && (
+            <a
+              className="max-bot-link"
+              href={config.botUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Открыть бота <ArrowRight size={16} />
+            </a>
+          )}
+          <Link to="/guide" className="max-guide-link">
+            Как связаны бот и кабинет
           </Link>
-        </div>
-        <div
-          className="hiring-illustration"
-          aria-label="Пример пути: вакансия, отклик, новый сотрудник"
-        >
-          <div className="orbit orbit-one" />
-          <div className="orbit orbit-two" />
-          <div className="illustration-card job">
-            <div className="illustration-icon">
-              <BriefcaseBusiness size={22} />
-            </div>
-            <div>
-              <small>ВАША ВАКАНСИЯ</small>
-              <strong>Нужен человек в команду</strong>
-              <div className="skeleton-line" />
-              <div className="skeleton-line short" />
-            </div>
-            <span className="illustration-check">
-              <Check size={13} />
-            </span>
-          </div>
-          <div className="illustration-card reply">
-            <div className="mini-avatar">А</div>
-            <div>
-              <strong>Давайте познакомимся!</strong>
-              <small>Новый отклик в MAX</small>
-            </div>
-            <MessageCircle size={19} />
-          </div>
-          <div className="illustration-card hired">
-            <span>
-              <CheckCheck size={17} />
-            </span>
-            Ещё один человек в команде
-          </div>
-          <span className="illustration-caption">ОТ ЗНАКОМСТВА — К СОВМЕСТНОЙ РАБОТЕ</span>
-        </div>
-      </section>
-      <section className="steps-section" aria-labelledby="steps-title">
-        <div className="section-title">
-          <h2 id="steps-title">Три шага до вашей команды</h2>
-          <span>Понятный путь без лишних действий</span>
-        </div>
-        <div className="steps-grid">
-          {steps.map(({ icon: Icon, title, text }, i) => (
-            <article className="step-card" key={title}>
-              <div className="step-card-top">
-                <span className="step-icon">
-                  <Icon size={22} strokeWidth={1.7} />
-                </span>
-                <span className="step-number">0{i + 1}</span>
-              </div>
-              <h3>{title}</h3>
-              <p>{text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="bottom-note">
-        <span className="note-icon">
-          <MessageCircle size={23} />
-        </span>
+        </aside>
+      </div>
+      <section className="workflow-strip" aria-label="Порядок работы">
         <div>
-          <h3>Бот всегда рядом</h3>
-          <p>Отклики и уведомления приходят в MAX. Здесь — ваше рабочее пространство.</p>
+          <span>01</span>
+          <h3>Создайте вакансию</h3>
+          <p>Должность, оплата и условия</p>
         </div>
-        <Link to="/guide" aria-label="Узнать о работе бота">
-          <ArrowUpRight size={21} />
+        <div>
+          <span>02</span>
+          <h3>Поделитесь в MAX</h3>
+          <p>Перешлите карточку в нужные чаты</p>
+        </div>
+        <div>
+          <span>03</span>
+          <h3>Обработайте отклики</h3>
+          <p>Свяжитесь с кандидатами и обновите этап</p>
+        </div>
+        <Link to="/guide" aria-label="Подробнее о порядке работы">
+          <ArrowRight size={22} />
         </Link>
       </section>
     </>

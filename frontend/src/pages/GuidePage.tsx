@@ -1,87 +1,106 @@
-import { ArrowRight, FilePenLine, Send, UsersRound } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
+import { MaxLogo } from '../shared/ui/MaxLogo'
+import { config } from '../shared/config'
 
 export function GuidePage() {
   return (
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ЗНАКОМСТВО С СЕРВИСОМ</div>
-          <h1>Найм с понятным маршрутом</h1>
-          <p>От черновика вакансии до знакомства с кандидатом.</p>
+          <span className="eyebrow">Помощь работодателю</span>
+          <h1>Как работает сервис</h1>
+          <p>От публикации вакансии до выхода сотрудника на работу.</p>
         </div>
       </div>
       <div className="guide-layout">
-        <section className="guide-list">
+        <section className="guide-list" aria-label="Инструкция по найму">
           <article>
-            <span className="step-icon">
-              <FilePenLine size={22} />
-            </span>
+            <span className="guide-number">01</span>
             <div>
-              <span className="section-kicker">ШАГ 01</span>
-              <h2>Опишите работу</h2>
+              <h2>Подготовьте вакансию</h2>
               <p>
-                Создайте вакансию в этом приложении: укажите должность, место работы, график, оплату
-                и требования. Сохраните черновик и проверьте содержание. Пока он не опубликован, его
-                можно редактировать.
+                Укажите должность, место работы, тип занятости, оплату и требования. Добавьте
+                контакт для связи. Сохраните черновик — его можно редактировать до публикации.
               </p>
+              <Link className="guide-action" to="/vacancies/new">
+                Создать вакансию <ArrowRight size={15} />
+              </Link>
             </div>
           </article>
           <article>
-            <span className="step-icon">
-              <Send size={22} />
-            </span>
+            <span className="guide-number">02</span>
             <div>
-              <span className="section-kicker">ШАГ 02</span>
-              <h2>Найдите свою аудиторию</h2>
+              <h2>Опубликуйте и поделитесь</h2>
               <p>
-                Начните личный чат с ботом, затем подтвердите публикацию в приложении. Перешлите
-                полученную карточку в подходящие чаты MAX. Кандидат сможет перейти в бота по кнопке
-                отклика и оставить контакт.
+                Начните личный чат с ботом в MAX. Проверьте черновик и подтвердите публикацию в
+                кабинете. Бот пришлёт карточку: перешлите её в местные чаты и сообщества.
               </p>
+              <div className="guide-note">
+                Если кнопка отклика недоступна в пересланной карточке, кандидат может перейти в
+                личный чат с ботом по ссылке на ней.
+              </div>
             </div>
           </article>
           <article>
-            <span className="step-icon">
-              <UsersRound size={22} />
-            </span>
+            <span className="guide-number">03</span>
             <div>
-              <span className="section-kicker">ШАГ 03</span>
-              <h2>Договоритесь о следующем шаге</h2>
+              <h2>Свяжитесь с кандидатами</h2>
               <p>
-                Откройте раздел «Отклики», выберите кандидата и посмотрите его контакт. Обновляйте
-                этап найма по мере договорённостей. При приглашении, найме или отказе бот отправит
-                уведомление; если отправка не удалась, приложение сообщит об этом. Когда поиск
-                закончен, закройте вакансию.
+                В разделе «Отклики» доступны контакты и текущий этап каждого кандидата. Отфильтруйте
+                список по вакансии или статусу. После разговора обновите этап найма.
               </p>
               <div className="funnel-example" aria-label="Этапы найма">
-                {['Новый', 'На связи', 'Приглашён', 'Нанят'].map((label, index) => (
+                {['Новый', 'На связи', 'Приглашён', 'Нанят / Отказ'].map((label, index) => (
                   <span key={label}>
-                    {index > 0 && <ArrowRight size={13} />}
-                    {label}
+                    {index > 0 && <ArrowRight size={13} />} {label}
                   </span>
                 ))}
               </div>
+              <p>
+                При приглашении, найме или отказе бот отправляет уведомление. Если сообщение не
+                отправилось, статус всё равно сохранится, а кабинет покажет предупреждение.
+              </p>
+              <Link className="guide-action" to="/applications">
+                Перейти к откликам <ArrowRight size={15} />
+              </Link>
+            </div>
+          </article>
+          <article>
+            <span className="guide-number">04</span>
+            <div>
+              <h2>Завершите подбор</h2>
+              <p>
+                Когда сотрудник найден, закройте вакансию. Новые отклики больше не принимаются.
+                Полученные контакты и работа с кандидатами остаются доступны в кабинете.
+              </p>
             </div>
           </article>
         </section>
         <aside className="guide-aside">
-          <span className="section-kicker">НАЧНИТЕ С МАЛОГО</span>
-          <h2>
-            Одна вакансия.
-            <br />
-            Одна понятная задача.
-          </h2>
+          <MaxLogo />
+          <h2>Бот и кабинет работают вместе</h2>
           <p>
-            Конкретные условия помогают быстрее найти подходящих людей. Укажите оплату, даты и место
-            работы ещё до первого разговора.
+            Для входа с реальными данными откройте мини-приложение из MAX. Ваши вакансии и отклики
+            будут доступны после авторизации.
           </p>
-          <Button asChild variant="secondary">
-            <Link to="/vacancies">
-              К вакансиям <ArrowRight size={17} />
-            </Link>
-          </Button>
+          {config.botUrl && (
+            <Button asChild className="primary-button">
+              <a href={config.botUrl} target="_blank" rel="noopener noreferrer">
+                Перейти в MAX <ArrowRight size={16} />
+              </a>
+            </Button>
+          )}
+          <div className="guide-aside-rule" />
+          <h3>Что указать в вакансии</h3>
+          <ul>
+            <li>Понятное название должности</li>
+            <li>Место и даты работы</li>
+            <li>Оплату и период расчёта</li>
+            <li>Обязанности и требования</li>
+            <li>Способ связи с работодателем</li>
+          </ul>
         </aside>
       </div>
     </>

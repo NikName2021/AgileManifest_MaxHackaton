@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react'
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
-  ArrowUpRight,
-  BookOpen,
   BriefcaseBusiness,
   CircleHelp,
   House,
@@ -21,10 +19,10 @@ const navigation = [
   { to: '/settings', label: 'Настройки', icon: Settings2 },
 ]
 const titles: Record<string, string> = {
-  '/': 'Рабочее пространство',
+  '/': 'Кабинет работодателя',
   '/vacancies': 'Вакансии',
   '/applications': 'Отклики',
-  '/guide': 'Как работает Сезон',
+  '/guide': 'Как работает сервис',
   '/settings': 'Настройки',
 }
 export function Shell() {
@@ -57,93 +55,67 @@ export function Shell() {
       <a href="#main-content" className="skip-link">
         Перейти к содержимому
       </a>
-      <aside className="sidebar">
-        <Link to="/" className="brand-link" aria-label="Сезон — на главную">
-          <Brand />
-        </Link>
-        <div className="workspace-switch">
-          <span className="workspace-avatar">С</span>
-          <span>
-            Мой бизнес<small>Кабинет работодателя</small>
-          </span>
-        </div>
-        <div className="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-        <nav aria-label="Основная навигация">
-          {navigation.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-            >
-              <Icon size={20} strokeWidth={1.7} />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <Link to="/guide" className="sidebar-guide">
-            <BookOpen size={21} />
-            <strong>Первый раз в Сезоне?</strong>
-            <span>Коротко о том, как всё устроено</span>
-            <ArrowUpRight size={18} className="guide-arrow" />
-          </Link>
-          <div className="sidebar-footer">
-            <span className="status-dot" />
-            Мини-приложение MAX
-          </div>
-        </div>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <div className="desktop-breadcrumb">
-            Сезон <span>/</span> <strong>{title}</strong>
-          </div>
-          <Link to="/" className="mobile-brand" aria-label="Сезон — на главную">
+      <header className="site-header">
+        <div className="header-inner">
+          <Link to="/" className="brand-link" aria-label="Сезон — на главную">
             <Brand />
           </Link>
-          <div className="topbar-actions">
+          <span className="header-product">
+            Подбор персонала<span>для сезонной и временной работы</span>
+          </span>
+          <div className="header-account">
             <Link className="help-link" to="/guide" aria-label="Как работает Сезон">
-              <CircleHelp size={21} />
+              <CircleHelp size={19} />
+              <span>Помощь</span>
             </Link>
-            <span className="topbar-divider" />
-            <div className="user-avatar" aria-hidden="true">
+            <span className="account-divider" />
+            <span className="user-avatar" aria-hidden="true">
               {user.display_name.slice(0, 1).toLocaleUpperCase('ru')}
-            </div>
+            </span>
             <span className="user-name">
               {user.display_name}
               <small>Работодатель</small>
             </span>
           </div>
-        </header>
-        {mode === 'preview' && (
-          <div className="preview-banner">
-            <span className="preview-pill">ДЕМО</span>
-            <span>
-              Данные только в памяти браузера, до перезагрузки. Сообщения в MAX не отправляются.
-            </span>
-          </div>
-        )}
-        <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
-          {pathname !== '/' && (
-            <Link className="back-link" to={backTo}>
-              <ArrowLeft size={16} />
-              {backTo === '/'
-                ? 'На главную'
-                : backTo === '/vacancies'
-                  ? 'К вакансиям'
-                  : 'К черновику'}
+        </div>
+        <div className="desktop-nav-wrap">
+          <nav aria-label="Основная навигация" className="desktop-nav">
+            {navigation.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              >
+                {label}
+              </NavLink>
+            ))}
+            <Link className="nav-guide" to="/guide">
+              Как работает сервис
             </Link>
-          )}
-          <Outlet />
-        </main>
-        <footer className="content-footer">
-          <span>Сезон · Помогаем собрать команду</span>
-          <Link to="/guide">
-            Как это работает <ArrowUpRight size={14} />
+          </nav>
+        </div>
+      </header>
+      {mode === 'preview' && (
+        <div className="preview-banner">
+          <span className="preview-pill">Демо</span>
+          <span>Данные хранятся до перезагрузки страницы. Сообщения в MAX не отправляются.</span>
+        </div>
+      )}
+      <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
+        {inVacancy && (
+          <Link className="back-link" to={backTo}>
+            <ArrowLeft size={16} />
+            {backTo === '/vacancies' ? 'К вакансиям' : 'К черновику'}
           </Link>
-        </footer>
-      </div>
+        )}
+        <Outlet />
+      </main>
+      <footer className="content-footer">
+        <span>Сезон · Кабинет работодателя</span>
+        <Link to="/guide">Работа с сервисом</Link>
+        <span>Мини-приложение для MAX</span>
+      </footer>
       <nav className="mobile-nav" aria-label="Навигация на телефоне">
         {navigation.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -152,7 +124,7 @@ export function Shell() {
             end={to === '/'}
             className={({ isActive }) => (isActive ? 'active' : '')}
           >
-            <Icon size={21} strokeWidth={1.8} />
+            <Icon size={20} strokeWidth={1.8} />
             <span>{label}</span>
           </NavLink>
         ))}

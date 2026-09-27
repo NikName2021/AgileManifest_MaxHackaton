@@ -134,9 +134,9 @@ export function ApplicationsPage() {
     <>
       <div className="page-heading applications-heading">
         <div>
-          <div className="eyebrow">ОТ ЗНАКОМСТВА — К КОМАНДЕ</div>
+          <div className="eyebrow">Кабинет работодателя</div>
           <h1>Отклики кандидатов</h1>
-          <p>Контакты, договорённости и следующий шаг — под рукой.</p>
+          <p>Контакты кандидатов и текущие этапы найма.</p>
         </div>
         <span className="heading-badge">
           <UsersRound size={16} />

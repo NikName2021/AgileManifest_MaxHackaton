@@ -345,6 +345,43 @@
   font-size: 12px;
   color: var(--muted);
 }
+.candidate-contact-item + .candidate-contact-item {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.candidate-contact-value {
+  user-select: text;
+}
+.candidate-contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.candidate-contact-actions > * {
+  min-height: 44px;
+  max-width: 100%;
+}
+.candidate-contact-actions button {
+  font-family: inherit;
+}
+.candidate-contact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent-text);
+  font-size: 14px;
+}
+.candidate-contact-link:hover {
+  background: var(--accent-soft);
+}
+.application-contact .copy-result:empty {
+  margin: 0;
+}
 .application-dates {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

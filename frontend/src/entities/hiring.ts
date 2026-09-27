@@ -20,13 +20,15 @@ export interface Vacancy {
   createdAt: string
 }
 export interface Application {
-  id: string
-  vacancy_id: string
-  candidate_user_id: string
+  id: number
+  vacancyId: number
+  candidateUserId: number
   status: ApplicationStatus
-  contact: string
-  created_at: string
-  updated_at: string
+  contact: string | null
+  createdAt: string
+  updatedAt: string
+  candidate: { id: number; displayName: string | null; phone: string | null }
+  vacancy: Pick<Vacancy, 'id' | 'title' | 'status'>
 }
 export const applicationLabels: Record<ApplicationStatus, string> = {
   new: 'Новый',

@@ -4,7 +4,7 @@ import { AppearanceProvider } from '../features/appearance/AppearanceProvider'
 import { SessionGate } from '../features/session/SessionGate'
 import { Shell } from './Shell'
 import { OverviewPage } from '../pages/OverviewPage'
-import { WorkspacePage } from '../pages/WorkspacePage'
+import { ApplicationsPage } from '../pages/ApplicationsPage'
 import { GuidePage } from '../pages/GuidePage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -12,6 +12,7 @@ import { VacanciesPage } from '../pages/VacanciesPage'
 import { VacancyFormPage } from '../pages/VacancyFormPage'
 import { VacancyPage } from '../pages/VacancyPage'
 import '../features/vacancies/vacancies.css'
+import '../features/applications/applications.css'
 
 const router = createBrowserRouter([
   {
@@ -33,7 +34,7 @@ const router = createBrowserRouter([
       { path: 'vacancies/new', element: <VacancyFormPage /> },
       { path: 'vacancies/:id', element: <VacancyPage /> },
       { path: 'vacancies/:id/edit', element: <VacancyFormPage /> },
-      { path: 'applications', element: <WorkspacePage section="applications" /> },
+      { path: 'applications', element: <ApplicationsPage /> },
       { path: 'guide', element: <GuidePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },

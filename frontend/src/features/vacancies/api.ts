@@ -1,5 +1,5 @@
 import type { Vacancy } from '../../entities/hiring'
-import { ApiError, requestJson } from '../../shared/api/client'
+import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
 
 export interface VacancyInput {
@@ -72,17 +72,8 @@ export function createVacancyRepository(
   onUnauthorized: () => void,
 ): VacancyRepository {
   const endpoint = authUrl(base, '/api/vacancies', import.meta.env.PROD)
-  async function request(path: string, options: RequestInit = {}) {
-    try {
-      return await requestJson(endpoint + path, {
-        ...options,
-        headers: { Authorization: `Bearer ${token}` },
-      })
-    } catch (error) {
-      if (error instanceof ApiError && error.kind === 'unauthorized') onUnauthorized()
-      throw error
-    }
-  }
+  const send = authenticatedRequest(token, onUnauthorized)
+  const request = (path: string, options?: RequestInit) => send(endpoint + path, options)
   function idPath(id: number) {
     if (!Number.isSafeInteger(id) || id <= 0) throw new ApiError('contract')
     return `/${id}`

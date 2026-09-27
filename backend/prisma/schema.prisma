@@ -44,6 +44,12 @@ model Vacancy {
   // который может перезаписаться, если работодатель потом напишет боту из группового чата.
   employerChatId String?       @map("employer_chat_id")
 
+  // Атомарная метка "кто-то сейчас пытается (пере)доставить карточку в MAX" (publish.ts, claimCardRedelivery) —
+  // без этой метки два параллельных retry публикации одной и той же зависшей (без cardMessageId) вакансии оба могли пройти
+  // проверку "cardMessageId пуст" и оба отправить карточку в MAX (раздел 3 фидбека фронтенда). Null —
+  // никто сейчас не пытается или предыдущая попытка считается зависшей (>30с, STALE_DELIVERY_ATTEMPT_MS).
+  publishDeliveryAttemptAt DateTime? @map("publish_delivery_attempt_at")
+
   applications   Application[]
 
   @@map("vacancies")

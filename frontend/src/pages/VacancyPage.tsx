@@ -15,6 +15,7 @@ import { useResource } from '../shared/api/useResource'
 import { config } from '../shared/config'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import { NotFoundPage } from './NotFoundPage'
+import { VacancyHiringSummary } from '../features/overview/VacancyHiringSummary'
 
 export function VacancyPage() {
   const { id: routeId } = useParams()
@@ -342,6 +343,7 @@ function VacancyDetails({ id }: { id: number }) {
           )}
         </aside>
       </div>
+      <VacancyHiringSummary vacancy={vacancy} paused={busy || confirm !== null} />
       {confirm && (
         <ConfirmDialog
           title={

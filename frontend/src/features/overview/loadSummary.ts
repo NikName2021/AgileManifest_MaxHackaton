@@ -6,6 +6,19 @@ export interface HiringSummary {
   stages: Record<ApplicationStatus, number | null>
 }
 
+export async function loadVacancyHiringSummary(
+  applications: ApplicationRepository,
+  vacancyId: number,
+  signal: AbortSignal,
+): Promise<HiringSummary> {
+  // The vacancy endpoint returns the complete list, unlike the paginated employer endpoint.
+  const { items } = await applications.forVacancy(vacancyId, signal)
+  signal.throwIfAborted()
+  const stages = { new: 0, contacted: 0, invited: 0, hired: 0, rejected: 0 }
+  for (const item of items) stages[item.status] += 1
+  return { total: items.length, stages }
+}
+
 export async function loadHiringSummary(
   applications: ApplicationRepository,
   signal: AbortSignal,

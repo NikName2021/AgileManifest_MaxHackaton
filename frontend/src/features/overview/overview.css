@@ -1,6 +1,9 @@
 .hiring-funnel {
   margin-bottom: 32px;
 }
+.vacancy-hiring-summary {
+  margin-top: 32px;
+}
 .hiring-funnel .section-title {
   margin-bottom: 8px;
   flex-wrap: wrap;
@@ -13,6 +16,11 @@
 }
 .funnel-intro {
   margin-bottom: 18px;
+}
+.funnel-total {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 .funnel-stages {
   display: grid;

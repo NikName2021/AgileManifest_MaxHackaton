@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { ArrowUpRight, CheckCircle2, Pencil, Send } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Copy, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
 import { cardTextLength } from '../features/vacancies/model'
@@ -190,6 +190,18 @@ function VacancyDetails({ id }: { id: number }) {
                 <Link to="/vacancies/new">Создать новую вакансию</Link>
               </Button>
             </>
+          )}
+          {busy || needsRefresh ? (
+            <Button variant="secondary" disabled>
+              Создать копию
+            </Button>
+          ) : (
+            <Button asChild variant="secondary">
+              <Link to={`/vacancies/${id}/copy`}>
+                <Copy size={16} />
+                Создать копию
+              </Link>
+            </Button>
           )}
           {config.botUrl && mode === 'max' && (
             <a

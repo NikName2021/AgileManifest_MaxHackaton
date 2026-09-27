@@ -31,13 +31,16 @@ export function Shell() {
   const navigate = useNavigate()
   const main = useRef<HTMLElement>(null)
   const inVacancy = pathname.startsWith('/vacancies/')
-  const backTo = pathname.endsWith('/edit')
-    ? pathname.replace(/\/edit$/, '')
-    : inVacancy
-      ? '/vacancies'
-      : '/'
-  const title =
-    pathname === '/vacancies/new'
+  const isCopy = /^\/vacancies\/\d+\/copy$/.test(pathname)
+  const backTo =
+    pathname.endsWith('/edit') || isCopy
+      ? pathname.replace(/\/(edit|copy)$/, '')
+      : inVacancy
+        ? '/vacancies'
+        : '/'
+  const title = isCopy
+    ? 'Копия вакансии'
+    : pathname === '/vacancies/new'
       ? 'Новая вакансия'
       : inVacancy
         ? 'Вакансия'
@@ -106,7 +109,11 @@ export function Shell() {
         {inVacancy && (
           <Link className="back-link" to={backTo}>
             <ArrowLeft size={16} />
-            {backTo === '/vacancies' ? 'К вакансиям' : 'К черновику'}
+            {backTo === '/vacancies'
+              ? 'К вакансиям'
+              : isCopy
+                ? 'К исходной вакансии'
+                : 'К черновику'}
           </Link>
         )}
         <Outlet />

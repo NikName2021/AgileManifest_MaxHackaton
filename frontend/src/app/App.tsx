@@ -34,6 +34,7 @@ const router = createBrowserRouter([
       { path: 'vacancies/new', element: <VacancyFormPage /> },
       { path: 'vacancies/:id', element: <VacancyPage /> },
       { path: 'vacancies/:id/edit', element: <VacancyFormPage /> },
+      { path: 'vacancies/:id/copy', element: <VacancyFormPage copy /> },
       { path: 'applications', element: <ApplicationsPage /> },
       { path: 'guide', element: <GuidePage /> },
       { path: 'settings', element: <SettingsPage /> },

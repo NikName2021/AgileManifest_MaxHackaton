@@ -1,3 +1,10 @@
+.vacancy-copy-note {
+  margin-bottom: 24px;
+  overflow-wrap: anywhere;
+}
+.vacancy-copy-note p + p {
+  margin-top: 8px;
+}
 .vacancies-heading {
   align-items: center;
   gap: 24px;

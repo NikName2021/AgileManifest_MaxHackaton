@@ -1,6 +1,8 @@
 import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, BriefcaseBusiness, MapPin, Plus, RefreshCw, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
+import { RefreshStatus } from '../shared/ui/RefreshStatus'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { formatSalary, scheduleLabels, statusLabels } from '../features/vacancies/model'
@@ -9,7 +11,11 @@ import { VacancyFailure, VacancyLoading, VacancyStatusBadge } from '../features/
 const filters = ['all', 'draft', 'published', 'closed'] as const
 export function VacanciesPage() {
   const { vacancies } = useSession()
-  const { result, reload } = useResource(vacancies.list, 'list')
+  const { result, reload, refresh, isRefreshing, refreshError } = useResource(
+    vacancies.list,
+    'list',
+  )
+  useRefreshOnReturn(refresh, result.state === 'loading' || isRefreshing)
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'all'
   const query = params.get('q') ?? ''
@@ -88,6 +94,7 @@ export function VacanciesPage() {
           </button>
         ))}
       </div>
+      <RefreshStatus refreshing={isRefreshing} failed={Boolean(refreshError)} retry={refresh} />
       {result.state === 'loading' && <VacancyLoading />}
       {result.state === 'error' && <VacancyFailure error={result.error} retry={reload} />}
       {result.state === 'ready' &&

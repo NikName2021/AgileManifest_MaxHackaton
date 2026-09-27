@@ -19,6 +19,8 @@ import {
 } from '../features/applications/model'
 import { ApplicationDialog } from '../features/applications/ApplicationDialog'
 import { useResource } from '../shared/api/useResource'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
+import { RefreshStatus } from '../shared/ui/RefreshStatus'
 
 const pageSize = 20
 type Loaded =
@@ -45,7 +47,7 @@ export function ApplicationsPage() {
           },
     [applications, vacancyId, remoteOffset, remoteStatus],
   )
-  const { result, reload } = useResource(
+  const { result, reload, refresh, isRefreshing, refreshError } = useResource(
     load,
     `${vacancyId ?? 'all'}:${remoteStatus ?? 'all'}:${remoteOffset}`,
   )
@@ -54,6 +56,20 @@ export function ApplicationsPage() {
   const [notice, setNotice] = useState<StatusNotice>()
   const [seeding, setSeeding] = useState(false)
   const [seedFailure, setSeedFailure] = useState('')
+  const refreshVacancies = vacancyOptions.refresh
+  const refreshApplications = useCallback(() => {
+    refresh()
+    refreshVacancies()
+  }, [refresh, refreshVacancies])
+  const refreshing = isRefreshing || vacancyOptions.isRefreshing
+  useRefreshOnReturn(
+    refreshApplications,
+    selected !== null ||
+      seeding ||
+      result.state === 'loading' ||
+      vacancyOptions.result.state === 'loading' ||
+      refreshing,
+  )
   const seedLock = useRef(false)
   const mounted = useRef(true)
   const listHeading = useRef<HTMLParagraphElement>(null)
@@ -192,6 +208,11 @@ export function ApplicationsPage() {
           Обновить
         </Button>
       </div>
+      <RefreshStatus
+        refreshing={refreshing}
+        failed={Boolean(refreshError || vacancyOptions.refreshError)}
+        retry={refreshApplications}
+      />
       {vacancyOptions.result.state === 'error' && (
         <p className="application-options-error" role="status">
           Список вакансий недоступен.{' '}

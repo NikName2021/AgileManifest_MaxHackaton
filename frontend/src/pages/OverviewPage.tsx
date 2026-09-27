@@ -10,6 +10,8 @@ import { MaxLogo } from '../shared/ui/MaxLogo'
 import { config } from '../shared/config'
 import { loadHiringSummary } from '../features/overview/loadSummary'
 import { HiringFunnel } from '../features/overview/HiringFunnel'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
+import { RefreshStatus } from '../shared/ui/RefreshStatus'
 
 export function OverviewPage() {
   const { vacancies, applications } = useSession()
@@ -19,6 +21,17 @@ export function OverviewPage() {
     [applications],
   )
   const counts = useResource(loadCounts, 'overview-applications')
+  const refreshVacancies = vacancyData.refresh,
+    refreshCounts = counts.refresh
+  const refreshOverview = useCallback(() => {
+    refreshVacancies()
+    refreshCounts()
+  }, [refreshVacancies, refreshCounts])
+  const refreshing = vacancyData.isRefreshing || counts.isRefreshing
+  useRefreshOnReturn(
+    refreshOverview,
+    vacancyData.result.state === 'loading' || counts.result.state === 'loading' || refreshing,
+  )
   const rows = vacancyData.result.state === 'ready' ? vacancyData.result.data : []
   const recent = [...rows]
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id - a.id)
@@ -79,6 +92,11 @@ export function OverviewPage() {
           </Link>
         ))}
       </section>
+      <RefreshStatus
+        refreshing={refreshing}
+        failed={Boolean(vacancyData.refreshError || counts.refreshError)}
+        retry={refreshOverview}
+      />
       <HiringFunnel
         summary={counts.result.state === 'ready' ? counts.result.data : undefined}
         loading={counts.result.state === 'loading'}

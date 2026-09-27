@@ -101,6 +101,8 @@ describe('employer vacancy workflow', () => {
     const session = createPreviewSession()
     session.mode = 'max'
     const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
+    // Keep the summary's independent read out of the publication request sequence.
+    vi.spyOn(session.applications, 'forVacancy').mockResolvedValue({ vacancy: row, items: [] })
     const get = vi.spyOn(session.vacancies, 'get').mockResolvedValue(row)
     let resolve!: (value: Vacancy) => void
     const publish = vi.spyOn(session.vacancies, 'publish').mockImplementation(
@@ -162,6 +164,7 @@ describe('employer vacancy workflow', () => {
   it('locks resend after a failed state check and restores it only after a successful read and renewed chat check', async () => {
     const session = createPreviewSession()
     const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
+    vi.spyOn(session.applications, 'forVacancy').mockResolvedValue({ vacancy: row, items: [] })
     const get = vi
       .spyOn(session.vacancies, 'get')
       .mockResolvedValueOnce(row)
@@ -222,6 +225,7 @@ describe('employer vacancy workflow', () => {
       const update = vi.spyOn(session.vacancies, 'update')
       const publish = vi.spyOn(session.vacancies, 'publish')
       const applicationList = vi.spyOn(session.applications, 'forVacancy')
+      const applicationUpdate = vi.spyOn(session.applications, 'updateStatus')
       start(session, `/vacancies/${row.id}`)
       fireEvent.click(await screen.findByRole('link', { name: 'Создать копию' }))
       await screen.findByRole('heading', { name: 'Копия вакансии' })
@@ -250,7 +254,9 @@ describe('employer vacancy workflow', () => {
       })
       expect(update).not.toHaveBeenCalled()
       expect(publish).not.toHaveBeenCalled()
-      expect(applicationList).not.toHaveBeenCalled()
+      // Detail screens read each vacancy's summary; copying must never change applications.
+      expect(applicationList.mock.calls.map(([id]) => id)).toEqual([row.id, row.id + 1])
+      expect(applicationUpdate).not.toHaveBeenCalled()
       expect(await session.vacancies.get(row.id)).toEqual(original)
       expect(await session.vacancies.get(row.id + 1)).toMatchObject({
         status: 'draft',

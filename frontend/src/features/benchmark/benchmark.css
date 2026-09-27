@@ -1,0 +1,94 @@
+.salary-benchmark {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.form-section > .salary-benchmark {
+  margin: 20px 0 28px;
+}
+.benchmark-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.benchmark-heading > svg {
+  color: var(--accent-text);
+  flex-shrink: 0;
+}
+.benchmark-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.benchmark-demo {
+  margin-left: auto;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+}
+.salary-benchmark p {
+  margin: 12px 0;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.salary-benchmark .benchmark-hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.benchmark-amounts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px 0;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.benchmark-amounts dt {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.benchmark-amounts dd {
+  margin: 6px 0 0;
+  font-size: 23px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.benchmark-warning {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 10px 12px;
+}
+.benchmark-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-top: 16px;
+}
+.benchmark-actions a {
+  color: var(--accent-text);
+  font-size: 12px;
+  text-underline-offset: 3px;
+}
+.vacancy-detail-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+@media (max-width: 400px) {
+  .salary-benchmark {
+    padding: 16px;
+  }
+  .benchmark-amounts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

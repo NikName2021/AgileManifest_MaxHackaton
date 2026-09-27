@@ -33,6 +33,13 @@ function Content() {
   return (
     <div>
       Рабочее пространство: {session.user.display_name}; {session.mode}
+      <button
+        onClick={() =>
+          void session.benchmark.get({ position: 'Повар', region: 'Тула' }).catch(() => {})
+        }
+      >
+        Загрузить ориентир
+      </button>
       <button onClick={() => void session.vacancies.list().catch(() => {})}>
         Загрузить вакансии
       </button>
@@ -52,6 +59,24 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(credentials))))
 })
 describe('launch and authorization states', () => {
+  it('does not expire the session when the public benchmark endpoint rejects a request', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(credentials)))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: 'unauthorized' } }), { status: 401 }),
+      )
+    vi.stubGlobal('fetch', fetcher)
+    render(
+      <SessionGate>
+        <Content />
+      </SessionGate>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Загрузить ориентир' }))
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('Рабочее пространство: Мой кабинет; max')).toBeInTheDocument()
+    expect(fetcher.mock.calls[1][1].headers).not.toHaveProperty('Authorization')
+  })
   it.each(['Загрузить вакансии', 'Загрузить отклики'])(
     'removes private content when %s rejects the bearer session',
     async (action) => {

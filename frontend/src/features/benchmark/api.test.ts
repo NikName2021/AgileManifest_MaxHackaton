@@ -51,13 +51,11 @@ describe('salary benchmark contract', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
   it('propagates unavailability without automatic retries or exposing server messages', async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ error: { code: 'not_found', message: 'private' } }), {
-          status: 404,
-        }),
-      )
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'not_found', message: 'private' } }), {
+        status: 404,
+      }),
+    )
     vi.stubGlobal('fetch', fetcher)
     await expect(
       createBenchmarkRepository('https://example.test').get({ position: 'Повар', region: 'Тула' }),

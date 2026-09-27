@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, CheckCircle2, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
+import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
 import { cardTextLength } from '../features/vacancies/model'
 import {
   VacancyFailure,
@@ -98,7 +99,10 @@ function VacancyDetails({ id }: { id: number }) {
       </div>
       {Boolean(failure) && <VacancyFailure error={failure} retry={() => void refresh()} />}
       <div className="vacancy-detail-layout">
-        <VacancyPreview vacancy={vacancy} />
+        <div className="vacancy-detail-main">
+          <VacancyPreview vacancy={vacancy} />
+          <SalaryBenchmark position={vacancy.title} region={vacancy.regionCode ?? ''} />
+        </div>
         <aside className="vacancy-side-panel" aria-busy={busy}>
           <Button asChild variant="secondary">
             <Link to={`/applications?vacancy=${id}`}>Отклики на вакансию</Link>

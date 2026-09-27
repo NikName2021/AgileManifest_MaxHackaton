@@ -75,6 +75,57 @@ async function seed(session: Session) {
   })
 }
 describe('employer vacancy workflow', () => {
+  it('restores sorting from the URL and keeps it through filtering, refresh, history and clearing filters', async () => {
+    const session = createPreviewSession()
+    const first = await seed(session)
+    await session.vacancies.update(first.id, {
+      title: 'Бариста',
+      region_code: 'Тула',
+      category: 'Общепит',
+      schedule: 'seasonal',
+      salary_min: null,
+      salary_max: null,
+      description: null,
+      contact_info: null,
+    })
+    await seed(session)
+    const list = vi.spyOn(session.vacancies, 'list')
+    const router = start(session, '/vacancies?sort=oldest&status=draft&q=Тула')
+    const titles = () =>
+      screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
+    await screen.findByRole('heading', { name: 'Бариста' })
+    expect(titles()).toEqual(['Бариста', 'Повар'])
+    expect(screen.getByRole('combobox', { name: 'Сортировка вакансий' })).toHaveValue('oldest')
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'title' } })
+    expect(new URLSearchParams(router.state.location.search).get('q')).toBe('Тула')
+    expect(new URLSearchParams(router.state.location.search).get('status')).toBe('draft')
+    expect(list).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('link', { name: /Бариста/ }))
+    await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
+    await act(() => router.navigate(-1))
+    await screen.findByRole('heading', { name: 'Бариста' })
+    expect(screen.getByRole('combobox')).toHaveValue('title')
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
+    await screen.findByRole('heading', { name: 'Бариста' })
+    expect(titles()).toEqual(['Бариста', 'Повар'])
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Нет такой вакансии' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Сбросить фильтры' }))
+    expect(router.state.location.search).toBe('?sort=title')
+    expect(titles()).toEqual(['Бариста', 'Повар'])
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'newest' } })
+    expect(router.state.location.search).toBe('')
+    expect(titles()).toEqual(['Повар', 'Бариста'])
+  })
+  it('falls back to newest for an invalid sort URL and treats reserved option names as literal search text', async () => {
+    const session = createPreviewSession()
+    await seed(session)
+    const router = start(session, '/vacancies?sort=unknown')
+    await screen.findByRole('heading', { name: 'Повар' })
+    expect(screen.getByRole('combobox')).toHaveValue('newest')
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'all' } })
+    expect(new URLSearchParams(router.state.location.search).get('q')).toBe('all')
+    expect(screen.getByRole('heading', { name: 'Ничего не нашлось' })).toBeInTheDocument()
+  })
   it('shows confirmed delivery when a read resolves a lost response and clears the obsolete error', async () => {
     const session = createPreviewSession()
     session.mode = 'max'
@@ -255,7 +306,9 @@ describe('employer vacancy workflow', () => {
       expect(update).not.toHaveBeenCalled()
       expect(publish).not.toHaveBeenCalled()
       // Detail screens read each vacancy's summary; copying must never change applications.
-      expect(applicationList.mock.calls.map(([id]) => id)).toEqual([row.id, row.id + 1])
+      await waitFor(() =>
+        expect(applicationList.mock.calls.map(([id]) => id)).toEqual([row.id, row.id + 1]),
+      )
       expect(applicationUpdate).not.toHaveBeenCalled()
       expect(await session.vacancies.get(row.id)).toEqual(original)
       expect(await session.vacancies.get(row.id + 1)).toMatchObject({

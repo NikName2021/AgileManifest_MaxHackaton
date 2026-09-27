@@ -63,6 +63,13 @@ export function createPreviewSession(): Session {
     mode: 'preview',
     user: { id: 1, display_name: 'Демо-кабинет' },
     vacancies,
+    benchmark: {
+      async get(_query, signal) {
+        signal?.throwIfAborted()
+        // Fixed illustrative values, never presented as actual market data.
+        return { avgSalaryMin: 45000, avgSalaryMax: 65000, vacancyCount: 24, isFresh: true }
+      },
+    },
     ...createPreviewApplications(vacancies),
   }
 }

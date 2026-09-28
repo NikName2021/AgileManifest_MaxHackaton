@@ -12,3 +12,6 @@ docs/
 
 .env
 monitoring/.env
+
+# Generated jury session tokens; never commit these files.
+.jury-access*.json

@@ -201,20 +201,33 @@ jobs:
       - name: Build and start containers
         run: docker compose --env-file .env.example up --build --detach --wait --wait-timeout 180
 
+      - name: Discover published HTTP port
+        run: |
+          binding=$(docker compose --env-file .env.example port frontend 80 | head -n 1)
+          port=${binding##*:}
+          test -n "$port"
+          echo "APP_BASE_URL=http://127.0.0.1:$port" >> "$GITHUB_ENV"
+
       - name: Check frontend, API and webhook through Nginx
         run: |
-          curl --fail --silent --show-error http://127.0.0.1:18080/vacancies | grep -q '<!doctype html>'
-          curl --fail --silent --show-error http://127.0.0.1:18080/health | python3 -c '
+          curl --fail --silent --show-error "$APP_BASE_URL/vacancies" | grep -q '<!doctype html>'
+          curl --fail --silent --show-error "$APP_BASE_URL/health" | python3 -c '
           import json, sys
           health = json.load(sys.stdin)
           assert health == {"ok": True, "db": "up"}, health
           '
-          api_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/api/vacancies)
+          api_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$APP_BASE_URL/api/vacancies")
           test "$api_status" = 401
           webhook_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            --header 'Content-Type: application/json' --data '{}' http://127.0.0.1:18080/webhook/max)
+            --header 'Content-Type: application/json' --data '{}' "$APP_BASE_URL/webhook/max")
           test "$webhook_status" = 401
           test "$(docker compose --env-file .env.example exec -T backend id -u)" != 0
+
+      - name: Check API scenario with synthetic jury data
+        run: |
+          docker compose --env-file .env.example exec -T -e ALLOW_DEMO_SEED=true backend \
+            node prisma/seed-demo.mjs > "$RUNNER_TEMP/jury-access.json"
+          python3 test-data/check-api.py --base-url "$APP_BASE_URL" --access-file "$RUNNER_TEMP/jury-access.json"
 
       - name: Show container logs on failure
         if: failure()

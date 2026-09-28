@@ -1,0 +1,55 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+  write_to = [loki.relabel.alloy_logs.receiver]
+}
+
+discovery.docker "local_docker" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_log_labels" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "service_name"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "docker_engine" {
+  host = "unix:///var/run/docker.sock"
+
+  targets       = discovery.docker.local_docker.targets
+  relabel_rules = discovery.relabel.docker_log_labels.rules
+
+  labels = {
+    job     = "docker_logs",
+    env     = "dev",
+    cluster = "local",
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+loki.relabel "alloy_logs" {
+  forward_to = [loki.write.local.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "alloy"
+  }
+}

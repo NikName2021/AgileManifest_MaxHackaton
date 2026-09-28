@@ -9,3 +9,9 @@ docs/
 
 # Local diagnostics must never enter version control.
 /tmp/
+
+.env
+monitoring/.env
+
+# Generated jury session tokens; never commit these files.
+.jury-access*.json

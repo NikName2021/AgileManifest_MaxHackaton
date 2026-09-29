@@ -1,23 +1,15 @@
-# DATA-API.yaml
-#
-# ВАЖНО (проверить перед сдачей): организаторы хакатона просят файл "DATA-API.yaml по заданной
-# структуре", но точный образец/шаблон в разобранном тексте кейса не был приведён дословно —
-# только перечень обязательных полей (версия схемы, идентификатор команды, базовый адрес,
-# обязательные проверки, HTTP-методы, параметры, роли, статус-коды, формат ответа), см.
-# docs/ТЗ — Ассистент сезонного найма (MAX).md, раздел 11. Ниже — состав на основе этого
-# перечня. Если организаторы прикладывали отдельный файл-шаблон/пример DATA-API.yaml к кейсу —
-# сверьте ключи и вложенность с ним и поправьте при необходимости.
-
+# Формат материалов для проверки по разделу «Формат сдачи» кейса.
+# Это структура проекта; совместимость с отдельной схемой организаторов нужно
+# подтвердить, если такая схема предоставлена. Секреты передаются отдельно.
 schema_version: "1.1"
-
-team:
-  # TODO: вписать реальный идентификатор/название команды перед сдачей
-  id: "REPLACE_WITH_TEAM_ID"
-  name: "REPLACE_WITH_TEAM_NAME"
+solution:
+  name: "Ассистент сезонного найма в MAX"
+submission_status: deployment_pending
 
 api:
-  # TODO: вписать реальный HTTPS-адрес backend на время проверки жюри
-  base_url: "https://REPLACE_WITH_PUBLIC_HTTPS_URL"
+  # Заполнить реальным HTTPS-адресом после развёртывания, до передачи жюри.
+  base_url: null
+  local_base_url: "http://localhost"
   spec: "./openapi.yaml"
 
   health_check:
@@ -50,9 +42,39 @@ api:
         Так же не привязан к отдельной роли аккаунта — определяется владением (candidateUserId).
       entry_point: "кнопка «Откликнуться» на карточке вакансии в MAX, либо POST /api/applications из мини-приложения"
 
+  checks:
+    runner: "python3 test-data/check-api.py --base-url <BASE_URL> --access-file <ACCESS_FILE>"
+    preparation: "backend/prisma/seed-demo.mjs (ALLOW_DEMO_SEED=true), see test-data/README.md"
+    data_mode: synthetic
+    live_scenario: "test-data/README.md — section 3; required separately after deployment"
+    required_scenarios:
+      - "health: 200, {ok: true, db: up}"
+      - "no bearer token: 401, error.code=unauthorized"
+      - "invalid request body: 400, error.code=validation_error"
+      - "employer creates draft: 201, id/employerUserId/status=draft"
+      - "owner reads and edits draft: 200, updated fields"
+      - "candidate reads employer vacancy: 403, error.code=forbidden"
+      - "publish without employer chat: 409, error.code=employer_chat_missing; remains draft"
+      - "apply to draft: 409, error.code=conflict"
+      - "edit published vacancy: 409, error.code=conflict"
+      - "candidate applies to synthetic published vacancy: 201, id/status=new/notified=false"
+      - "duplicate application: 409, error.code=conflict"
+      - "owner lists applications: 200, candidate included; paginated list has items/total/limit/offset"
+      - "candidate reads or changes employer funnel: 403, error.code=forbidden"
+      - "owner invites candidate: 200, status=invited/notified=false/unchanged=false"
+      - "repeat invitation: 200, unchanged=true/notified=false"
+      - "owner closes vacancy: 200, status=closed; apply/publish after close: 409"
+
+  request_format:
+    content_type: application/json
+    headers:
+      Authorization: "Bearer <employer.token or candidate.token from the private access file>"
+    note: "Public endpoints do not require Authorization. Full request schemas and response fields are in the linked OpenAPI operation."
+
   endpoints:
     - method: POST
       path: /api/auth/max
+      contract: "./openapi.yaml#/paths/~1api~1auth~1max/post"
       role: public
       auth: none
       params:
@@ -67,6 +89,7 @@ api:
 
     - method: GET
       path: /api/vacancies
+      contract: "./openapi.yaml#/paths/~1api~1vacancies/get"
       role: employer
       auth: bearer
       params: []
@@ -76,6 +99,7 @@ api:
 
     - method: POST
       path: /api/vacancies
+      contract: "./openapi.yaml#/paths/~1api~1vacancies/post"
       role: employer
       auth: bearer
       params:
@@ -83,6 +107,34 @@ api:
           in: body
           required: true
           type: string
+        - name: region_code
+          in: body
+          required: false
+          type: string
+        - name: category
+          in: body
+          required: false
+          type: string
+        - name: schedule
+          in: body
+          required: false
+          type: string
+          enum: [seasonal, temporary, permanent]
+        - name: salary_min
+          in: body
+          required: false
+          type: integer
+          nullable: true
+        - name: salary_max
+          in: body
+          required: false
+          type: integer
+          nullable: true
+        - name: description
+          in: body
+          required: false
+          type: string
+          nullable: true
         - name: contact_info
           in: body
           required: false
@@ -94,6 +146,7 @@ api:
 
     - method: GET
       path: /api/vacancies/{id}
+      contract: "./openapi.yaml#/paths/~1api~1vacancies~1{id}/get"
       role: employer
       auth: bearer
       params:
@@ -109,6 +162,7 @@ api:
 
     - method: PATCH
       path: /api/vacancies/{id}
+      contract: "./openapi.yaml#/paths/~1api~1vacancies~1{id}/patch"
       role: employer
       auth: bearer
       note: "Редактирование разрешено только для вакансии в статусе draft; хотя бы одно поле обязательно."
@@ -160,6 +214,7 @@ api:
 
     - method: POST
       path: /api/vacancies/{id}/publish
+      contract: "./openapi.yaml#/paths/~1api~1vacancies~1{id}~1publish/post"
       role: employer
       auth: bearer
       params:
@@ -172,11 +227,12 @@ api:
         "401": "unauthorized"
         "403": "not owner"
         "404": "not found"
-        "409": "already published or closed"
-        "502": "failed to deliver card to MAX, rolled back to draft"
+        "409": "employer_chat_missing, or conflict (closed/already published with a confirmed card)"
+        "502": "upstream_error: rolled back to draft; card_delivery_unknown: delivery timed out, remains published"
 
     - method: POST
       path: /api/vacancies/{id}/close
+      contract: "./openapi.yaml#/paths/~1api~1vacancies~1{id}~1close/post"
       role: employer
       auth: bearer
       params:
@@ -192,6 +248,7 @@ api:
 
     - method: GET
       path: /api/vacancies/{id}/applications
+      contract: "./openapi.yaml#/paths/~1api~1vacancies~1{id}~1applications/get"
       role: employer
       auth: bearer
       note: "Отклики по одной конкретной вакансии, без пагинации. Для общего списка по всем вакансиям см. GET /api/applications."
@@ -208,6 +265,7 @@ api:
 
     - method: GET
       path: /api/applications
+      contract: "./openapi.yaml#/paths/~1api~1applications/get"
       role: employer
       auth: bearer
       note: "Общий список откликов по всем вакансиям работодателя, с пагинацией и фильтром по статусу."
@@ -235,6 +293,7 @@ api:
 
     - method: POST
       path: /api/applications
+      contract: "./openapi.yaml#/paths/~1api~1applications/post"
       role: candidate
       auth: bearer
       params:
@@ -255,6 +314,7 @@ api:
 
     - method: PATCH
       path: /api/applications/{id}
+      contract: "./openapi.yaml#/paths/~1api~1applications~1{id}/patch"
       role: employer
       auth: bearer
       params:
@@ -276,6 +336,7 @@ api:
 
     - method: GET
       path: /api/benchmark
+      contract: "./openapi.yaml#/paths/~1api~1benchmark/get"
       role: public
       auth: none
       params:
@@ -305,7 +366,8 @@ api:
       employer_chat_missing (409, POST /api/vacancies/{id}/publish) — работодатель ещё не писал
       боту напрямую, publish некуда слать карточку. card_delivery_unknown (502, тот же эндпоинт) —
       таймаут ответа MAX, неизвестно, ушла ли карточка; вакансия остаётся published без
-      cardMessageId, повторный publish безопасен (не создаёт дубликат).
+      cardMessageId. Повторный publish повторяет отправку; при неоднозначном таймауте
+      фактическую доставку карточки следует проверить в MAX.
 
   cors:
     note: >
@@ -315,3 +377,8 @@ api:
 
 test_data:
   path: "./test-data/"
+  synthetic: true
+  setup: "Explicit CLI seed creates two independent users and a published fixture without MAX delivery."
+  credentials: "Private .jury-access.json; separate employer/candidate tokens, never committed."
+  repeat: "Generate a new fixture before each run; the checker creates an application and closes the fixture vacancy."
+  limitations: "MAX login, actual publication, notifications and live benchmark are verified separately on the deployed service."

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useBeforeUnload, useBlocker } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { Copy, X } from 'lucide-react'
+import { X } from 'lucide-react'
+import { CandidateContacts } from './CandidateContacts'
 import { applicationLabels, type Application, type ApplicationStatus } from '../../entities/hiring'
 import { useSession } from '../session/context'
 import { statuses } from './api'
 import {
   applicationError,
-  candidateContact,
   candidateName,
   notificationExpected,
   statusNotice,
@@ -32,7 +32,6 @@ export function ApplicationDialog({
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [failure, setFailure] = useState('')
   const [notice, setNotice] = useState<StatusNotice>()
-  const [copyMessage, setCopyMessage] = useState('')
   const dialog = useRef<HTMLDialogElement>(null)
   const mounted = useRef(true),
     lock = useRef(false)
@@ -67,15 +66,6 @@ export function ApplicationDialog({
 
   function close() {
     if (!lock.current) onClose()
-  }
-  async function copy(text: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-      if (mounted.current) setCopyMessage('Контакт скопирован.')
-    } catch {
-      if (mounted.current)
-        setCopyMessage('Не удалось скопировать. Выделите и скопируйте контакт вручную.')
-    }
   }
   async function reconcile() {
     const snapshot = await applications.forVacancy(current.vacancyId)
@@ -139,7 +129,6 @@ export function ApplicationDialog({
       }
     }
   }
-  const contact = candidateContact(current)
   return (
     <dialog
       className="application-dialog"
@@ -173,28 +162,7 @@ export function ApplicationDialog({
           <small>Вакансия закрыта. Работу с полученными откликами можно продолжить.</small>
         )}
       </div>
-      <section className="application-contact">
-        <h3>Контакт кандидата</h3>
-        <p>{contact || 'Кандидат не оставил контакт для связи.'}</p>
-        {contact && (
-          <Button
-            variant="secondary"
-            size="small"
-            iconBefore={<Copy size={16} />}
-            onClick={() => void copy(contact)}
-          >
-            Копировать контакт
-          </Button>
-        )}
-        {current.candidate.phone?.trim() && current.candidate.phone.trim() !== contact && (
-          <p className="secondary-contact">Телефон профиля: {current.candidate.phone}</p>
-        )}
-        {copyMessage && (
-          <p className="copy-result" role="status">
-            {copyMessage}
-          </p>
-        )}
-      </section>
+      <CandidateContacts application={current} />
       <dl className="application-dates">
         <div>
           <dt>Отклик получен</dt>

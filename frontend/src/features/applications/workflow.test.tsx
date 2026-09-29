@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
@@ -77,7 +77,128 @@ function chooseStatus(value: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Изменить статус' }))
 }
 
+afterEach(() => vi.useRealTimers())
 describe('employer applications workflow', () => {
+  it('offers separate email and profile phone actions, copies the selected contact and never changes the hiring stage', async () => {
+    const session = await seeded()
+    const page = await session.applications.list({ limit: 20, offset: 0 })
+    const row = {
+      ...page.items[0],
+      contact: 'candidate@example.org',
+      candidate: { ...page.items[0].candidate, phone: '+7 (900) 123-45-67' },
+    }
+    vi.spyOn(session.applications, 'list').mockResolvedValue({ ...page, items: [row], total: 1 })
+    const update = vi.spyOn(session.applications, 'updateStatus')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    start(session)
+    const dialog = await openFirst()
+    expect(dialog.getByRole('link', { name: 'Написать письмо' })).toHaveAttribute(
+      'href',
+      'mailto:candidate@example.org',
+    )
+    expect(dialog.getByRole('link', { name: 'Позвонить по телефону профиля' })).toHaveAttribute(
+      'href',
+      'tel:+79001234567',
+    )
+    fireEvent.click(dialog.getByRole('button', { name: 'Копировать телефон профиля' }))
+    await dialog.findByText('Телефон профиля скопирован.')
+    expect(writeText).toHaveBeenLastCalledWith('+7 (900) 123-45-67')
+    fireEvent.click(dialog.getByRole('button', { name: 'Копировать контакт' }))
+    await dialog.findByText('Контакт скопирован.')
+    expect(writeText).toHaveBeenLastCalledWith('candidate@example.org')
+    expect(update).not.toHaveBeenCalled()
+  })
+  it('opens an explicit MAX link through the bridge on click while preserving the selected stage', async () => {
+    const session = await seeded()
+    const page = await session.applications.list({ limit: 20, offset: 0 })
+    vi.spyOn(session.applications, 'list').mockResolvedValue({
+      ...page,
+      items: [{ ...page.items[0], contact: 'https://max.ru/u/test-user' }],
+      total: 1,
+    })
+    const openMaxLink = vi.fn()
+    session.bridge = {
+      initData: '',
+      platform: 'web',
+      openMaxLink,
+      BackButton: { show() {}, hide() {}, onClick() {}, offClick() {} },
+    }
+    const update = vi.spyOn(session.applications, 'updateStatus')
+    start(session)
+    const dialog = await openFirst()
+    fireEvent.change(dialog.getByLabelText('Новый этап'), { target: { value: 'contacted' } })
+    const link = dialog.getByRole('link', { name: 'Открыть ссылку MAX' })
+    expect(openMaxLink).not.toHaveBeenCalled()
+    expect(link).toHaveAttribute('href', 'https://max.ru/u/test-user')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(fireEvent.click(link)).toBe(false)
+    expect(openMaxLink).toHaveBeenCalledExactlyOnceWith('https://max.ru/u/test-user')
+    expect(dialog.getByLabelText('Новый этап')).toHaveValue('contacted')
+    expect(update).not.toHaveBeenCalled()
+    openMaxLink.mockImplementation(() => {
+      throw new Error('unsupported')
+    })
+    expect(fireEvent.click(link)).toBe(true)
+  })
+  it('deduplicates differently formatted phone numbers and keeps unrecognized contacts copyable', async () => {
+    const session = await seeded()
+    const page = await session.applications.list({ limit: 20, offset: 0 })
+    const list = vi.spyOn(session.applications, 'list').mockResolvedValue({
+      ...page,
+      items: [
+        {
+          ...page.items[0],
+          contact: '8 (900) 123-45-67',
+          candidate: { ...page.items[0].candidate, phone: '+79001234567' },
+        },
+      ],
+      total: 1,
+    })
+    start(session)
+    let dialog = await openFirst()
+    expect(dialog.getAllByRole('link')).toHaveLength(1)
+    expect(
+      dialog.queryByRole('button', { name: 'Копировать телефон профиля' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: 'Закрыть карточку кандидата' }))
+    list.mockResolvedValue({
+      ...page,
+      items: [{ ...page.items[0], contact: '@candidate' }],
+      total: 1,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
+    dialog = await openFirst()
+    expect(dialog.queryByRole('link')).not.toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Копировать контакт' })).toBeInTheDocument()
+    expect(dialog.getByText('@candidate')).toBeInTheDocument()
+  })
+  it('defers return refresh while a candidate dialog is open and retains the current filter', async () => {
+    const session = await seeded()
+    const list = vi.spyOn(session.applications, 'list')
+    const router = start(session, '/applications?status=new')
+    const dialog = await openFirst()
+    fireEvent.change(dialog.getByLabelText('Новый этап'), { target: { value: 'invited' } })
+    const before = list.mock.calls.length
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    vi.useFakeTimers()
+    fireEvent.focus(window)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    expect(list).toHaveBeenCalledTimes(before)
+    expect(dialog.getByLabelText('Новый этап')).toHaveValue('invited')
+    fireEvent.click(dialog.getByRole('button', { name: 'Закрыть карточку кандидата' }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300)
+    })
+    expect(list).toHaveBeenCalledTimes(before + 1)
+    expect(list).toHaveBeenLastCalledWith(
+      { limit: 20, offset: 0, status: 'new' },
+      expect.any(AbortSignal),
+    )
+    expect(router.state.location.search).toBe('?status=new')
+  })
   it('loads demo only by explicit choice, paginates and resets the page on filtering without network', async () => {
     const fetcher = vi.fn()
     vi.stubGlobal('fetch', fetcher)

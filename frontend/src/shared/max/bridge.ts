@@ -2,6 +2,7 @@
 export interface MaxBridge {
   initData: string
   platform: string
+  openMaxLink?(url: string): void
   BackButton: {
     show(): void
     hide(): void

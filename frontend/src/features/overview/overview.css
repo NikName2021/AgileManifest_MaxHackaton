@@ -1,0 +1,132 @@
+.hiring-funnel {
+  margin-bottom: 32px;
+}
+.vacancy-hiring-summary {
+  margin-top: 32px;
+}
+.hiring-funnel .section-title {
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.funnel-intro,
+.funnel-footer p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.funnel-intro {
+  margin-bottom: 18px;
+}
+.funnel-total {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.funnel-stages {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.funnel-stage {
+  --stage-color: var(--accent);
+  min-width: 0;
+  padding: 20px;
+  border-top: 3px solid var(--stage-color);
+  overflow-wrap: anywhere;
+}
+.funnel-stage + .funnel-stage {
+  border-left: 1px solid var(--border);
+}
+.funnel-stage-contacted {
+  --stage-color: var(--max-violet);
+}
+.funnel-stage-invited {
+  --stage-color: var(--max-purple);
+}
+.funnel-stage-hired {
+  --stage-color: var(--max-cyan);
+}
+.funnel-stage-rejected {
+  --stage-color: var(--muted);
+}
+.funnel-stage:hover {
+  background: var(--subtle);
+}
+.funnel-stage:focus-visible {
+  outline-offset: -3px;
+}
+.funnel-stage > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.funnel-stage svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.funnel-stage strong {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin: 16px 0 8px;
+}
+.funnel-stage-new strong {
+  color: var(--accent-text);
+}
+.funnel-stage small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.funnel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  margin-top: 12px;
+}
+.funnel-footer p {
+  margin: 0;
+  max-width: 750px;
+}
+.funnel-footer button {
+  flex-shrink: 0;
+  margin: 0;
+  min-height: 44px;
+}
+@media (max-width: 760px) {
+  .funnel-stages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .funnel-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 75px;
+    align-items: center;
+    gap: 12px;
+    border-top: 0;
+    border-left: 3px solid var(--stage-color);
+    padding: 14px 16px;
+  }
+  .funnel-stage + .funnel-stage {
+    border-left: 3px solid var(--stage-color);
+    border-top: 1px solid var(--border);
+  }
+  .funnel-stage strong {
+    margin: 0;
+    font-size: 23px;
+  }
+  .funnel-stage small {
+    text-align: right;
+  }
+  .funnel-stage svg {
+    display: none;
+  }
+}

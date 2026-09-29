@@ -1,32 +1,45 @@
 import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, BriefcaseBusiness, MapPin, Plus, RefreshCw, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
+import { RefreshStatus } from '../shared/ui/RefreshStatus'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { formatSalary, scheduleLabels, statusLabels } from '../features/vacancies/model'
 import { VacancyFailure, VacancyLoading, VacancyStatusBadge } from '../features/vacancies/VacancyUi'
+import { parseVacancySort, sortVacancies, vacancySortLabels } from '../features/vacancies/sorting'
 
 const filters = ['all', 'draft', 'published', 'closed'] as const
 export function VacanciesPage() {
   const { vacancies } = useSession()
-  const { result, reload } = useResource(vacancies.list, 'list')
+  const { result, reload, refresh, isRefreshing, refreshError } = useResource(
+    vacancies.list,
+    'list',
+  )
+  useRefreshOnReturn(refresh, result.state === 'loading' || isRefreshing)
   const [params, setParams] = useSearchParams()
   const status = params.get('status') ?? 'all'
   const query = params.get('q') ?? ''
-  function filter(key: string, value: string) {
+  const sort = parseVacancySort(params.get('sort'))
+  function filter(key: 'status' | 'q' | 'sort', value: string) {
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous)
-        if (value && value !== 'all') next.set(key, value)
-        else next.delete(key)
+        if (
+          !value ||
+          (key === 'status' && value === 'all') ||
+          (key === 'sort' && value === 'newest')
+        )
+          next.delete(key)
+        else next.set(key, value)
         return next
       },
       { replace: true },
     )
   }
   const rows = result.state === 'ready' ? result.data : []
-  const visible = rows
-    .filter(
+  const visible = sortVacancies(
+    rows.filter(
       (row) =>
         (!filters.includes(status as (typeof filters)[number]) ||
           status === 'all' ||
@@ -35,8 +48,9 @@ export function VacanciesPage() {
           .join(' ')
           .toLocaleLowerCase('ru')
           .includes(query.trim().toLocaleLowerCase('ru')),
-    )
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id - a.id)
+    ),
+    sort,
+  )
   return (
     <>
       <div className="page-heading vacancies-heading">
@@ -68,26 +82,43 @@ export function VacanciesPage() {
           Обновить
         </Button>
       </div>
-      <div className="vacancy-filters" role="group" aria-label="Фильтр по статусу">
-        {filters.map((item) => (
-          <button
-            key={item}
-            type="button"
-            aria-pressed={
-              status === item ||
-              (item === 'all' && !filters.includes(status as (typeof filters)[number]))
-            }
-            onClick={() => filter('status', item)}
+      <div className="vacancy-list-controls">
+        <div className="vacancy-filters" role="group" aria-label="Фильтр по статусу">
+          {filters.map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={
+                status === item ||
+                (item === 'all' && !filters.includes(status as (typeof filters)[number]))
+              }
+              onClick={() => filter('status', item)}
+            >
+              {item === 'all' ? 'Все' : statusLabels[item]}
+              <span>
+                {result.state === 'ready'
+                  ? rows.filter((row) => item === 'all' || row.status === item).length
+                  : '—'}
+              </span>
+            </button>
+          ))}
+        </div>
+        <label className="vacancy-sort">
+          <span>Порядок</span>
+          <select
+            aria-label="Сортировка вакансий"
+            value={sort}
+            onChange={(event) => filter('sort', event.target.value)}
           >
-            {item === 'all' ? 'Все' : statusLabels[item]}
-            <span>
-              {result.state === 'ready'
-                ? rows.filter((row) => item === 'all' || row.status === item).length
-                : '—'}
-            </span>
-          </button>
-        ))}
+            {Object.entries(vacancySortLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
+      <RefreshStatus refreshing={isRefreshing} failed={Boolean(refreshError)} retry={refresh} />
       {result.state === 'loading' && <VacancyLoading />}
       {result.state === 'error' && <VacancyFailure error={result.error} retry={reload} />}
       {result.state === 'ready' &&
@@ -136,7 +167,20 @@ export function VacanciesPage() {
                 : 'Расскажите, кого вы ищете. Сначала сохраним черновик — опубликуете, когда всё будет готово.'}
             </p>
             {rows.length ? (
-              <Button variant="secondary" onClick={() => setParams({})}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setParams(
+                    (previous) => {
+                      const next = new URLSearchParams(previous)
+                      next.delete('q')
+                      next.delete('status')
+                      return next
+                    },
+                    { replace: true },
+                  )
+                }
+              >
                 Сбросить фильтры
               </Button>
             ) : (

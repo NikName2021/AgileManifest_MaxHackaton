@@ -478,6 +478,22 @@ a.primary-button {
 .dashboard-refresh:hover {
   color: var(--accent-text);
 }
+.return-refresh-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.return-refresh-status:not(:empty) {
+  margin: 12px 0 20px;
+}
+.return-refresh-status button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .dashboard-warning {
   margin: -12px 0 24px;
   font-size: 13px;

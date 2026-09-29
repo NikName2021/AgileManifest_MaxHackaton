@@ -3,6 +3,7 @@ import { publishVacancy } from '../vacancies/publish.js';
 import { buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
+import { SCHEDULE_ENUM } from '../validation.js';
 
 function notEmpty(raw: string) {
     const value = raw.trim();
@@ -28,7 +29,7 @@ function parseSalary(raw: string) {
     return { ok: true as const, value: { min: Math.min(...nums), max: Math.max(...nums) } };
 }
 
-const SCHEDULE_VALUES = new Set(['seasonal', 'temporary', 'permanent']);
+const SCHEDULE_VALUES: Set<string> = new Set(SCHEDULE_ENUM.options);
 const SCHEDULE_LABELS: Record<string, string> = {
     'сезонная': 'seasonal',
     'временная': 'temporary',

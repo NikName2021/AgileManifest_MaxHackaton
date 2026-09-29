@@ -8,21 +8,30 @@ import { VacancyFailure, VacancyLoading, VacancyStatusBadge } from '../features/
 import { formatSalary, scheduleLabels } from '../features/vacancies/model'
 import { MaxLogo } from '../shared/ui/MaxLogo'
 import { config } from '../shared/config'
+import { loadHiringSummary } from '../features/overview/loadSummary'
+import { HiringFunnel } from '../features/overview/HiringFunnel'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
+import { RefreshStatus } from '../shared/ui/RefreshStatus'
 
 export function OverviewPage() {
   const { vacancies, applications } = useSession()
   const vacancyData = useResource(vacancies.list, 'overview-vacancies')
   const loadCounts = useCallback(
-    async (signal: AbortSignal) => {
-      const [all, fresh] = await Promise.all([
-        applications.list({ limit: 1, offset: 0 }, signal),
-        applications.list({ limit: 1, offset: 0, status: 'new' }, signal),
-      ])
-      return { all: all.total, fresh: fresh.total }
-    },
+    (signal: AbortSignal) => loadHiringSummary(applications, signal),
     [applications],
   )
   const counts = useResource(loadCounts, 'overview-applications')
+  const refreshVacancies = vacancyData.refresh,
+    refreshCounts = counts.refresh
+  const refreshOverview = useCallback(() => {
+    refreshVacancies()
+    refreshCounts()
+  }, [refreshVacancies, refreshCounts])
+  const refreshing = vacancyData.isRefreshing || counts.isRefreshing
+  useRefreshOnReturn(
+    refreshOverview,
+    vacancyData.result.state === 'loading' || counts.result.state === 'loading' || refreshing,
+  )
   const rows = vacancyData.result.state === 'ready' ? vacancyData.result.data : []
   const recent = [...rows]
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id - a.id)
@@ -39,13 +48,13 @@ export function OverviewPage() {
     },
     {
       label: 'Новые отклики',
-      value: counts.result.state === 'ready' ? counts.result.data.fresh : '—',
+      value: counts.result.state === 'ready' ? (counts.result.data.stages.new ?? '—') : '—',
       href: '/applications?status=new',
       hint: 'Ожидают вашего ответа',
     },
     {
       label: 'Всего откликов',
-      value: counts.result.state === 'ready' ? counts.result.data.all : '—',
+      value: counts.result.state === 'ready' ? (counts.result.data.total ?? '—') : '—',
       href: '/applications',
       hint: 'По всем вашим вакансиям',
     },
@@ -83,12 +92,17 @@ export function OverviewPage() {
           </Link>
         ))}
       </section>
-      {counts.result.state === 'error' && (
-        <div className="dashboard-warning" role="status">
-          Не удалось загрузить количество откликов.
-          <button onClick={counts.reload}>Повторить</button>
-        </div>
-      )}
+      <RefreshStatus
+        refreshing={refreshing}
+        failed={Boolean(vacancyData.refreshError || counts.refreshError)}
+        retry={refreshOverview}
+      />
+      <HiringFunnel
+        summary={counts.result.state === 'ready' ? counts.result.data : undefined}
+        loading={counts.result.state === 'loading'}
+        failed={counts.result.state === 'error'}
+        reload={counts.reload}
+      />
       <div className="dashboard-layout">
         <section className="dashboard-vacancies" aria-labelledby="recent-title">
           <div className="section-title">

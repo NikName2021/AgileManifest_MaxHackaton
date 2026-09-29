@@ -4,9 +4,11 @@ import { getBotUsername } from '../max/botInfo.js';
 import { buildVacancyCardText } from './cardText.js';
 import type { Vacancy } from '@prisma/client';
 
+export type PublishErrorKind = 'not_found' | 'conflict' | 'no_chat';
+
 export class PublishError extends Error {
-    kind: 'not_found' | 'conflict' | 'no_chat';
-    constructor(kind: 'not_found' | 'conflict' | 'no_chat', message: string) {
+    kind: PublishErrorKind;
+    constructor(kind: PublishErrorKind, message: string) {
         super(message);
         this.kind = kind;
     }
@@ -19,6 +21,11 @@ export class PublishError extends Error {
 function isAmbiguousDeliveryError(err: unknown): boolean {
     return err instanceof Error && err.name === 'TimeoutError';
 }
+
+// Сколько ждать, прежде чем считать чужую попытку доставки карточки "зависшей" (процесс упал
+// между claim и снятием метки) и разрешить новый retry поверх неё. Не бесконечно, иначе один
+// упавший процесс навсегда блокирует повторную публикацию вручную через БД.
+const STALE_DELIVERY_ATTEMPT_MS = 30_000;
 
 export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
     const text = buildVacancyCardText({
@@ -71,6 +78,67 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
     });
 }
 
+// Атомарно "забирает" право попытаться (пере)доставить карточку для уже published вакансии без
+// cardMessageId. Раньше обе ветки ниже (existing.status === 'published' и claim.count === 0)
+// звали publishVacancyCard() напрямую без какой-либо блокировки — при двух параллельных вызовах
+// publish на одну и ту же зависшую (без cardMessageId) вакансию оба проходили одну и ту же проверку
+// "cardMessageId пуст" и оба слали карточку в MAX, вопреки описанной в OpenAPI гарантии "повторный
+// вызов безопасен, дубликата не будет" (фидбек ревьюера и фронтенда). Тот же паттерн, что и для
+// draft -> published: claim через updateMany с условием на текущее значение поля-метки — второй
+// параллельный updateMany с тем же WHERE после коммита первого больше не находит строку и получает
+// count === 0, СУБД сериализует конкурентные UPDATE на одну строку через row-level lock.
+async function claimCardRedelivery(vacancyId: number): Promise<Vacancy | null> {
+    const staleThreshold = new Date(Date.now() - STALE_DELIVERY_ATTEMPT_MS);
+    const claim = await db.vacancy.updateMany({
+        where: {
+            id: vacancyId,
+            status: 'published',
+            cardMessageId: null,
+            OR: [{ publishDeliveryAttemptAt: null }, { publishDeliveryAttemptAt: { lt: staleThreshold } }],
+        },
+        data: { publishDeliveryAttemptAt: new Date() },
+    });
+    if (claim.count === 0) return null;
+    return db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+}
+
+// Пытается (пере)доставить уже claim'нутую карточку и снимает метку попытки при подтверждённом
+// отказе, чтобы следующий retry не ждал STALE_DELIVERY_ATTEMPT_MS впустую. При таймауте метку
+// намеренно НЕ снимаем — мы не знаем, ушла ли карточка, и лишняя параллельная попытка внутри
+// STALE-окна рискованнее, чем короткая пауза перед следующим retry (см. isAmbiguousDeliveryError).
+async function attemptCardRedelivery(claimed: Vacancy): Promise<void> {
+    try {
+        await publishVacancyCard(claimed);
+    } catch (err) {
+        if (!isAmbiguousDeliveryError(err)) {
+            await db.vacancy
+                .updateMany({
+                    where: { id: claimed.id, cardMessageId: null },
+                    data: { publishDeliveryAttemptAt: null },
+                })
+                .catch(() => {});
+        }
+        throw err;
+    }
+}
+
+// Общая точка для веток "вакансия уже published, но карточка не подтвердилась" — используется
+// и явным existing.status === 'published' случаем, и фолбэком после проигранной гонки за
+// draft -> published ниже, чтобы обе ветки шли через один и тот же claim и не дублировали логику.
+async function redeliverOrReportConflict(vacancyId: number): Promise<Vacancy> {
+    const claimed = await claimCardRedelivery(vacancyId);
+    if (!claimed) {
+        // Либо карточка только что подтвердилась в параллельном запросе (перечитываем и просто
+        // возвращаем актуальную вакансию), либо другой запрос прямо сейчас пытается её доставить —
+        // не шлём вторую карточку вдогонку, а просим клиента повторить попытку чуть позже.
+        const current = await db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+        if (current.cardMessageId) return current;
+        throw new PublishError('conflict', 'card delivery is already being retried, try again shortly');
+    }
+    await attemptCardRedelivery(claimed);
+    return db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+}
+
 // Единая точка перевода вакансии в published — используется и REST-эндпоинтом (server.ts),
 // и диалогом создания вакансии в чате (vacancyFlow.ts), чтобы избежать дублирующих карточек
 // и рассинхрона "статус published в БД, но карточка в MAX не ушла" при сбое отправки.
@@ -86,14 +154,13 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
     if (existing.status === 'published') {
         // Уже published — но если карточка так и не подтвердилась (cardMessageId пуст, например
         // прошлая попытка упала по таймауту), это не настоящий конфликт: это незавершённая
-        // публикация. Повторно пробуем отправить карточку на ТУ ЖЕ вакансию вместо 409, иначе
+        // публикация. Пробуем (пере)доставить карточку на ТУ ЖЕ вакансию вместо 409, иначе
         // повторный вызов после таймаута навсегда оставлял бы вакансию без карточки без способа
         // это исправить, кроме ручного вмешательства в БД.
         if (existing.cardMessageId) {
             throw new PublishError('conflict', 'vacancy already published');
         }
-        await publishVacancyCard(existing);
-        return db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+        return redeliverOrReportConflict(vacancyId);
     }
 
     // Атомарный переход draft -> published: при параллельных запросах (двойной клик в мини-аппе,
@@ -107,11 +174,11 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
         // Между нашим findUnique выше и этим updateMany кто-то другой мог уже забрать переход —
         // перечитываем актуальное состояние вместо того, чтобы слепо считать это конфликтом: если
         // это та же самая незавершённая публикация (published без cardMessageId), обрабатываем её
-        // так же, как явную ветку выше, а не заставляем клиента гадать, что делать с 409.
+        // так же, как явную ветку выше (через тот же claim на редоставку), а не заставляем клиента
+        // гадать, что делать с 409.
         const current = await db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
         if (current.status === 'published' && !current.cardMessageId) {
-            await publishVacancyCard(current);
-            return db.vacancy.findUniqueOrThrow({ where: { id: vacancyId } });
+            return redeliverOrReportConflict(vacancyId);
         }
         throw new PublishError('conflict', 'vacancy already published or not in draft state');
     }
@@ -125,7 +192,7 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
             // Неизвестно, дошло сообщение до MAX или нет (таймаут ответа) — НЕ откатываем в draft.
             // Если сообщение всё же ушло, откат в draft + повторный publish отправили бы вторую
             // карточку на ту же вакансию. Вакансия остаётся published без cardMessageId — следующий
-            // вызов publish попадёт в ветку выше и просто (безопасно) повторит отправку.
+            // вызов publish попадёт в ветку выше и безопасно (через claim) повторит отправку.
             throw err;
         }
         // Подтверждённый отказ (не таймаут, например MAX ответил ошибкой) — откатываем, но ТОЛЬКО

@@ -1,6 +1,6 @@
 import type { DialogFlow } from './types.js';
 import { publishVacancy } from '../vacancies/publish.js';
-import { buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
+import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
 import { SCHEDULE_ENUM } from '../validation.js';
@@ -63,7 +63,9 @@ function fitRequirementsToCardLimit(fields: {
     requirements: string;
     contactInfo: string;
 }): { requirements: string; truncated: boolean } {
-    const withFullText = buildVacancyCardText({
+    // vacancyCardTextLength учитывает и текстовую ссылку «Откликнуться» (с резервом под ещё не
+    // известный ID вакансии) — иначе укороченная здесь карточка могла не влезть при отправке.
+    const fullLength = vacancyCardTextLength({
         title: fields.title,
         regionCode: fields.regionCode,
         schedule: fields.schedule,
@@ -72,13 +74,13 @@ function fitRequirementsToCardLimit(fields: {
         description: fields.requirements,
         contactInfo: fields.contactInfo,
     });
-    if (withFullText.length <= MAX_CARD_TEXT_LIMIT) {
+    if (fullLength <= MAX_CARD_TEXT_LIMIT) {
         return { requirements: fields.requirements, truncated: false };
     }
 
     let requirements = fields.requirements;
     while (requirements.length > 0) {
-        const candidateText = buildVacancyCardText({
+        const candidateLength = vacancyCardTextLength({
             title: fields.title,
             regionCode: fields.regionCode,
             schedule: fields.schedule,
@@ -87,7 +89,7 @@ function fitRequirementsToCardLimit(fields: {
             description: requirements,
             contactInfo: fields.contactInfo,
         });
-        if (candidateText.length <= MAX_CARD_TEXT_LIMIT) break;
+        if (candidateLength <= MAX_CARD_TEXT_LIMIT) break;
         requirements = requirements.slice(0, Math.max(0, requirements.length - 100));
     }
     return { requirements: requirements.trim(), truncated: true };

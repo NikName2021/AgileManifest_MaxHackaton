@@ -1,7 +1,6 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
-import { getBotUsername } from '../max/botInfo.js';
-import { buildVacancyCardText } from './cardText.js';
+import { buildVacancyCardText, buildApplyDeepLink, MAX_CARD_TEXT_LIMIT } from './cardText.js';
 import type { Vacancy } from '@prisma/client';
 
 export type PublishErrorKind = 'not_found' | 'conflict' | 'no_chat';
@@ -28,6 +27,13 @@ function isAmbiguousDeliveryError(err: unknown): boolean {
 const STALE_DELIVERY_ATTEMPT_MS = 30_000;
 
 export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
+    // Ссылка нужна и в тексте (переживает пересылку — inline-кнопки MAX при пересылке теряет),
+    // и в link-кнопке. null — username бота неизвестен/некорректен: карточка уходит без
+    // deep-link (остаётся callback-кнопка), это явно логируется ниже, битый URL не вставляем.
+    const applyUrl = buildApplyDeepLink(vacancy.id);
+    if (!applyUrl) {
+        console.warn(`vacancy ${vacancy.id}: bot username unknown (set MAX_BOT_USERNAME), card is sent without the apply link`);
+    }
     const text = buildVacancyCardText({
         title: vacancy.title,
         regionCode: vacancy.regionCode,
@@ -36,7 +42,15 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         salaryMax: vacancy.salaryMax,
         description: vacancy.description,
         contactInfo: vacancy.contactInfo,
-    });
+    }, applyUrl);
+    // Повторная проверка итогового текста перед отправкой: предварительные проверки считают
+    // длину с резервом под ссылку, но старые записи могли сохраниться до появления ссылки.
+    if (text.length > MAX_CARD_TEXT_LIMIT) {
+        throw new PublishError(
+            'conflict',
+            `vacancy ${vacancy.id}: card text is ${text.length} characters, exceeds MAX limit of ${MAX_CARD_TEXT_LIMIT}`
+        );
+    }
 
     const employer = await db.user.findUnique({ where: { id: vacancy.employerUserId } });
     // Целевой чат для карточки — застывший employerChatId вакансии, а не "текущий" chatId
@@ -59,11 +73,8 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
     // Deep-link кнопка — работает, даже если карточку переслали в чат/группу, где бота нет:
     // MAX откроет приватный чат с ботом и пришлёт update_type=bot_started с payload=apply_<id>
     // (см. webhook.ts). Доступна только когда известен username бота (кэшируется при старте, см. server.ts).
-    const botUsername = getBotUsername();
-    if (botUsername) {
-        buttons.push([
-            { type: 'link', text: 'Откликнуться из другого чата', url: `https://max.ru/${botUsername}?start=apply_${vacancy.id}` },
-        ]);
+    if (applyUrl) {
+        buttons.push([{ type: 'link', text: 'Откликнуться из другого чата', url: applyUrl }]);
     }
 
     const result = await maxApi.sendMessage(targetChatId, text, buttons);

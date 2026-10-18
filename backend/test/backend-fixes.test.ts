@@ -167,3 +167,15 @@ describe('напоминание о вакансии без откликов', (
     expect(sentTo('chat-A')).toHaveLength(1);
   });
 });
+
+describe('секрет вебхука', () => {
+  it('неверный или отсутствующий заголовок -> 401, верный -> 200', async () => {
+    const body = { update_type: 'bot_started', chat_id: 'x', user: { user_id: 'max-A' }, payload: '' };
+    for (const headers of [{}, { 'x-max-bot-api-secret': 'wrong' }, { 'x-max-bot-api-secret': 'test-webhook-secret-but-longer' }]) {
+      const res = await app.inject({ method: 'POST', url: '/webhook/max', headers, payload: body });
+      expect(res.statusCode).toBe(401);
+    }
+    const ok = await app.inject({ method: 'POST', url: '/webhook/max', headers: webhookHeaders(), payload: body });
+    expect(ok.statusCode).toBe(200);
+  });
+});

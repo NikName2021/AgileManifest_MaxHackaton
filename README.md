@@ -147,7 +147,7 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
 | `users` | `id`, `max_user_id`, `chat_id`, `dialog_chat_id` (nullable), `display_name`, `phone` (nullable), `application_contact` (nullable) | Все пользователи бота |
-| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `contact_info`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
+| `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `contact_info`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `published_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
 | `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
 | `dialog_sessions` | `chat_id`, `step`, `data`, `updated_at` | Текущий шаг диалога создания вакансии (переживает рестарт backend) |
@@ -183,6 +183,12 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
   интеграцию оно не блокирует.
 - **Формат сессии.** `Authorization: Bearer <token>`, а не `HttpOnly`-cookie. Если существующий
   адаптер фронтенда рассчитан на cookie — его нужно переключить на заголовок.
+- **Идентификаторы и числа.** `:id` в пути — положительное целое, иначе `400 validation_error`.
+  `salary_min`/`salary_max` в теле — JSON-числа: строки (`""`, `"50000"`) отклоняются, а не
+  превращаются в 0.
+- **Кандидат в ответах работодателя.** `candidate` в `GET /api/applications`,
+  `GET /api/vacancies/:id/applications` и `PATCH /api/applications/:id` содержит только
+  `id`, `maxUserId`, `displayName`, `phone`; ответ `PATCH` также содержит `vacancy { id, title, status }`.
 - **Формат ошибок.** Единый на весь API конверт:
   ```json
   { "error": { "code": "validation_error", "message": "invalid request body", "fields": { "title": ["title is required"] } } }

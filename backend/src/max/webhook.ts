@@ -1,9 +1,18 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { maxApi } from './client.js';
 import { config } from '../config.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
 import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
+
+// Сравнение за постоянное время; хеши уравнивают длину.
+function secretsEqual(received: unknown, expected: string): boolean {
+    if (typeof received !== 'string') return false;
+    const a = createHash('sha256').update(received).digest();
+    const b = createHash('sha256').update(expected).digest();
+    return timingSafeEqual(a, b);
+}
 
 // MAX присылает id и числом, и строкой; в БД это String.
 function toStringId(raw: unknown): string | undefined {
@@ -66,7 +75,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
     // MAX присылает секрет подписки в заголовке X-Max-Bot-Api-Secret.
     if (config.maxWebhookSecret) {
       const headerSecret = request.headers['x-max-bot-api-secret'];
-      if (headerSecret !== config.maxWebhookSecret) {
+      if (!secretsEqual(headerSecret, config.maxWebhookSecret)) {
         app.log.warn('MAX webhook: invalid or missing secret header');
         return reply.code(401).send({ error: { code: 'unauthorized', message: 'invalid webhook secret' } });
       }

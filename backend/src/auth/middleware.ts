@@ -4,8 +4,7 @@ import { config } from '../config.js';
 import { verifySessionToken } from './session.js';
 import { sendError } from '../errors.js';
 
-// Фиксированный технический аккаунт для теста API жюри без реального MAX-логина
-// (раздел 11 ТЗ — "тестовые учётки"). Активен только если задан TEST_API_TOKEN.
+// Технический аккаунт жюри для доступа по TEST_API_TOKEN без MAX-логина.
 const TEST_USER_MAX_ID = 'test-jury-account';
 
 declare module 'fastify' {
@@ -18,8 +17,6 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   const header = request.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : undefined;
   if (!token) {
-    // Единый конверт ошибки для всего API (см. errors.ts) — раньше здесь был сырой
-    // { error: string }, отдельный от формата остальных эндпоинтов в server.ts.
     return sendError(reply, 401, 'unauthorized', 'missing Authorization: Bearer <token>');
   }
 

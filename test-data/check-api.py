@@ -75,13 +75,14 @@ def main():
     check('PATCH', draft_path, 200, employer, {'salary_min': 45000}, {'salaryMin': 45000})
     check('POST', draft_path + '/publish', 409, employer, expected={'error.code': 'employer_chat_missing'})
     check('GET', draft_path, 200, employer, expected={'status': 'draft'})
-    check('POST', '/api/applications', 409, candidate, {'vacancy_id': draft['id']}, {'error.code': 'conflict'})
+    check('POST', '/api/applications', 409, candidate, {'vacancy_id': draft['id'], 'contact': 'demo-candidate@example.invalid'},
+          {'error.code': 'vacancy_unavailable'})
     check('GET', f'/api/vacancies/{published_id}', 200, employer, expected={'status': 'published'})
     check('PATCH', f'/api/vacancies/{published_id}', 409, employer, {'title': 'ДЕМО'}, {'error.code': 'conflict'})
     payload = {'vacancy_id': published_id, 'contact': 'demo-candidate@example.invalid'}
     application = check('POST', '/api/applications', 201, candidate, payload,
                         {'status': 'new', 'notified': False, 'candidateUserId': access['candidate']['user_id']})
-    check('POST', '/api/applications', 409, candidate, payload, {'error.code': 'conflict'})
+    check('POST', '/api/applications', 409, candidate, payload, {'error.code': 'already_applied'})
     items = check('GET', f'/api/vacancies/{published_id}/applications', 200, employer)
     assert len(items) == 1 and items[0]['id'] == application['id'] and 'candidate' in items[0]
     check('GET', f'/api/vacancies/{published_id}/applications', 403, candidate, expected={'error.code': 'forbidden'})
@@ -95,7 +96,7 @@ def main():
     check('PATCH', application_path, 200, employer, {'status': 'invited'},
           {'status': 'invited', 'notified': False, 'unchanged': True})
     check('POST', f'/api/vacancies/{published_id}/close', 200, employer, expected={'status': 'closed'})
-    check('POST', '/api/applications', 409, candidate, payload, {'error.code': 'conflict'})
+    check('POST', '/api/applications', 409, candidate, payload, {'error.code': 'vacancy_unavailable'})
     check('POST', f'/api/vacancies/{published_id}/publish', 409, employer, expected={'error.code': 'conflict'})
     print(f'{count} API checks passed. Synthetic data only; live MAX delivery was not tested.')
 

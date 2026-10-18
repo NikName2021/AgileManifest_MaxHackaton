@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { vacancyFlow } from './vacancyFlow.js';
-import type { DialogFlow } from './types.js';
+import { OWNER_KEY, type DialogFlow } from './types.js';
 
 const flows: Record<string, DialogFlow> = {
     [vacancyFlow.name]: vacancyFlow,
@@ -15,23 +15,22 @@ async function sendStepPrompt(chatId: string, flow: DialogFlow, stepIndex: numbe
     await maxApi.sendMessage(chatId, step.prompt, buttons);
 }
 
-export async function startFlow(chatId: string, flowName: string) {
+export async function startFlow(chatId: string, flowName: string, ownerMaxUserId: string) {
     const flow = flows[flowName];
     if (!flow) throw new Error(`Unknown flow: ${flowName}`);
 
+    const data = { [OWNER_KEY]: ownerMaxUserId };
     await db.dialogSession.upsert({
         where: { chatId },
-        update: { step: 0, data: {} },
-        create: { chatId, step: 0, data: {} },
+        update: { step: 0, data },
+        create: { chatId, step: 0, data },
     });
 
     await sendStepPrompt(chatId, flow, 0);
 }
 
 export async function cancelFlow(chatId: string) {
-  // Раньше /отмена чистила только DialogSession — если кандидат успел нажать "Откликнуться" и
-  // застрял на шаге "пришлите контакт" (PendingApplication), /отмена его не сбрасывала: следующее
-  // сообщение кандидата в чате всё равно попадало в resolvePendingApplication как "контакт".
+  // Сбрасываем и ожидание контакта после «Откликнуться», иначе следующее сообщение примется за контакт.
   const [deletedSession, deletedPending] = await Promise.all([
     db.dialogSession.deleteMany({ where: { chatId } }),
     db.pendingApplication.deleteMany({ where: { chatId } }),
@@ -42,20 +41,16 @@ export async function cancelFlow(chatId: string) {
   await maxApi.sendMessage(chatId, text);
 }
 
-/**
- * Обрабатывает ответ пользователя (текст или значение с кнопки) на текущем шаге.
- * Возвращает true, если сообщение было адресовано активному диалогу (и, значит,
- * не нужно обрабатывать его как что-то ещё), иначе false — активной сессии нет.
- */
-export async function handleAnswer(chatId: string, rawAnswer: string): Promise<boolean> {
+// true — сообщение адресовано активному диалогу; false — диалога нет (или он чужой).
+export async function handleAnswer(chatId: string, senderMaxUserId: string | undefined, rawAnswer: string): Promise<boolean> {
     const session = await db.dialogSession.findUnique({ where: { chatId } });
     if (!session) return false;
+    const owner = (session.data as Record<string, unknown>)[OWNER_KEY];
+    if (typeof owner === 'string' && owner !== senderMaxUserId) return false;
 
-    // Сессия могла остаться от старого запуска другого флоу — сейчас у нас он один
     const flow = vacancyFlow;
     const step = flow.steps[session.step];
     if (!step) {
-        // на всякий случай — рассинхрон, чистим сессию
         await db.dialogSession.deleteMany({ where: { chatId } });
         return false;
     }
@@ -75,11 +70,7 @@ export async function handleAnswer(chatId: string, rawAnswer: string): Promise<b
         return true;
     }
 
-    // Последний шаг: сессию удаляем до onComplete, потому что все ответы уже собраны и повторно
-    // отвечать на них нечем — «продолжить с того же шага» здесь не имеет смысла. Но раньше
-    // ошибка в onComplete (например, БД моргнула на create вакансии) улетала в общий catch
-    // webhook.ts и пользователь оставался вообще без ответа бота, будто сообщение потерялось.
-    // Теперь при сбое явно говорим об этом и просим начать заново, а не молчим.
+    // Все ответы собраны — сессию удаляем до onComplete. При сбое сообщаем пользователю, а не молчим.
     await db.dialogSession.deleteMany({ where: { chatId } });
     try {
         const resultText = await flow.onComplete(chatId, data);

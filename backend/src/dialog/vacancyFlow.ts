@@ -1,6 +1,6 @@
-import type { DialogFlow } from './types.js';
+import { OWNER_KEY, type DialogFlow } from './types.js';
 import { publishVacancy } from '../vacancies/publish.js';
-import { buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
+import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
 import { SCHEDULE_ENUM } from '../validation.js';
@@ -16,10 +16,7 @@ function parseSalary(raw: string) {
     if (text === 'не знаю' || text === 'не важно' || text === '-') {
         return { ok: true as const, value: { min: null, max: null } };
     }
-    // Убираем пробел/точку/запятую перед группой ровно из 3 цифр (разделитель тысяч: "40 000",
-    // "40.000", "40,000"), иначе "40 000–60 000" распадается на 4 отдельные группы (40, 000, 60,
-    // 000) вместо двух чисел — старая версия из-за этого возвращала абсурдные вилки вроде 0–100,
-    // а для одиночного "100 000" вообще давала min=0.
+    // Убираем разделитель тысяч ("40 000", "40.000", "40,000"), иначе "40 000–60 000" даст четыре числа.
     const compact = text.replace(/[\s.,](?=\d{3}(\D|$))/g, '');
     const numbers = compact.match(/\d+/g);
     if (!numbers || numbers.length === 0) {
@@ -41,19 +38,14 @@ function parseSchedule(raw: string) {
     if (SCHEDULE_VALUES.has(trimmed)) return { ok: true as const, value: trimmed };
     const byLabel = SCHEDULE_LABELS[trimmed.toLowerCase()];
     if (byLabel) return { ok: true as const, value: byLabel };
-    // Раньше у этого шага не было parse вообще — принимался любой текст, включая опечатки,
-    // который потом попадал в карточку вакансии как есть.
     return {
         ok: false as const,
         error: 'Выберите график кнопкой ниже или напишите одно из: сезонная, временная, постоянная.',
     };
 }
 
-// Если собранные ответы дают карточку длиннее лимита MAX (4000 символов, см. cardText.ts) — не
-// блокируем весь 6-шаговый диалог и не роняем создание вакансии, а укорачиваем requirements
-// (единственное практически неограниченное по факту поле среди собранных в диалоге) до тех пор,
-// пока карточка не влезет. Работодатель всегда может уточнить/дописать текст позже через
-// PATCH /api/vacancies/:id (там та же самая проверка длины, см. validation.ts).
+// Карточка длиннее лимита MAX не должна срывать весь диалог — укорачиваем requirements,
+// самое длинное поле, пока карточка не влезет. Полный текст можно задать позже через PATCH.
 function fitRequirementsToCardLimit(fields: {
     title: string;
     regionCode: string;
@@ -63,7 +55,8 @@ function fitRequirementsToCardLimit(fields: {
     requirements: string;
     contactInfo: string;
 }): { requirements: string; truncated: boolean } {
-    const withFullText = buildVacancyCardText({
+    // Длина считается с резервом под ссылку «Откликнуться» (ID вакансии ещё неизвестен).
+    const fullLength = vacancyCardTextLength({
         title: fields.title,
         regionCode: fields.regionCode,
         schedule: fields.schedule,
@@ -72,13 +65,13 @@ function fitRequirementsToCardLimit(fields: {
         description: fields.requirements,
         contactInfo: fields.contactInfo,
     });
-    if (withFullText.length <= MAX_CARD_TEXT_LIMIT) {
+    if (fullLength <= MAX_CARD_TEXT_LIMIT) {
         return { requirements: fields.requirements, truncated: false };
     }
 
     let requirements = fields.requirements;
     while (requirements.length > 0) {
-        const candidateText = buildVacancyCardText({
+        const candidateLength = vacancyCardTextLength({
             title: fields.title,
             regionCode: fields.regionCode,
             schedule: fields.schedule,
@@ -87,7 +80,7 @@ function fitRequirementsToCardLimit(fields: {
             description: requirements,
             contactInfo: fields.contactInfo,
         });
-        if (candidateText.length <= MAX_CARD_TEXT_LIMIT) break;
+        if (candidateLength <= MAX_CARD_TEXT_LIMIT) break;
         requirements = requirements.slice(0, Math.max(0, requirements.length - 100));
     }
     return { requirements: requirements.trim(), truncated: true };
@@ -113,7 +106,11 @@ export const vacancyFlow: DialogFlow = {
     ],
 
     async onComplete(chatId, data) {
-        const employer = await db.user.findFirst({ where: { chatId } });
+        // Сессии, начатые до появления OWNER_KEY, — по-старому, через chatId.
+        const owner = data[OWNER_KEY];
+        const employer = typeof owner === 'string'
+            ? await db.user.findUnique({ where: { maxUserId: owner } })
+            : await db.user.findFirst({ where: { chatId } });
         if (!employer) {
             return 'Не нашёл вас в базе — попробуйте написать /новая_вакансия ещё раз.';
         }
@@ -138,16 +135,13 @@ export const vacancyFlow: DialogFlow = {
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,
                 description: requirements,
-                // Контакт — отдельное поле (раздел 3.3 хендоффа), а не часть description, чтобы
-                // REST мог отдавать/принимать его как структурированное значение, а не парсить текст.
                 contactInfo: data.contact,
                 status: 'draft',
-                // Застываем сразу же — это тот самый чат, где идёт этот диалог, гарантированно верно.
                 employerChatId: chatId,
             },
         });
 
-        // Бенчмарк — best-effort: если trudvsem недоступен, просто не показываем блок, вакансию это не ломает
+        // Без данных trudvsem блок просто не показывается.
         const benchmark = await getBenchmark(vacancy.regionCode, vacancy.title.toLowerCase().trim());
         const benchmarkText = formatBenchmarkText(benchmark);
         const truncatedNotice = truncated

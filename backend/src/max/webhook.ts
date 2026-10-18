@@ -1,19 +1,25 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { maxApi } from './client.js';
 import { config } from '../config.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
 import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
 
-// MAX может присылать chat_id/user_id и числом, и строкой — в схеме БД это String,
-// поэтому всегда приводим к строке в одном месте, а не полагаемся на неявное приведение Prisma.
+// Сравнение за постоянное время; хеши уравнивают длину.
+function secretsEqual(received: unknown, expected: string): boolean {
+    if (typeof received !== 'string') return false;
+    const a = createHash('sha256').update(received).digest();
+    const b = createHash('sha256').update(expected).digest();
+    return timingSafeEqual(a, b);
+}
+
+// MAX присылает id и числом, и строкой; в БД это String.
 function toStringId(raw: unknown): string | undefined {
     return raw !== undefined && raw !== null ? String(raw) : undefined;
 }
 
-// Разбор VCF (payload.vcf_info, см. dev.max.ru/docs-api/use-cases/sending-messages/another-attachments) —
-// вложение контакта в MAX приходит как vCard-текст, а не готовым номером. Ищем строку вида
-// "TEL...:<номер>" (регистронезависимо, с необязательными типами вроде TEL;TYPE=CELL:).
+// Вложение контакта приходит vCard-текстом (payload.vcf_info) — достаём строку TEL...:<номер>.
 function extractPhoneFromVcf(vcf: string): string | undefined {
     const match = /^TEL[^:\n]*:(.+)$/im.exec(vcf);
     if (!match) return undefined;
@@ -21,9 +27,8 @@ function extractPhoneFromVcf(vcf: string): string | undefined {
     return phone || undefined;
 }
 
-// TODO: точная структура вложения для нажатия кнопки request_contact подтверждена частично —
-// vcf_info описан в документации как формат вложения контакта, но живым вызовом не проверен.
-// У кандидата всегда есть фолбэк — просто написать контакт текстом (обрабатывается тем же путём).
+// TODO: формат вложения от кнопки request_contact не проверен живым вызовом.
+// Фолбэк — кандидат пишет контакт текстом.
 function extractContactFromMessage(update: any): string | undefined {
     const text = (update.message?.body?.text ?? update.message?.text ?? '').trim();
     if (text) return text;
@@ -38,18 +43,16 @@ function extractContactFromMessage(update: any): string | undefined {
         if (phoneFromVcf) return phoneFromVcf;
     }
 
-    // Старые непроверенные поля — оставлены как дополнительный фолбэк на случай другого формата ответа.
+    // Непроверенные поля на случай другого формата.
     const legacyPhone = contactAttachment?.payload?.vcf_phone ?? contactAttachment?.payload?.phone;
     if (legacyPhone) return String(legacyPhone);
 
-    // contact_id без телефона (см. раздел 1.3 хендоффа) — извлечь номер невозможно, кандидату
-    // придётся написать контакт текстом; resolvePendingApplication и так переспросит при undefined.
+    // Только contact_id без телефона — номер не извлечь, resolvePendingApplication переспросит.
     return undefined;
 }
 
-// Отклик через deep link (https://max.ru/<bot>?start=apply_<id>) — payload у deep link'а в
-// формате "apply_123" (без двоеточия), чтобы не путать с payload инлайн-кнопок вида "apply:123"
-// и не зависеть от того, как MAX кодирует спецсимволы в query-параметре start=.
+// Payload deep link — "apply_123" без двоеточия: отличается от callback-кнопки "apply:123"
+// и не зависит от кодирования спецсимволов в start=.
 function parseDeepLinkApplyPayload(payload: unknown): number | undefined {
     if (typeof payload !== 'string') return undefined;
     const match = /^apply_(\d+)$/.exec(payload);
@@ -60,10 +63,7 @@ function parseDeepLinkApplyPayload(payload: unknown): number | undefined {
 
 export function registerMaxWebhook(app: FastifyInstance) {
   app.post('/webhook/max', async (request, reply) => {
-    // Если backend публично доступен (задан PUBLIC_BASE_URL — так регистрируется вебхук-подписка,
-    // см. server.ts), но секрет не настроен — отказываем всем вызовам целиком, а не пропускаем
-    // их без проверки. Раньше пустой MAX_WEBHOOK_SECRET означал "проверки нет вообще", то есть
-    // публичный вебхук был открыт для любого, кто узнает URL (раздел 2.6 хендоффа).
+    // Публичный вебхук без секрета был бы открыт любому, кто узнает URL — отказываем всем.
     if (config.publicBaseUrl && !config.maxWebhookSecret) {
       app.log.error(
         'MAX webhook is publicly exposed (PUBLIC_BASE_URL is set) but MAX_WEBHOOK_SECRET is empty — ' +
@@ -72,12 +72,10 @@ export function registerMaxWebhook(app: FastifyInstance) {
       return reply.code(503).send({ error: { code: 'service_unavailable', message: 'webhook secret not configured' } });
     }
 
-    // Проверка секрета (раздел 7 ТЗ — "валидирует подпись/секрет"). По официальной документации
-    // dev.max.ru (POST /subscriptions) MAX присылает секрет ТОЛЬКО в заголовке X-Max-Bot-Api-Secret
-    // на каждом webhook-запросе.
+    // MAX присылает секрет подписки в заголовке X-Max-Bot-Api-Secret.
     if (config.maxWebhookSecret) {
       const headerSecret = request.headers['x-max-bot-api-secret'];
-      if (headerSecret !== config.maxWebhookSecret) {
+      if (!secretsEqual(headerSecret, config.maxWebhookSecret)) {
         app.log.warn('MAX webhook: invalid or missing secret header');
         return reply.code(401).send({ error: { code: 'unauthorized', message: 'invalid webhook secret' } });
       }
@@ -90,15 +88,12 @@ export function registerMaxWebhook(app: FastifyInstance) {
       return reply.code(400).send({ error: { code: 'validation_error', message: 'missing update_type' } });
     }
 
-    // Не логируем request.body целиком — он может содержать контакты кандидатов (телефон и т.п.),
-    // а логи в проде обычно менее защищены, чем сама БД. Для отладки достаточно типа апдейта и chat_id.
+    // Тело не логируем: в нём могут быть контакты кандидатов.
     app.log.info({ update_type: update.update_type, chat_id: update.chat_id }, 'MAX update received');
 
     try {
       if (update.update_type === 'message_created') {
-        // chat_id/user_id: по документации Update-объект несёт chat_id/user и на верхнем уровне,
-        // и вложенно внутри message (message.recipient/message.sender) — пробуем оба варианта,
-        // так как какой из них реально используется для message_created, не подтверждено вживую.
+        // Какие поля реально заполнены в message_created, вживую не подтверждено — пробуем оба места.
         const chatId = toStringId(update.message?.recipient?.chat_id ?? update.chat_id ?? update.message?.chat_id);
         const text = (update.message?.body?.text ?? update.message?.text ?? '').trim();
         const senderId = update.message?.sender?.user_id ?? update.user?.user_id ?? update.sender?.user_id;
@@ -108,13 +103,12 @@ export function registerMaxWebhook(app: FastifyInstance) {
           await upsertUser(String(senderId), String(chatId), senderName);
 
           if (text === '/новая_вакансия') {
-            await startFlow(chatId, 'new_vacancy');
+            await startFlow(chatId, 'new_vacancy', String(senderId));
           } else if (text === '/отмена') {
             await cancelFlow(chatId);
           } else {
-            // Порядок важен: сперва диалог создания вакансии, потом ожидание контакта после
-            // отклика — это два независимых "состояния ожидания" для одного chatId.
-            const dialogHandled = await handleAnswer(chatId, text);
+            // Сначала диалог создания вакансии, потом ожидание контакта после отклика.
+            const dialogHandled = await handleAnswer(chatId, String(senderId), text);
             if (!dialogHandled) {
               const contact = extractContactFromMessage(update);
               const pendingHandled = await resolvePendingApplication(chatId, String(senderId), contact);
@@ -127,15 +121,13 @@ export function registerMaxWebhook(app: FastifyInstance) {
       }
 
       if (update.update_type === 'bot_started') {
-        // Кандидат перешёл по deep link (https://max.ru/<bot>?start=apply_<id>) — это гарантированно
-        // приватный чат с ботом, даже если исходная карточка вакансии была переслана в группу,
-        // где бота нет и обычная inline-кнопка callback не сработала бы вовсе.
+        // Deep link и «Начать» всегда открывают личный чат с ботом — поэтому isDialog.
         const chatId = toStringId(update.chat_id);
         const senderId = update.user?.user_id;
         const senderName = update.user?.name;
 
         if (chatId && senderId) {
-          await upsertUser(String(senderId), chatId, senderName);
+          await upsertUser(String(senderId), chatId, senderName, { isDialog: true });
 
           const vacancyId = parseDeepLinkApplyPayload(update.payload);
           if (vacancyId !== undefined) {
@@ -151,9 +143,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
       }
 
       if (update.update_type === 'message_callback') {
-        // Официальный SDK (context.ts) читает сообщение из update.message, а не из update.callback.message —
-        // раньше здесь был обратный приоритет, из-за чего chat_id для нажатия кнопки мог не находиться.
-        // Пользователь и payload самого нажатия по-прежнему берутся из update.callback.
+        // Как в официальном SDK: сообщение — из update.message, пользователь и payload — из update.callback.
         const chatId = toStringId(
             update.message?.recipient?.chat_id ?? update.chat_id ?? update.callback?.message?.recipient?.chat_id ?? update.callback?.chat_id
         );
@@ -162,9 +152,6 @@ export function registerMaxWebhook(app: FastifyInstance) {
         const senderId = update.callback?.user?.user_id ?? update.user?.user_id ?? update.callback?.sender?.user_id;
         const senderName = update.callback?.user?.name ?? update.user?.name ?? update.callback?.sender?.name;
 
-        // Подтверждаем нажатие кнопки (POST /answers) — без этого MAX-клиент у пользователя
-        // показывает "часики" на кнопке до таймаута. Best-effort: ошибка подтверждения не должна
-        // ронять обработку самого нажатия (см. answerCallback в max/client.ts).
         if (callbackId) {
           maxApi.answerCallback(String(callbackId)).catch((err) => {
             app.log.warn(err, 'failed to acknowledge MAX callback (non-fatal)');
@@ -184,12 +171,10 @@ export function registerMaxWebhook(app: FastifyInstance) {
           const [, applicationIdStr, status] = payload.split(':');
           const applicationId = Number(applicationIdStr);
           if (Number.isFinite(applicationId) && status && senderId) {
-            // senderId передаём дальше — менять статус может только сам работодатель этой
-            // вакансии, а не любой участник группового чата, где стоит бот (раздел 1.5 хендоффа).
             await handleStatusChangeFromChat(chatId, String(senderId), applicationId, status);
           }
         } else if (chatId && payload) {
-          const handled = await handleAnswer(chatId, payload);
+          const handled = await handleAnswer(chatId, senderId ? String(senderId) : undefined, payload);
           if (!handled) {
             app.log.warn({ chatId, payload }, 'callback received but no active dialog session');
           }
@@ -199,14 +184,8 @@ export function registerMaxWebhook(app: FastifyInstance) {
       app.log.error(err, 'failed to handle MAX update');
     }
 
-    // Отвечаем 200 даже если внутренняя обработка упала (см. catch выше и лог с ошибкой) — это
-    // осознанное решение, а не "заметание под ковёр": подтверждённый апдейт MAX не будет повторять
-    // через retry, а реальная причина сбоя видна в логах (app.log.error). 400/401/503 выше — для
-    // случаев, когда некорректен сам запрос, а не его обработка.
-    // TODO (известное ограничение, не реализовано): полноценная дедупликация повторных апдейтов
-    // по их id — MAX теоретически может доставить один апдейт дважды даже без ошибки на нашей
-    // стороне, и без хранения обработанных id это продвинет диалог на лишний шаг. Возврат 200
-    // выше убирает retry-storm от НАШИХ сбоев, но не защищает от дублирования на стороне MAX.
+    // 200 и при сбое обработки (он в логе): иначе MAX повторял бы апдейт.
+    // TODO: дедупликации апдейтов по id нет — повторная доставка продвинет диалог на лишний шаг.
     reply.code(200).send({ ok: true });
   });
 }

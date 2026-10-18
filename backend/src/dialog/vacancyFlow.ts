@@ -1,4 +1,4 @@
-import type { DialogFlow } from './types.js';
+import { OWNER_KEY, type DialogFlow } from './types.js';
 import { publishVacancy } from '../vacancies/publish.js';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
@@ -115,7 +115,11 @@ export const vacancyFlow: DialogFlow = {
     ],
 
     async onComplete(chatId, data) {
-        const employer = await db.user.findFirst({ where: { chatId } });
+        // Сессии, начатые до появления OWNER_KEY, — по-старому, через chatId.
+        const owner = data[OWNER_KEY];
+        const employer = typeof owner === 'string'
+            ? await db.user.findUnique({ where: { maxUserId: owner } })
+            : await db.user.findFirst({ where: { chatId } });
         if (!employer) {
             return 'Не нашёл вас в базе — попробуйте написать /новая_вакансия ещё раз.';
         }

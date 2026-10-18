@@ -47,6 +47,9 @@ model Vacancy {
   cardMessageId  String?       @map("card_message_id")
   createdAt      DateTime      @default(now()) @map("created_at")
   reminderSentAt DateTime?     @map("reminder_sent_at")
+  // Момент перехода draft -> published. Напоминание «нет откликов 48 часов» считается от него,
+  // а не от createdAt: черновик мог пролежать дольше 48 часов до публикации.
+  publishedAt    DateTime?     @map("published_at")
   // Чат, где родилась вакансия (или где её опубликовали через REST) — застывает один раз,
   // уведомления воронки идут именно сюда, а не в "текущий" chatId работодателя из users,
   // который может перезаписаться, если работодатель потом напишет боту из группового чата.

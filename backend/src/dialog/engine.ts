@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { vacancyFlow } from './vacancyFlow.js';
-import type { DialogFlow } from './types.js';
+import { OWNER_KEY, type DialogFlow } from './types.js';
 
 const flows: Record<string, DialogFlow> = {
     [vacancyFlow.name]: vacancyFlow,
@@ -15,14 +15,15 @@ async function sendStepPrompt(chatId: string, flow: DialogFlow, stepIndex: numbe
     await maxApi.sendMessage(chatId, step.prompt, buttons);
 }
 
-export async function startFlow(chatId: string, flowName: string) {
+export async function startFlow(chatId: string, flowName: string, ownerMaxUserId: string) {
     const flow = flows[flowName];
     if (!flow) throw new Error(`Unknown flow: ${flowName}`);
 
+    const data = { [OWNER_KEY]: ownerMaxUserId };
     await db.dialogSession.upsert({
         where: { chatId },
-        update: { step: 0, data: {} },
-        create: { chatId, step: 0, data: {} },
+        update: { step: 0, data },
+        create: { chatId, step: 0, data },
     });
 
     await sendStepPrompt(chatId, flow, 0);
@@ -47,9 +48,11 @@ export async function cancelFlow(chatId: string) {
  * Возвращает true, если сообщение было адресовано активному диалогу (и, значит,
  * не нужно обрабатывать его как что-то ещё), иначе false — активной сессии нет.
  */
-export async function handleAnswer(chatId: string, rawAnswer: string): Promise<boolean> {
+export async function handleAnswer(chatId: string, senderMaxUserId: string | undefined, rawAnswer: string): Promise<boolean> {
     const session = await db.dialogSession.findUnique({ where: { chatId } });
     if (!session) return false;
+    const owner = (session.data as Record<string, unknown>)[OWNER_KEY];
+    if (typeof owner === 'string' && owner !== senderMaxUserId) return false;
 
     // Сессия могла остаться от старого запуска другого флоу — сейчас у нас он один
     const flow = vacancyFlow;

@@ -58,7 +58,7 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
     // из группового чата уже после публикации). Фолбэк на текущий chatId — только для вакансий,
     // созданных до появления этого поля, либо через REST без явного chatId. Пустая строка
     // (плейсхолдер users.chatId для ещё не писавших боту пользователей мини-аппа) — тоже "нет чата".
-    const targetChatId = vacancy.employerChatId || employer?.chatId;
+    const targetChatId = vacancy.employerChatId || employer?.dialogChatId || employer?.chatId;
     if (!targetChatId) {
         // Типизированная ошибка (не просто Error) — server.ts отдаёт под неё отдельный код
         // employer_chat_missing вместо общего upstream_error, чтобы frontend мог явно предложить
@@ -179,7 +179,7 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
     // и не станут слать вторую карточку в MAX на одну и ту же вакансию.
     const claim = await db.vacancy.updateMany({
         where: { id: vacancyId, status: 'draft' },
-        data: { status: 'published' },
+        data: { status: 'published', publishedAt: new Date() },
     });
     if (claim.count === 0) {
         // Между нашим findUnique выше и этим updateMany кто-то другой мог уже забрать переход —
@@ -211,7 +211,7 @@ export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
         // тихо вернуть в draft вакансию, которую работодатель уже успел закрыть другим запросом.
         await db.vacancy.updateMany({
             where: { id: vacancyId, status: 'published' },
-            data: { status: 'draft' },
+            data: { status: 'draft', publishedAt: null },
         }).catch(() => {});
         throw err;
     }

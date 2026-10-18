@@ -14,7 +14,7 @@ export async function checkStaleVacanciesOnce(): Promise<number> {
     where: {
       status: 'published',
       reminderSentAt: null,
-      createdAt: { lt: staleBefore },
+      publishedAt: { lt: staleBefore },
     },
     include: {
       employer: true,

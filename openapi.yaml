@@ -869,8 +869,11 @@ components:
       name: id
       in: path
       required: true
+      description: Положительное целое в пределах Postgres Int; иначе 400 validation_error
       schema:
         type: integer
+        minimum: 1
+        maximum: 2147483647
 
   schemas:
     Error:
@@ -990,7 +993,8 @@ components:
         title+region_code+schedule+зарплата+description+contact_info собираются в текст карточки
         MAX (после markdown-экранирования) — итоговая длина не должна превышать 4000 символов
         (документированный лимит MAX на сообщение), иначе 400 validation_error с полем description.
-        salary_min/salary_max ограничены диапазоном Postgres Int (максимум 2147483647).
+        salary_min/salary_max — JSON-числа (строки вроде "" или "50000" отклоняются 400),
+        ограничены диапазоном Postgres Int (максимум 2147483647).
       properties:
         title:
           type: string
@@ -1060,9 +1064,9 @@ components:
           allOf:
             - $ref: '#/components/schemas/CandidateSummary'
           description: >
-            Присутствует только в ответах, где отклик подгружается с include (GET
-            /api/vacancies/{id}/applications, GET /api/applications) — не в ответе POST
-            /api/applications и PATCH /api/applications/{id}.
+            Присутствует в GET /api/vacancies/{id}/applications, GET /api/applications и PATCH
+            /api/applications/{id} — только поля CandidateSummary (без чатов и сохранённого контакта
+            кандидата). Не возвращается в POST /api/applications.
         status:
           type: string
           enum: [new, contacted, invited, hired, rejected]
@@ -1073,6 +1077,13 @@ components:
           type: string
           nullable: true
           description: Чат MAX, застывший в момент отклика — сюда уходят уведомления о смене статуса.
+        vacancy:
+          type: object
+          description: В GET /api/applications и PATCH /api/applications/{id} — краткие сведения о вакансии.
+          properties:
+            id: { type: integer }
+            title: { type: string }
+            status: { type: string, enum: [draft, published, closed] }
         notified:
           type: boolean
           description: >

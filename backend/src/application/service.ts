@@ -299,20 +299,19 @@ export interface ApplyStatusChangeResult {
 // доставилось (сеть, чат недоступен), это не должно откатывать уже сохранённый статус или
 // превращать успешный запрос в 500 — вызывающий код сам решает, как сообщить про notified:false.
 export async function applyStatusChange(applicationId: number, status: string): Promise<ApplyStatusChangeResult> {
-    const current = await db.application.findUniqueOrThrow({
-        where: { id: applicationId },
-        include: { vacancy: true, candidate: true },
-    });
-
-    if (current.status === status) {
-        return { application: current, notified: false, unchanged: true };
-    }
-
-    const application = await db.application.update({
-        where: { id: applicationId },
+    // Условный UPDATE вместо «прочитать, сравнить, записать»: при двух одновременных одинаковых
+    // сменах статуса (REST + кнопка в чате) запись и уведомление случатся только один раз.
+    const changed = await db.application.updateMany({
+        where: { id: applicationId, status: { not: status } },
         data: { status },
+    });
+    const application = await db.application.findUniqueOrThrow({
+        where: { id: applicationId },
         include: { vacancy: true, candidate: true },
     });
+    if (changed.count === 0) {
+        return { application, notified: false, unchanged: true };
+    }
 
     const candidateText = statusMessageForCandidate(status, application.vacancy.title);
     // Фолбэк — только подтверждённый личный чат с ботом (dialogChatId из bot_started), а не

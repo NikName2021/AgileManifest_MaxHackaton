@@ -26,7 +26,10 @@ import {
   updateApplicationStatusSchema,
   listApplicationsQuerySchema,
   authMaxSchema,
+  benchmarkQuerySchema,
+  idParamSchema,
 } from './validation.js';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 // Экспортируется для интеграционных тестов (backend/test) — там приложение поднимается через
 // app.inject() без реального порта и без подключения к MAX (см. start() внизу).
@@ -60,6 +63,17 @@ registerCandidateRoutes(app);
 function withApplyUrl(vacancy: Vacancy) {
   return { ...vacancy, applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null };
 }
+
+function parseIdParam(request: FastifyRequest, reply: FastifyReply): number | undefined {
+  const parsed = idParamSchema.safeParse(request.params);
+  if (!parsed.success) {
+    sendError(reply, 400, 'validation_error', 'invalid id', zodFieldErrors(parsed.error.flatten()));
+    return undefined;
+  }
+  return parsed.data.id;
+}
+
+const CANDIDATE_SUMMARY_SELECT = { id: true, maxUserId: true, displayName: true, phone: true } as const;
 
 // Служебный healthcheck — пригодится и для Docker, и для проверки, что backend жив.
 // Проверяет не только сам процесс, но и реальную доступность БД (readiness, не просто liveness).
@@ -137,7 +151,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       // Лучшее известное на момент создания через REST/мини-апп. Может быть пустой строкой у
       // пользователей мини-аппа, ещё не писавших боту напрямую (см. findOrCreateUserByMaxId) —
       // тогда публикация (см. publish.ts) осмысленно упадёт, пока пользователь не откроет чат с ботом.
-      employerChatId: employer?.chatId || null,
+      employerChatId: employer?.dialogChatId || employer?.chatId || null,
     },
   });
 
@@ -145,7 +159,8 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
 });
 
 app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const id = Number((request.params as any).id);
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
   const vacancy = await db.vacancy.findUnique({ where: { id } });
   if (!vacancy) return sendError(reply, 404, 'not_found', 'vacancy not found');
   if (vacancy.employerUserId !== request.sessionUserId) {
@@ -158,7 +173,8 @@ app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply
 // draft. У опубликованной/закрытой вакансии карточка уже могла уйти в MAX или воронка уже идёт —
 // молчаливое расхождение между БД и тем, что видели кандидаты, хуже явного 409.
 app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const id = Number((request.params as any).id);
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
   const parsed = updateVacancySchema.safeParse(request.body);
   if (!parsed.success) {
     return sendError(reply, 400, 'validation_error', 'invalid request body', zodFieldErrors(parsed.error.flatten()));
@@ -222,7 +238,8 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
 });
 
 app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (request, reply) => {
-  const id = Number((request.params as any).id);
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
   const existing = await db.vacancy.findUnique({ where: { id } });
   if (!existing) return sendError(reply, 404, 'not_found', 'vacancy not found');
   if (existing.employerUserId !== request.sessionUserId) {
@@ -263,7 +280,8 @@ app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (reque
 });
 
 app.post('/api/vacancies/:id/close', { preHandler: requireAuth }, async (request, reply) => {
-  const id = Number((request.params as any).id);
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
   const existing = await db.vacancy.findUnique({ where: { id } });
   if (!existing) return sendError(reply, 404, 'not_found', 'vacancy not found');
   if (existing.employerUserId !== request.sessionUserId) {
@@ -274,7 +292,8 @@ app.post('/api/vacancies/:id/close', { preHandler: requireAuth }, async (request
 });
 
 app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (request, reply) => {
-  const vacancyId = Number((request.params as any).id);
+  const vacancyId = parseIdParam(request, reply);
+  if (vacancyId === undefined) return reply;
   const vacancy = await db.vacancy.findUnique({ where: { id: vacancyId } });
   if (!vacancy) return sendError(reply, 404, 'not_found', 'vacancy not found');
   if (vacancy.employerUserId !== request.sessionUserId) {
@@ -285,7 +304,7 @@ app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (r
 
   return db.application.findMany({
     where: { vacancyId },
-    include: { candidate: true },
+    include: { candidate: { select: CANDIDATE_SUMMARY_SELECT } },
     orderBy: { createdAt: 'desc' },
   });
 });
@@ -305,7 +324,7 @@ app.get('/api/applications', { preHandler: requireAuth }, async (request, reply)
         vacancy: { employerUserId: request.sessionUserId },
         ...(status ? { status } : {}),
       },
-      include: { candidate: true, vacancy: { select: { id: true, title: true, status: true } } },
+      include: { candidate: { select: CANDIDATE_SUMMARY_SELECT }, vacancy: { select: { id: true, title: true, status: true } } },
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset,
@@ -391,7 +410,8 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
 });
 
 app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, reply) => {
-  const id = Number((request.params as any).id);
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
   const parsed = updateApplicationStatusSchema.safeParse(request.body);
   if (!parsed.success) {
     return sendError(reply, 400, 'validation_error', 'invalid request body', zodFieldErrors(parsed.error.flatten()));
@@ -406,18 +426,23 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
   // applyStatusChange общий с обработчиком кнопок в чате — кандидат получит уведомление
   // в MAX и при смене статуса через API, не только через кнопки в чате работодателя.
   const result = await applyStatusChange(id, parsed.data.status);
-  return reply.send({ ...result.application, notified: result.notified, unchanged: result.unchanged ?? false });
+  const { candidate, vacancy, ...updated } = result.application;
+  return reply.send({
+    ...updated,
+    candidate: { id: candidate.id, maxUserId: candidate.maxUserId, displayName: candidate.displayName, phone: candidate.phone },
+    vacancy: { id: vacancy.id, title: vacancy.title, status: vacancy.status },
+    notified: result.notified,
+    unchanged: result.unchanged ?? false,
+  });
 });
 
 app.get('/api/benchmark', async (request, reply) => {
-  const query = request.query as any;
-  const regionCode = query?.region_code;
-  const category = query?.category;
-  if (!regionCode || !category) {
-    return sendError(reply, 400, 'validation_error', 'region_code and category are required');
+  const parsed = benchmarkQuerySchema.safeParse(request.query);
+  if (!parsed.success) {
+    return sendError(reply, 400, 'validation_error', 'region_code and category are required', zodFieldErrors(parsed.error.flatten()));
   }
 
-  const benchmark = await getBenchmark(String(regionCode), String(category));
+  const benchmark = await getBenchmark(parsed.data.region_code, parsed.data.category);
   if (!benchmark) return sendError(reply, 404, 'not_found', 'no benchmark data available');
   return benchmark;
 });
@@ -449,11 +474,10 @@ app.setErrorHandler((err: any, request, reply) => {
 });
 
 async function start() {
+  setBotUsername(config.botUsernameOverride);
   try {
     const me = await maxApi.getMe();
-    // MAX_BOT_USERNAME из .env — явный приоритет над автоопределением, на случай если поле
-    // в ответе /me называется иначе, чем мы предполагаем (см. TODO ниже).
-    setBotUsername(config.botUsernameOverride ?? (me as any)?.username); // TODO: сверить имя поля с реальным ответом /me
+    if (!config.botUsernameOverride) setBotUsername((me as any)?.username); // TODO: сверить имя поля с реальным ответом /me
     await maxApi.registerCommands([
       { name: 'новая_вакансия', description: 'Создать вакансию' },
       { name: 'отмена', description: 'Отменить текущий диалог' },

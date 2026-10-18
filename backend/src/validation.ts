@@ -19,8 +19,9 @@ const vacancyBaseShape = {
   region_code: z.string().trim().max(100).optional(),
   category: z.string().trim().max(100).optional(),
   schedule: SCHEDULE_ENUM.optional(),
-  salary_min: z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
-  salary_max: z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
+  // Без coerce: в JSON-теле сумма должна прийти числом — coerce превращал "" в 0 и true в 1.
+  salary_min: z.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
+  salary_max: z.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
   // Лимит согласован с картой вакансии (см. vacancies/cardText.ts) — это независимый от лимита
   // на весь текст карточки предохранитель на само поле, полная длина карточки после сборки всех
   // полей и экранирования проверяется отдельно (checkCardLength ниже и server.ts для PATCH).
@@ -110,7 +111,7 @@ const contactString = (field: string) =>
 // Кабинет работника: contact стал обязательным (раньше был nullable/optional) — работодателю
 // бесполезен отклик без способа связи. Намеренное изменение контракта, см. README/OpenAPI.
 export const createApplicationSchema = z.object({
-  vacancy_id: z.coerce.number().int().positive('vacancy_id is required'),
+  vacancy_id: z.coerce.number().int().positive('vacancy_id is required').max(POSTGRES_INT4_MAX),
   contact: contactString('contact'),
 });
 
@@ -178,6 +179,11 @@ export const updateMeSchema = z
     application_contact: contactString('application_contact').nullable(),
   })
   .strict();
+
+export const benchmarkQuerySchema = z.object({
+  region_code: z.string().trim().min(1).max(100),
+  category: z.string().trim().min(1).max(200),
+});
 
 export const idParamSchema = z.object({ id: POSITIVE_INT.max(POSTGRES_INT4_MAX) });
 

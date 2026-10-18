@@ -108,13 +108,13 @@ export function registerMaxWebhook(app: FastifyInstance) {
           await upsertUser(String(senderId), String(chatId), senderName);
 
           if (text === '/новая_вакансия') {
-            await startFlow(chatId, 'new_vacancy');
+            await startFlow(chatId, 'new_vacancy', String(senderId));
           } else if (text === '/отмена') {
             await cancelFlow(chatId);
           } else {
             // Порядок важен: сперва диалог создания вакансии, потом ожидание контакта после
             // отклика — это два независимых "состояния ожидания" для одного chatId.
-            const dialogHandled = await handleAnswer(chatId, text);
+            const dialogHandled = await handleAnswer(chatId, String(senderId), text);
             if (!dialogHandled) {
               const contact = extractContactFromMessage(update);
               const pendingHandled = await resolvePendingApplication(chatId, String(senderId), contact);
@@ -189,7 +189,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
             await handleStatusChangeFromChat(chatId, String(senderId), applicationId, status);
           }
         } else if (chatId && payload) {
-          const handled = await handleAnswer(chatId, payload);
+          const handled = await handleAnswer(chatId, senderId ? String(senderId) : undefined, payload);
           if (!handled) {
             app.log.warn({ chatId, payload }, 'callback received but no active dialog session');
           }

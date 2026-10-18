@@ -62,6 +62,13 @@ async function throttlePerChat(chatId: string): Promise<void> {
   // Проставляем ДО реального запроса — параллельные вызовы на один chatId тоже должны
   // выстроиться в очередь, а не пройти таймер одновременно по устаревшему значению last.
   lastSentAtByChat.set(chatId, Date.now());
+  // Без очистки карта росла бы на каждый чат за всё время работы процесса.
+  if (lastSentAtByChat.size > 10_000) {
+    const staleBefore = Date.now() - MIN_MS_BETWEEN_MESSAGES_PER_CHAT;
+    for (const [id, sentAt] of lastSentAtByChat) {
+      if (sentAt < staleBefore) lastSentAtByChat.delete(id);
+    }
+  }
 }
 
 export interface InlineButton {

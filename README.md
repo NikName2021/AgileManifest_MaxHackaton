@@ -146,7 +146,7 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
 
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
-| `users` | `id`, `max_user_id`, `chat_id`, `display_name`, `phone` (nullable) | Все пользователи бота |
+| `users` | `id`, `max_user_id`, `chat_id`, `dialog_chat_id` (nullable), `display_name`, `phone` (nullable), `application_contact` (nullable) | Все пользователи бота |
 | `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `contact_info`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
 | `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
@@ -162,6 +162,13 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
 отдельное структурированное поле (раздел 3.3 хендоффа фронтенда), а не часть свободного текста
 `description` — раньше контакт дописывался прямо в описание и REST не мог отдать/принять его
 отдельно. Показывается отдельной строкой на карточке вакансии.
+
+`users.dialog_chat_id` — личный чат пользователя с ботом. Проставляется только из события
+`bot_started` (по документации MAX deep link и «Начать» открывают приватный чат), в отличие от
+`chat_id`, который может оказаться групповым. Уведомления кандидату о статусе отклика идут в
+`applications.candidate_chat_id`, а если его нет — только в `dialog_chat_id`, но не в группу.
+`users.application_contact` — сохранённый контакт для предзаполнения формы отклика в кабинете
+работника; не заменяет `phone` (номер из MAX) и не переписывает контакты уже отправленных откликов.
 
 ## Решения по контракту (важно для фронтенда)
 
@@ -181,7 +188,9 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
   { "error": { "code": "validation_error", "message": "invalid request body", "fields": { "title": ["title is required"] } } }
   ```
   `code` — одно из: `unauthorized`, `forbidden`, `not_found`, `validation_error`, `conflict`,
-  `upstream_error`, `service_unavailable`, `internal_error`. `fields` присутствует только при
+  `upstream_error`, `service_unavailable`, `internal_error`, `employer_chat_missing`,
+  `card_delivery_unknown`, `self_application_forbidden`, `vacancy_unavailable`,
+  `already_applied`. `fields` присутствует только при
   `validation_error`, когда ошибку можно привязать к конкретным полям. См. `backend/src/errors.ts`
   и схему `Error` в `openapi.yaml`.
 
@@ -218,6 +227,53 @@ CORS настроен через `FRONTEND_ORIGIN` (см. таблицу пер�
 - `GET /api/applications` — общий список откликов по всем вакансиям работодателя, с пагинацией
   (`limit`/`offset`) и фильтром по `status`, в дополнение к `GET /api/vacancies/:id/applications`
   (отклики по одной вакансии, без пагинации).
+
+### Кабинет работника (v0.4.0)
+
+После входа мини-приложение предлагает режим «работодатель» или «работник». Режим — выбор
+интерфейса на frontend, на сервере он не хранится и прав не даёт: один аккаунт MAX может и
+нанимать, и откликаться, доступ проверяется по userId из сессии и владению записью. Прежние
+маршруты работодателя (`/api/vacancies`, `GET /api/applications`) не изменили назначения.
+
+| Маршрут | Назначение |
+|---|---|
+| `GET /api/jobs` | Каталог: только `published` и только чужие вакансии; `q`, `region_code`, `category`, `schedule`, `salary_from`/`salary_to` (пересечение диапазонов), `sort=newest\|salary_desc`, `limit` 1–100 (20), `offset`. Ответ `{ items, total, limit, offset }`, у каждой — `myApplication`, `canApply`, `applyUnavailableReason` |
+| `GET /api/jobs/filters` | `{ regions, categories }` из реально доступных вакансий; `label = value` (справочника названий нет) |
+| `GET /api/jobs/:id` | Карточка для работника; черновик/закрытая/нет — `404 not_found`; своя — `canApply=false`, `own_vacancy` |
+| `POST /api/applications` | Отклик (прежний маршрут): `contact` теперь обязателен, коды `self_application_forbidden` (403), `vacancy_unavailable`, `already_applied` (409) |
+| `GET /api/me/applications` | История своих откликов (включая закрытые вакансии) с `vacancy.contactInfo` работодателя |
+| `GET /api/me`, `PATCH /api/me` | Профиль `{ id, displayName, applicationContact, hasBotChat }`; PATCH принимает только `application_contact` |
+
+Зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц (как и
+бенчмарк «Работы России»). При появлении оплаты за смену/час нужно отдельное поле `salary_period`.
+
+Отклик через REST и через бота идёт через одну функцию `createApplicationRecord`
+(`backend/src/application/service.ts`): проверка статуса и вставка — в транзакции под
+`SELECT … FOR SHARE` на строку вакансии, дубли отсекает уникальный индекс. Поэтому одинаково
+работают запрет отклика на свою вакансию, повторы (в т.ч. параллельные и REST + бот) и гонка с
+закрытием вакансии.
+
+**Текстовая ссылка в карточке.** MAX не переносит inline-кнопки при пересылке сообщения бота,
+поэтому в конец текста карточки добавляется `Откликнуться:` и ссылка
+`https://max.ru/<botUsername>?start=apply_<id>` (кнопки исходного сообщения сохраняются). Длина
+карточки при создании/редактировании считается с резервом под ссылку, перед отправкой текст
+проверяется ещё раз. Если username бота неизвестен (не определился через `GET /me` и не задан
+`MAX_BOT_USERNAME`), карточка уходит без ссылки и в лог пишется предупреждение — битый URL не
+вставляется. Уже отправленные карточки не меняются; ссылку для них работодатель получает из поля
+`applyUrl` в `GET /api/vacancies` / `GET /api/vacancies/:id` и пересылает вручную (или закрывает
+вакансию и публикует новую). Массовой рассылки обновлений нет.
+
+### Автотесты backend
+
+Интеграционные тесты (`backend/test`, Vitest + `fastify.inject`) идут на отдельной БД с
+замоканной доставкой MAX — реальные сообщения не отправляются. Имя базы обязано заканчиваться на
+`_test` (таблицы очищаются перед каждым сценарием); миграции применяются автоматически
+(`prisma migrate deploy`), Prisma сама создаёт базу, если её нет.
+
+```sh
+cd backend
+TEST_DATABASE_URL="postgresql://hiring:hiring_dev_password@localhost:5446/hiring_test?schema=public" npm test
+```
 
 ## Проверки и материалы для жюри
 
@@ -263,6 +319,15 @@ commit hash сдаваемой версии. В презентации укаж�
 - Предпросмотр и явное подтверждение вакансии перед публикацией не реализованы — бот публикует
   карточку сразу по завершении диалога из 6 шагов (раздел 3.8 хендоффа фронтенда, отдельное
   расширение сценария за рамками текущего MVP).
+- Кабинет работника проверен интеграционными тестами с моком MAX, но не живым сценарием на двух
+  аккаунтах MAX (публикация → каталог → отклик → статус → история, пересылка карточки → текстовая
+  ссылка → контакт). Точный рендер markdown-ссылки в пересланном сообщении не подтверждён вживую.
+- Кандидат, который откликнулся из мини-приложения и ни разу не запускал бота лично
+  (`hasBotChat=false`), не получит уведомлений о статусе: писать первым пользователю, не начинавшему
+  диалог, документация MAX не подтверждает. Отклик при этом сохраняется, статус виден в
+  `GET /api/me/applications`. Пользователи, писавшие боту до этой версии, получат `hasBotChat=true`
+  только после следующего `bot_started` (например, перехода по ссылке отклика).
+- Справочников регионов и категорий нет — `GET /api/jobs/filters` отдаёт исходные значения.
 - Проверки frontend и REST API на синтетических данных не заменяют живую проверку
   публикации и уведомлений в MAX. До развёртывания эта часть остаётся непроверенной.
 

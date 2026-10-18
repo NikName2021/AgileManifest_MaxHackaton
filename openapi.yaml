@@ -19,7 +19,17 @@ info:
     2) сессия — Bearer-токен в заголовке Authorization, НЕ HttpOnly cookie;
     3) все ошибки — единый конверт `{ error: { code, message, fields? } }` (см. схему Error ниже),
     вместо разных по форме ответов на разных ручках.
-  version: 0.3.0
+
+
+    Кабинет работника (v0.4.0): мини-приложение после входа предлагает режим «работодатель» или
+    «работник». Режим — только выбор интерфейса и на сервере не хранится; права по-прежнему
+    определяются userId из сессии и владением записью. Работодатель пользуется прежними
+    /api/vacancies и GET /api/applications, работник — /api/jobs, /api/me/applications и /api/me.
+    Новые ответы — camelCase, query-параметры — snake_case, даты — ISO 8601 UTC.
+    Суммы зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц
+    (как и бенчмарк «Работы России»). Если появится оплата за смену/час, нужно отдельное поле
+    salary_period — до этого фильтр сравнивает суммы как есть.
+  version: 0.4.0
 servers:
   - url: http://localhost:3000
     description: Локальная разработка / Docker Compose
@@ -416,7 +426,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
     post:
-      summary: Зафиксировать отклик авторизованного кандидата на опубликованную вакансию
+      summary: >
+        Зафиксировать отклик авторизованного кандидата на опубликованную вакансию. Кандидат —
+        только из сессии. Те же правила и та же транзакция, что у отклика через бота: проверка
+        статуса и вставка идут под блокировкой строки вакансии, поэтому отклик не сохранится, если
+        закрытие вакансии зафиксировалось раньше. Уведомление работодателю отправляется после
+        сохранения; сбой MAX не отменяет отклик (notified=false).
       operationId: createApplication
       requestBody:
         required: true
@@ -424,33 +439,49 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ApplicationInput'
+            example:
+              vacancy_id: 42
+              contact: '+7 900 000-00-00'
       responses:
         '201':
-          description: Отклик создан (поле notified показывает, удалось ли уведомить работодателя в MAX)
+          description: Отклик создан
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Application'
+                $ref: '#/components/schemas/CreatedApplication'
         '400':
-          description: Ошибка валидации тела запроса
+          description: >
+            validation_error — в т.ч. fields.contact, если contact отсутствует, null, пустой
+            после trim или длиннее 200 символов
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: { code: validation_error, message: invalid request body, fields: { contact: [contact is required] } }
         '401':
           description: Не авторизован
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          description: code=self_application_forbidden — отклик на собственную вакансию
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
-          description: Вакансия не найдена
+          description: code=not_found — вакансия не найдена
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '409':
-          description: Вакансия не опубликована, либо кандидат уже откликался на неё
+          description: >
+            code=vacancy_unavailable — вакансия в статусе draft или closed;
+            code=already_applied — этот пользователь уже откликался (через REST или бота),
+            в т.ч. при параллельных запросах
           content:
             application/json:
               schema:
@@ -507,6 +538,282 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Отклик не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/jobs:
+    get:
+      summary: >
+        Каталог для работника — опубликованные вакансии ДРУГИХ пользователей. Черновики, закрытые
+        и собственные вакансии исключаются на сервере. Вакансии, на которые пользователь уже
+        откликнулся, остаются в выдаче с myApplication и canApply=false.
+      operationId: listJobs
+      parameters:
+        - name: q
+          in: query
+          description: Поиск без учёта регистра по title и description (подстрока). trim; пустая строка не фильтрует.
+          schema: { type: string, maxLength: 200 }
+        - name: region_code
+          in: query
+          description: Точное совпадение с regionCode (значения — из GET /api/jobs/filters)
+          schema: { type: string, maxLength: 100 }
+        - name: category
+          in: query
+          description: Точное совпадение с category
+          schema: { type: string, maxLength: 100 }
+        - name: schedule
+          in: query
+          schema: { type: string, enum: [seasonal, temporary, permanent] }
+        - name: salary_from
+          in: query
+          description: >
+            Нижняя граница, ₽ (целое >= 0). Фильтр — пересечение диапазонов: у вакансии с одной
+            указанной границей она служит обеими. При активном зарплатном фильтре вакансии без обеих
+            границ исключаются, без фильтра — показываются. 0 — действительная сумма.
+            Пустое значение (?salary_from=) — фильтра нет.
+          schema: { type: integer, minimum: 0, maximum: 2147483647 }
+        - name: salary_to
+          in: query
+          description: Верхняя граница, ₽ (целое >= 0); при обеих границах salary_from <= salary_to, иначе 400
+          schema: { type: integer, minimum: 0, maximum: 2147483647 }
+        - name: sort
+          in: query
+          description: >
+            newest — createdAt DESC, id DESC; salary_desc — COALESCE(salaryMax, salaryMin) DESC,
+            вакансии без зарплаты в конце, затем createdAt DESC, id DESC
+          schema: { type: string, enum: [newest, salary_desc], default: newest }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Страница каталога; total — с учётом всех фильтров до пагинации. Пустой результат — 200 с пустым items.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+              example:
+                items:
+                  - id: 42
+                    title: Сборщик урожая
+                    regionCode: '23'
+                    category: agriculture
+                    schedule: seasonal
+                    salaryMin: 50000
+                    salaryMax: 70000
+                    description: Условия работы
+                    status: published
+                    createdAt: '2026-10-17T09:00:00.000Z'
+                    employer: { displayName: Иван }
+                    myApplication: null
+                    canApply: true
+                    applyUnavailableReason: null
+                total: 1
+                limit: 20
+                offset: 0
+        '400':
+          description: Некорректные query-параметры (validation_error с fields)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/jobs/filters:
+    get:
+      summary: >
+        Значения для фильтров каталога — только из реально доступных (published, чужих) вакансий.
+        Справочника названий регионов/категорий в проекте нет, поэтому label = value (исходное
+        значение без расшифровки). Пустые значения не включаются.
+      operationId: listJobFilters
+      responses:
+        '200':
+          description: Значения фильтров
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [regions, categories]
+                properties:
+                  regions:
+                    type: array
+                    items: { $ref: '#/components/schemas/FilterOption' }
+                  categories:
+                    type: array
+                    items: { $ref: '#/components/schemas/FilterOption' }
+              example:
+                regions: [{ value: '23', label: '23' }]
+                categories: [{ value: agriculture, label: agriculture }]
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/jobs/{id}:
+    get:
+      summary: >
+        Карточка вакансии для работника (полное description). Своя опубликованная вакансия
+        доступна с canApply=false и applyUnavailableReason=own_vacancy (управление — по-прежнему
+        /api/vacancies/{id}). Контакт работодателя (contactInfo) здесь не отдаётся — он виден
+        кандидату в GET /api/me/applications после собственного отклика.
+      operationId: getJob
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Вакансия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          description: id — не положительное целое
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: >
+            code=not_found — вакансии нет, она черновик или закрыта (одинаковый ответ, чтобы подбором
+            ID нельзя было отличить чужой черновик от отсутствующей записи)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/me/applications:
+    get:
+      summary: >
+        История откликов текущего пользователя (candidateUserId из сессии), включая отклики на
+        закрытые вакансии. Этап найма меняет только работодатель (REST или кнопки бота) — здесь
+        он только отображается. Порядок — createdAt DESC, id DESC.
+      operationId: listMyApplications
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [new, contacted, invited, hired, rejected] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Страница истории
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MyApplication'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '400':
+          description: Некорректные query-параметры
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/me:
+    get:
+      summary: Безопасный профиль текущего пользователя (без токенов и идентификаторов чатов)
+      operationId: getMe
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+              example:
+                id: 7
+                displayName: Иван
+                applicationContact: '@ivan_max'
+                hasBotChat: true
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: >
+        Изменить сохранённый контакт для предзаполнения формы отклика. Принимает только
+        application_contact; любые другие поля (id, maxUserId, chatId, role…) — 400. Контакты уже
+        отправленных откликов не меняются; POST /api/applications всегда берёт contact из тела.
+      operationId: updateMe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [application_contact]
+              additionalProperties: false
+              properties:
+                application_contact:
+                  type: string
+                  nullable: true
+                  minLength: 1
+                  maxLength: 200
+                  description: trim, 1–200 символов; null очищает сохранённый контакт
+            example:
+              application_contact: '@ivan_max'
+      responses:
+        '200':
+          description: Обновлённый профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          description: Ошибка валидации или лишние поля
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
           content:
             application/json:
               schema:
@@ -589,6 +896,9 @@ components:
                 - internal_error
                 - employer_chat_missing
                 - card_delivery_unknown
+                - self_application_forbidden
+                - vacancy_unavailable
+                - already_applied
             message:
               type: string
               description: Человекочитаемое сообщение (на английском, для логов/дебага, не для показа конечному пользователю как есть)
@@ -663,6 +973,14 @@ components:
         createdAt:
           type: string
           format: date-time
+        applyUrl:
+          type: string
+          nullable: true
+          description: >
+            Только в GET /api/vacancies и GET /api/vacancies/{id}. Deep link отклика
+            https://max.ru/<botUsername>?start=apply_<id> — тот же, что в тексте карточки. null, если
+            вакансия не опубликована или username бота неизвестен. Нужен, чтобы переслать ссылку
+            вручную, в том числе для карточек, отправленных до появления текстовой ссылки.
 
     VacancyInput:
       type: object
@@ -776,14 +1094,156 @@ components:
 
     ApplicationInput:
       type: object
-      required: [vacancy_id]
-      description: candidate_user_id больше не передаётся — кандидат определяется по Bearer-токену.
+      required: [vacancy_id, contact]
+      description: >
+        Кандидат определяется по Bearer-токену; candidate_user_id, status, имя и т.п. из тела
+        игнорируются. contact обязателен с v0.4.0 (раньше был необязательным).
       properties:
         vacancy_id:
           type: integer
         contact:
           type: string
+          minLength: 1
+          maxLength: 200
+          description: Телефон, username или ссылка MAX; trim, 1–200 символов
+
+    CreatedApplication:
+      type: object
+      description: >
+        Ответ POST /api/applications (v0.4.0 — явный DTO: служебный candidateChatId больше не
+        возвращается).
+      required: [id, vacancyId, candidateUserId, status, contact, createdAt, updatedAt, notified]
+      properties:
+        id: { type: integer }
+        vacancyId: { type: integer }
+        candidateUserId: { type: integer }
+        status: { type: string, enum: [new] }
+        contact: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        notified:
+          type: boolean
+          description: Удалось ли отправить уведомление работодателю в MAX. false — отклик всё равно сохранён.
+
+    EmployerPublic:
+      type: object
+      required: [displayName]
+      description: Публичные сведения о работодателе. Отдельного поля «компания» нет — это имя пользователя в MAX.
+      properties:
+        displayName: { type: string, nullable: true }
+
+    MyApplicationRef:
+      type: object
+      required: [id, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        status: { type: string, enum: [new, contacted, invited, hired, rejected] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Job:
+      type: object
+      description: Вакансия в каталоге работника. Служебные поля доставки и контакты не включаются.
+      required: [id, title, regionCode, category, schedule, salaryMin, salaryMax, description, status, createdAt, employer, myApplication, canApply, applyUnavailableReason]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        regionCode: { type: string, description: 'Исходное значение (свободный текст или код), справочника нет' }
+        category: { type: string }
+        schedule: { type: string, enum: [seasonal, temporary, permanent] }
+        salaryMin: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
+        salaryMax: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [published] }
+        createdAt: { type: string, format: date-time }
+        employer: { $ref: '#/components/schemas/EmployerPublic' }
+        myApplication:
+          allOf:
+            - $ref: '#/components/schemas/MyApplicationRef'
           nullable: true
+          description: Собственный отклик текущего пользователя, если он есть
+        canApply: { type: boolean }
+        applyUnavailableReason:
+          type: string
+          nullable: true
+          enum: [already_applied, own_vacancy, null]
+
+    MyApplication:
+      type: object
+      required: [id, status, contact, createdAt, updatedAt, vacancy]
+      properties:
+        id: { type: integer }
+        status:
+          type: string
+          enum: [new, contacted, invited, hired, rejected]
+          description: Этап найма (меняет работодатель). Не путать с vacancy.status.
+        contact:
+          type: string
+          nullable: true
+          description: Контакт, подтверждённый кандидатом при отклике (null — только у старых откликов до v0.4.0)
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        vacancy:
+          type: object
+          required: [id, title, regionCode, category, schedule, salaryMin, salaryMax, description, contactInfo, status, employer]
+          properties:
+            id: { type: integer }
+            title: { type: string }
+            regionCode: { type: string }
+            category: { type: string }
+            schedule: { type: string, enum: [seasonal, temporary, permanent] }
+            salaryMin: { type: integer, nullable: true }
+            salaryMax: { type: integer, nullable: true }
+            description: { type: string, nullable: true }
+            contactInfo:
+              type: string
+              nullable: true
+              description: Контакт работодателя — показывается только в собственной истории откликов
+            status: { type: string, enum: [draft, published, closed] }
+            employer: { $ref: '#/components/schemas/EmployerPublic' }
+      example:
+        id: 15
+        status: invited
+        contact: '+7 900 000-00-00'
+        createdAt: '2026-10-17T09:10:00.000Z'
+        updatedAt: '2026-10-17T10:00:00.000Z'
+        vacancy:
+          id: 42
+          title: Сборщик урожая
+          regionCode: '23'
+          category: agriculture
+          schedule: seasonal
+          salaryMin: 50000
+          salaryMax: 70000
+          description: Условия работы
+          contactInfo: '+7 999 000-00-00'
+          status: closed
+          employer: { displayName: Иван }
+
+    Profile:
+      type: object
+      required: [id, displayName, applicationContact, hasBotChat]
+      properties:
+        id: { type: integer }
+        displayName: { type: string, nullable: true }
+        applicationContact:
+          type: string
+          nullable: true
+          description: Сохранённый контакт для предзаполнения формы отклика (не номер из MAX)
+        hasBotChat:
+          type: boolean
+          description: >
+            true — пользователь запускал бота в личном чате (событие bot_started), бот может
+            присылать ему уведомления о статусе отклика. false — отклик сохраняется, но уведомить
+            кандидата некуда: frontend должен предложить открыть чат с ботом. Это не гарантия
+            доставки конкретного сообщения.
+
+    FilterOption:
+      type: object
+      required: [value, label]
+      properties:
+        value: { type: string }
+        label: { type: string }
 
     Benchmark:
       type: object

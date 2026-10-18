@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { MaxUI } from '@maxhub/max-ui'
 import { ThemeContext, type ThemePreference } from './context'
 
@@ -20,6 +20,15 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const [preference, setPreference] = useState<ThemePreference>(readPreference)
   const systemDark = useSyncExternalStore(subscribe, () => window.matchMedia(query).matches)
   const colorScheme = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const previousTheme = root.getAttribute('data-app-theme')
+    root.setAttribute('data-app-theme', colorScheme)
+    return () => {
+      if (previousTheme === null) root.removeAttribute('data-app-theme')
+      else root.setAttribute('data-app-theme', previousTheme)
+    }
+  }, [colorScheme])
   function changePreference(value: ThemePreference) {
     setPreference(value)
     try {

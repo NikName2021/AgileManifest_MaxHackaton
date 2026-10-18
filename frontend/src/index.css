@@ -9,6 +9,7 @@
 }
 body {
   margin: 0;
+  background: var(--bg);
 }
 button,
 input,
@@ -40,7 +41,7 @@ svg {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
-.theme-root {
+:root {
   --max-blue: #471aff;
   --max-purple: #9500ff;
   --max-white: #ffffff;
@@ -67,10 +68,9 @@ svg {
   );
   color: var(--text);
   background: var(--bg);
-  min-height: 100dvh;
-  color-scheme: light;
+  color-scheme: only light;
 }
-.theme-root[data-theme='dark'] {
+:root[data-app-theme='dark'] {
   --bg: var(--max-ink);
   --surface: #191024;
   --text: #f3effa;
@@ -83,7 +83,12 @@ svg {
   --hero: #29183e;
   --hero-text: #f3effa;
   --shadow: none;
-  color-scheme: dark;
+  color-scheme: only dark;
+}
+.theme-root {
+  min-height: 100dvh;
+  color: var(--text);
+  background: var(--bg);
 }
 .max-root {
   --family-base: 'Segoe UI', Arial, sans-serif;

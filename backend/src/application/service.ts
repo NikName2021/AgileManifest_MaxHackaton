@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
+import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
 import type { Application, User, Vacancy } from '@prisma/client';
 
 const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
@@ -45,6 +46,56 @@ export function funnelButtons(applicationId: number): InlineButton[][] {
     ];
 }
 
+// --- Создание отклика: общая точка для REST (POST /api/applications) и бота ---
+
+export type CreateApplicationError = 'not_found' | 'vacancy_unavailable' | 'self_application_forbidden' | 'already_applied';
+
+export type CreateApplicationResult =
+    | { ok: true; application: Application }
+    | { ok: false; error: CreateApplicationError };
+
+// Единые правила для обоих каналов: вакансия существует и published, отклик не на свою вакансию,
+// одна запись на пару (vacancy, candidate). Проверка статуса и вставка — в одной транзакции под
+// SELECT ... FOR SHARE на строку вакансии: закрытие (UPDATE status='closed' в /close) ждёт этой
+// блокировки, а отклик, начавшийся после закрытия, после ожидания перечитывает уже closed — значит,
+// отклик на вакансию, закрытие которой зафиксировалось раньше, не сохранится. Дубли (в т.ч.
+// параллельные и REST+бот) отсекает уникальный индекс (vacancy_id, candidate_user_id) -> P2002.
+export async function createApplicationRecord(input: {
+    vacancyId: number;
+    candidateUserId: number;
+    contact: string;
+    candidateChatId: string | null;
+}): Promise<CreateApplicationResult> {
+    try {
+        return await db.$transaction(async (tx) => {
+            const rows = await tx.$queryRaw<{ status: string; employer_user_id: number }[]>`
+                SELECT status, employer_user_id FROM vacancies WHERE id = ${input.vacancyId} FOR SHARE`;
+            const vacancy = rows[0];
+            if (!vacancy) return { ok: false as const, error: 'not_found' as const };
+            if (vacancy.employer_user_id === input.candidateUserId) {
+                return { ok: false as const, error: 'self_application_forbidden' as const };
+            }
+            if (vacancy.status !== 'published') {
+                return { ok: false as const, error: 'vacancy_unavailable' as const };
+            }
+            const application = await tx.application.create({
+                data: {
+                    vacancyId: input.vacancyId,
+                    candidateUserId: input.candidateUserId,
+                    status: 'new',
+                    contact: input.contact,
+                    candidateChatId: input.candidateChatId,
+                },
+            });
+            return { ok: true as const, application };
+        });
+    } catch (err: any) {
+        // Уникальный constraint (vacancy_id, candidate_user_id) — см. миграцию add_application_unique
+        if (err?.code === 'P2002') return { ok: false, error: 'already_applied' };
+        throw err;
+    }
+}
+
 // --- Отклик: шаг 1 — кандидат жмёт «Откликнуться», просим контакт ---
 
 export async function handleApplyClick(candidateChatId: string, candidateMaxUserId: string, vacancyId: number) {
@@ -57,6 +108,12 @@ export async function handleApplyClick(candidateChatId: string, candidateMaxUser
     const vacancy = await db.vacancy.findUnique({ where: { id: vacancyId } });
     if (!vacancy) {
         await maxApi.sendMessage(candidateChatId, 'Эта вакансия больше не доступна.');
+        return;
+    }
+
+    // Те же правила, что и в REST (createApplicationRecord): на собственную вакансию не откликаются.
+    if (vacancy.employerUserId === candidate.id) {
+        await maxApi.sendMessage(candidateChatId, 'Это ваша вакансия — откликнуться на неё нельзя. Ссылку можно переслать кандидатам.');
         return;
     }
 
@@ -109,6 +166,11 @@ export async function resolvePendingApplication(
         );
         return true; // сообщение адресовано этому флоу, просто переспрашиваем, сессию не рвём
     }
+    // Тот же лимит, что и у REST (createApplicationSchema.contact) — одинаковые правила для каналов.
+    if (contact.length > APPLICATION_CONTACT_MAX_LENGTH) {
+        await maxApi.sendMessage(chatId, `Контакт слишком длинный — уложитесь в ${APPLICATION_CONTACT_MAX_LENGTH} символов: телефон или юзернейм в MAX.`);
+        return true;
+    }
 
     const candidate = await db.user.findUnique({ where: { maxUserId: candidateMaxUserId } });
     if (!candidate) {
@@ -127,35 +189,33 @@ export async function resolvePendingApplication(
         return true;
     }
 
-    // Вакансию могли закрыть между нажатием «Откликнуться» и отправкой контакта (раздел 2.1
-    // хендоффа) — раньше проверка status==='published' была только в handleApplyClick.
-    if (vacancy.status !== 'published') {
-        await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});
-        await maxApi.sendMessage(chatId, 'Эта вакансия уже недоступна для отклика (закрыта или снята с публикации).');
-        return true;
-    }
-
-    // Важен порядок: сначала пытаемся создать отклик, и только при успехе (или при подтверждённом
-    // дубликате P2002) чистим pendingApplication. Раньше запись удалялась ДО create — если create
-    // падал по любой другой причине, кандидат молча терял состояние "жду контакт".
+    // Проверки статуса, самоотклика и дубля — в общей транзакции с REST (createApplicationRecord):
+    // вакансию могли закрыть между нажатием «Откликнуться» и отправкой контакта (раздел 2.1
+    // хендоффа), а кандидат мог параллельно откликнуться из мини-приложения.
+    // Важен порядок: pendingApplication чистим только при успехе или окончательном отказе —
+    // если create падал по любой другой причине, кандидат не должен молча терять состояние "жду контакт".
     let application;
     try {
-        application = await db.application.create({
-            data: {
-                vacancyId: vacancy.id,
-                candidateUserId: candidate.id,
-                status: 'new',
-                contact,
-                // Чат, где реально прошёл отклик — гарантированно верный адрес для уведомлений кандидату.
-                candidateChatId: chatId,
-            },
+        const result = await createApplicationRecord({
+            vacancyId: vacancy.id,
+            candidateUserId: candidate.id,
+            contact,
+            // Чат, где реально прошёл отклик — гарантированно верный адрес для уведомлений кандидату.
+            candidateChatId: chatId,
         });
-    } catch (err: any) {
-        if (err?.code === 'P2002') {
+        if (!result.ok) {
             await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});
-            await maxApi.sendMessage(chatId, 'Вы уже откликались на эту вакансию.');
+            const messages: Record<CreateApplicationError, string> = {
+                not_found: 'Эта вакансия больше не доступна.',
+                vacancy_unavailable: 'Эта вакансия уже недоступна для отклика (закрыта или снята с публикации).',
+                self_application_forbidden: 'Это ваша вакансия — откликнуться на неё нельзя.',
+                already_applied: 'Вы уже откликались на эту вакансию.',
+            };
+            await maxApi.sendMessage(chatId, messages[result.error]);
             return true;
         }
+        application = result.application;
+    } catch (err) {
         console.error('failed to create application', err);
         await maxApi.sendMessage(chatId, 'Не получилось сохранить отклик, попробуйте отправить контакт ещё раз через минуту.');
         return true;
@@ -255,7 +315,10 @@ export async function applyStatusChange(applicationId: number, status: string): 
     });
 
     const candidateText = statusMessageForCandidate(status, application.vacancy.title);
-    const targetChatId = application.candidateChatId || application.candidate.chatId;
+    // Фолбэк — только подтверждённый личный чат с ботом (dialogChatId из bot_started), а не
+    // "последний увиденный" chatId, который может оказаться групповым: сообщение о найме/отказе
+    // не должно уйти в группу. Нет ни того, ни другого — notified:false, статус всё равно сохранён.
+    const targetChatId = application.candidateChatId || application.candidate.dialogChatId;
 
     if (!candidateText || !targetChatId) {
         return { application, notified: false };

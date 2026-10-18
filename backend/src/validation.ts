@@ -96,9 +96,22 @@ export const updateVacancySchema = z
   .partial()
   .refine((data) => Object.keys(data).length > 0, { message: 'at least one field is required' });
 
+// Контакт для отклика — телефон, username или ссылка MAX (не только номер), 1–200 символов после
+// trim. Тот же лимит применяет бот (application/service.ts), чтобы правила каналов не расходились.
+export const APPLICATION_CONTACT_MAX_LENGTH = 200;
+
+const contactString = (field: string) =>
+  z
+    .string({ required_error: `${field} is required`, invalid_type_error: `${field} must be a string` })
+    .trim()
+    .min(1, `${field} must not be empty`)
+    .max(APPLICATION_CONTACT_MAX_LENGTH);
+
+// Кабинет работника: contact стал обязательным (раньше был nullable/optional) — работодателю
+// бесполезен отклик без способа связи. Намеренное изменение контракта, см. README/OpenAPI.
 export const createApplicationSchema = z.object({
   vacancy_id: z.coerce.number().int().positive('vacancy_id is required'),
-  contact: z.string().trim().max(200).nullable().optional(),
+  contact: contactString('contact'),
 });
 
 export const APPLICATION_STATUS_ENUM = z.enum(['new', 'contacted', 'invited', 'hired', 'rejected']);
@@ -118,6 +131,55 @@ export const listApplicationsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional().default(50),
   offset: z.coerce.number().int().nonnegative().optional().default(0),
 });
+
+// --- Кабинет работника ---
+
+const POSITIVE_INT = z.coerce.number().int().positive();
+
+// Числовые query-параметры: пустую строку (?salary_from=) считаем отсутствующей, а не нулём —
+// z.coerce.number('') дал бы 0 и молча включил бы зарплатный фильтр.
+const optionalQueryInt = (schema: z.ZodNumber) =>
+  z.preprocess((v) => (v === '' || v === undefined ? undefined : v), schema.optional());
+
+export const JOB_SORT_ENUM = z.enum(['newest', 'salary_desc']);
+
+export const listJobsQuerySchema = z
+  .object({
+    q: z.string().trim().max(200).optional(),
+    region_code: z.string().trim().max(100).optional(),
+    category: z.string().trim().max(100).optional(),
+    schedule: SCHEDULE_ENUM.optional(),
+    salary_from: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)),
+    salary_to: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)),
+    sort: JOB_SORT_ENUM.optional().default('newest'),
+    limit: optionalQueryInt(z.coerce.number().int().min(1).max(100)).default(20),
+    offset: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)).default(0),
+  })
+  .superRefine((data, ctx) => {
+    if (data.salary_from !== undefined && data.salary_to !== undefined && data.salary_from > data.salary_to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'salary_from must be less than or equal to salary_to',
+        path: ['salary_from'],
+      });
+    }
+  });
+
+export const listMyApplicationsQuerySchema = z.object({
+  status: APPLICATION_STATUS_ENUM.optional(),
+  limit: optionalQueryInt(z.coerce.number().int().min(1).max(100)).default(20),
+  offset: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)).default(0),
+});
+
+// PATCH /api/me — только application_contact; .strict() отклоняет попытки передать id, maxUserId,
+// chatId, role и т.п. явным 400, а не молча игнорирует их.
+export const updateMeSchema = z
+  .object({
+    application_contact: contactString('application_contact').nullable(),
+  })
+  .strict();
+
+export const idParamSchema = z.object({ id: POSITIVE_INT.max(POSTGRES_INT4_MAX) });
 
 // Утилита для PATCH /api/vacancies/:id (server.ts) — проверка salary_min<=salary_max и длины
 // карточки ПОСЛЕ слияния уже сохранённых полей с частичным телом запроса. Отдельно от zod-схем

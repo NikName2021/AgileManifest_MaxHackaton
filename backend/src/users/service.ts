@@ -9,11 +9,15 @@ import { db } from "../db.js";
 // застывают один раз, в момент, когда чат точно известен и уместен, и используются как основной
 // источник адреса при отправке уведомлений; user.chatId остаётся лишь фолбэком для старых записей
 // и для самого диалога создания вакансии.
-export function upsertUser(maxUserId: string, chatId: string, displayName?: string) {
+// isDialog=true — только для событий, где чат гарантированно личный (bot_started: по документации
+// MAX deep link и «Начать» открывают приватный чат с ботом). Тогда же фиксируем dialogChatId —
+// адрес для уведомлений кандидату и признак hasBotChat в GET /api/me.
+export function upsertUser(maxUserId: string, chatId: string, displayName?: string, options: { isDialog?: boolean } = {}) {
+    const dialog = options.isDialog ? { dialogChatId: chatId } : {};
     return db.user.upsert({
         where: { maxUserId },
-        update: { chatId, ...(displayName ? { displayName } : {}) },
-        create: { maxUserId, chatId, displayName },
+        update: { chatId, ...dialog, ...(displayName ? { displayName } : {}) },
+        create: { maxUserId, chatId, displayName, ...dialog },
     });
 }
 

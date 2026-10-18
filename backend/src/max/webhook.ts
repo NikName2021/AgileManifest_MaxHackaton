@@ -135,7 +135,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
         const senderName = update.user?.name;
 
         if (chatId && senderId) {
-          await upsertUser(String(senderId), chatId, senderName);
+          await upsertUser(String(senderId), chatId, senderName, { isDialog: true });
 
           const vacancyId = parseDeepLinkApplyPayload(update.payload);
           if (vacancyId !== undefined) {

@@ -7,14 +7,17 @@ import { setBotUsername } from './max/botInfo.js';
 import { db } from './db.js';
 import { publishVacancy, PublishError } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
-import { applyStatusChange, funnelButtons } from './application/service.js';
+import { applyStatusChange, funnelButtons, createApplicationRecord, type CreateApplicationError } from './application/service.js';
+import { registerCandidateRoutes } from './candidate/routes.js';
+import { buildApplyDeepLink } from './vacancies/cardText.js';
+import type { Vacancy } from '@prisma/client';
 import { startStaleVacancyReminders } from './vacancies/reminders.js';
 import { requireAuth } from './auth/middleware.js';
 import { verifyMaxInitData } from './auth/maxInitData.js';
 import { issueSessionToken } from './auth/session.js';
 import { findOrCreateUserByMaxId } from './users/service.js';
 import { escapeMarkdown } from './markdown.js';
-import { sendError, zodFieldErrors } from './errors.js';
+import { sendError, zodFieldErrors, type ErrorCode } from './errors.js';
 import {
   createVacancySchema,
   updateVacancySchema,
@@ -25,7 +28,9 @@ import {
   authMaxSchema,
 } from './validation.js';
 
-const app = Fastify({ logger: true });
+// Экспортируется для интеграционных тестов (backend/test) — там приложение поднимается через
+// app.inject() без реального порта и без подключения к MAX (см. start() внизу).
+export const app = Fastify({ logger: process.env.VITEST ? false : true });
 
 // CORS (раздел 1 фидбека фронтенда): frontend и API — разные origin (mini-app во встроенном
 // WebView MAX может грузиться с отдельного хостинга), поэтому браузерные fetch-запросы с
@@ -46,6 +51,15 @@ app.register(cors, {
 const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_started'];
 
 registerMaxWebhook(app);
+registerCandidateRoutes(app);
+
+// applyUrl — deep link отклика для опубликованной вакансии (тот же, что в тексте карточки, см.
+// vacancies/cardText.ts). Нужен работодателю, чтобы переслать ссылку вручную, в том числе для
+// карточек, отправленных до появления текстовой ссылки: старые сообщения в MAX не меняются.
+// null — вакансия не опубликована или username бота неизвестен (MAX_BOT_USERNAME).
+function withApplyUrl(vacancy: Vacancy) {
+  return { ...vacancy, applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null };
+}
 
 // Служебный healthcheck — пригодится и для Docker, и для проверки, что backend жив.
 // Проверяет не только сам процесс, но и реальную доступность БД (readiness, не просто liveness).
@@ -93,10 +107,11 @@ app.post('/api/auth/max', async (request, reply) => {
 });
 
 app.get('/api/vacancies', { preHandler: requireAuth }, async (request) => {
-  return db.vacancy.findMany({
+  const vacancies = await db.vacancy.findMany({
     where: { employerUserId: request.sessionUserId },
     orderBy: { createdAt: 'desc' },
   });
+  return vacancies.map(withApplyUrl);
 });
 
 app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) => {
@@ -136,7 +151,7 @@ app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply
   if (vacancy.employerUserId !== request.sessionUserId) {
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
-  return vacancy;
+  return withApplyUrl(vacancy);
 });
 
 // Редактирование черновика (раздел 3.1 хендоффа) — разрешено только пока вакансия в статусе
@@ -306,6 +321,13 @@ app.get('/api/applications', { preHandler: requireAuth }, async (request, reply)
   return { items, total, limit, offset };
 });
 
+const CREATE_APPLICATION_ERRORS: Record<CreateApplicationError, { status: number; code: ErrorCode; message: string }> = {
+  not_found: { status: 404, code: 'not_found', message: 'vacancy not found' },
+  self_application_forbidden: { status: 403, code: 'self_application_forbidden', message: 'cannot apply to your own vacancy' },
+  vacancy_unavailable: { status: 409, code: 'vacancy_unavailable', message: 'vacancy is not published, cannot apply' },
+  already_applied: { status: 409, code: 'already_applied', message: 'candidate already applied to this vacancy' },
+};
+
 app.post('/api/applications', { preHandler: requireAuth }, async (request, reply) => {
   const parsed = createApplicationSchema.safeParse(request.body);
   if (!parsed.success) {
@@ -313,36 +335,29 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
   }
   const body = parsed.data;
 
-  const vacancy = await db.vacancy.findUnique({ where: { id: body.vacancy_id }, include: { employer: true } });
-  if (!vacancy) return sendError(reply, 404, 'not_found', 'vacancy not found');
-  if (vacancy.status !== 'published') {
-    return sendError(reply, 409, 'conflict', 'vacancy is not published, cannot apply');
-  }
-
+  // Кандидат — только из серверной сессии; статус, владелец и имя из тела не принимаются (схема их не знает).
   const candidate = await db.user.findUnique({ where: { id: request.sessionUserId! } });
-  if (!candidate) return sendError(reply, 404, 'not_found', 'candidate not found');
+  if (!candidate) return sendError(reply, 401, 'unauthorized', 'session user no longer exists');
 
-  let application;
-  try {
-    application = await db.application.create({
-      data: {
-        vacancyId: vacancy.id,
-        candidateUserId: candidate.id,
-        status: 'new',
-        contact: body.contact ?? null,
-        candidateChatId: candidate.chatId || null,
-      },
-    });
-  } catch (err: any) {
-    // Уникальный constraint (vacancy_id, candidate_user_id) — см. миграцию add_application_unique
-    if (err?.code === 'P2002') {
-      return sendError(reply, 409, 'conflict', 'candidate already applied to this vacancy');
-    }
-    throw err;
+  // Те же проверки и та же транзакция, что и у отклика через бота (application/service.ts).
+  const result = await createApplicationRecord({
+    vacancyId: body.vacancy_id,
+    candidateUserId: candidate.id,
+    contact: body.contact,
+    // Только подтверждённый личный чат с ботом (bot_started). Раньше здесь был "последний
+    // увиденный" chatId, который мог быть групповым — уведомление о статусе ушло бы в группу.
+    // null — кандидат ещё не запускал бота лично: отклик сохраняется, уведомлять его некуда
+    // (frontend видит это по GET /api/me -> hasBotChat=false).
+    candidateChatId: candidate.dialogChatId,
+  });
+  if (!result.ok) {
+    const e = CREATE_APPLICATION_ERRORS[result.error];
+    return sendError(reply, e.status, e.code, e.message);
   }
+  const application = result.application;
 
-  // Отклик через REST (мини-апп) — раньше здесь вообще не было уведомления работодателя,
-  // хотя ровно та же ситуация через бот-диалог его получает.
+  // Уведомление — строго после сохранения. Сбой MAX не отменяет отклик и не превращает ответ в 500.
+  const vacancy = await db.vacancy.findUniqueOrThrow({ where: { id: application.vacancyId }, include: { employer: true } });
   const targetChatId = vacancy.employerChatId || vacancy.employer.chatId;
   let notified = false;
   if (targetChatId) {
@@ -356,12 +371,23 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
       );
       notified = true;
     } catch (err) {
-      // Отклик уже сохранён — сбой уведомления не должен превращать успешное создание в ошибку.
-      request.log.error(err, 'failed to notify employer about new application via REST');
+      // Не логируем текст сообщения/контакт — только факт сбоя.
+      request.log.error({ err, applicationId: application.id }, 'failed to notify employer about new application via REST');
     }
   }
 
-  return reply.code(201).send({ ...application, notified });
+  // Явный DTO: candidateChatId (служебный адрес доставки) кандидату не отдаётся.
+  // notified — удалось ли уведомить работодателя.
+  return reply.code(201).send({
+    id: application.id,
+    vacancyId: application.vacancyId,
+    candidateUserId: application.candidateUserId,
+    status: application.status,
+    contact: application.contact,
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    notified,
+  });
 });
 
 app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, reply) => {
@@ -486,4 +512,5 @@ async function start() {
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }
 
-start();
+// Под vitest приложение только импортируется (app.inject), без подключения к MAX и прослушивания порта.
+if (!process.env.VITEST) start();

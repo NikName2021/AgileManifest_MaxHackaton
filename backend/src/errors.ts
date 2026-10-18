@@ -17,7 +17,15 @@ export type ErrorCode =
   // Публикация ушла в таймаут — неизвестно, дошла ли карточка до MAX. Вакансия остаётся
   // published без cardMessageId; повторный вызов /publish безопасен (не создаёт дубликат) и
   // либо подтвердит доставку, либо повторит отправку.
-  | 'card_delivery_unknown';
+  | 'card_delivery_unknown'
+  // Кабинет работника (POST /api/applications): отдельные коды вместо общего conflict, чтобы
+  // frontend различал сценарии без разбора message.
+  // Отклик на собственную вакансию (403).
+  | 'self_application_forbidden'
+  // Вакансия существует, но не принимает отклики — черновик или закрыта (409).
+  | 'vacancy_unavailable'
+  // Этот пользователь уже откликался на вакансию — через REST или через бота (409).
+  | 'already_applied';
 
 export interface ErrorFields {
   [field: string]: string[];

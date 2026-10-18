@@ -184,11 +184,8 @@ export function VacanciesPage() {
                 Сбросить фильтры
               </Button>
             ) : (
-              <Button asChild className="primary-button">
-                <Link to="/vacancies/new">
-                  Создать первую вакансию
-                  <Plus size={17} />
-                </Link>
+              <Button asChild className="primary-button" iconAfter={<Plus size={17} />}>
+                <Link to="/vacancies/new">Создать первую вакансию</Link>
               </Button>
             )}
           </section>

@@ -4,8 +4,7 @@ import { sendError, zodFieldErrors } from '../errors.js';
 import { idParamSchema, listJobsQuerySchema, listMyApplicationsQuerySchema, updateMeSchema } from '../validation.js';
 import { getJob, getProfile, listJobFilters, listJobs, listMyApplications, updateApplicationContact } from './service.js';
 
-// Маршруты кабинета работника. Отдельно от /api/vacancies и GET /api/applications — те остаются
-// кабинетом работодателя (только свои вакансии и входящие отклики), их назначение не меняется.
+// /api/vacancies и GET /api/applications остаются кабинетом работодателя.
 export function registerCandidateRoutes(app: FastifyInstance) {
   app.get('/api/jobs', { preHandler: requireAuth }, async (request, reply) => {
     const parsed = listJobsQuerySchema.safeParse(request.query);
@@ -15,8 +14,6 @@ export function registerCandidateRoutes(app: FastifyInstance) {
     return listJobs(request.sessionUserId!, parsed.data);
   });
 
-  // Регистрируется до /api/jobs/:id не обязательно (Fastify отдаёт приоритет статическому пути),
-  // но держим рядом с каталогом — значения фильтров считаются по той же видимости, что и каталог.
   app.get('/api/jobs/filters', { preHandler: requireAuth }, async (request) => {
     return listJobFilters(request.sessionUserId!);
   });

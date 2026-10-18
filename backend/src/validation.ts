@@ -1,30 +1,20 @@
 import { z } from 'zod';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
 
-// Общие zod-схемы для REST API (раздел 6 ТЗ) — раньше валидация была ручной ("if (!body?.x)"),
-// пропускала неверные типы (например строку вместо числа в salary_min) и не давала внятных
-// сообщений об ошибке. safeParse ниже используется в server.ts для каждого мутирующего эндпоинта.
-
 export const SCHEDULE_ENUM = z.enum(['seasonal', 'temporary', 'permanent']);
 
-// Верхняя граница — INT4 в Postgres (см. schema.prisma, salary_min/salary_max — Int), а не просто
-// "положительное число": значение больше 2 147 483 647 роняло бы запрос на уровне Prisma/БД с
-// сырой ошибкой вместо понятного 400 (пункт 5 фидбека фронтенда).
+// Колонки зарплат и id — Postgres INT4: значение больше даёт ошибку БД вместо понятного 400.
 const POSTGRES_INT4_MAX = 2147483647;
 
-// salary_min/salary_max проверяются отдельно (nonnegative) и совместно (min <= max) — раньше
-// соотношение между ними вообще не проверялось, можно было создать вакансию с min > max.
 const vacancyBaseShape = {
   title: z.string().trim().min(1, 'title is required').max(200),
   region_code: z.string().trim().max(100).optional(),
   category: z.string().trim().max(100).optional(),
   schedule: SCHEDULE_ENUM.optional(),
-  // Без coerce: в JSON-теле сумма должна прийти числом — coerce превращал "" в 0 и true в 1.
+  // Без coerce: coerce превращал "" в 0 и true в 1.
   salary_min: z.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
   salary_max: z.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
-  // Лимит согласован с картой вакансии (см. vacancies/cardText.ts) — это независимый от лимита
-  // на весь текст карточки предохранитель на само поле, полная длина карточки после сборки всех
-  // полей и экранирования проверяется отдельно (checkCardLength ниже и server.ts для PATCH).
+  // Ограничение самого поля; длина всей карточки проверяется отдельно (checkCardLength).
   description: z.string().trim().max(4000).nullable().optional(),
   contact_info: z.string().trim().max(300).nullable().optional(),
 };
@@ -48,11 +38,8 @@ function checkSalaryRange<T extends { salary_min?: number | null; salary_max?: n
   }
 }
 
-// Раньше длину проверяло только поле description (max 4000) — но итоговая карточка это
-// title+region+schedule+salary+description+contact ПОСЛЕ markdown-экранирования, и могла
-// превысить лимит MAX (4000 символов на сообщение) даже при валидном по отдельности description
-// (раздел 4 фидбека фронтенда). Проверяем это только при создании (тут есть все поля сразу) —
-// для PATCH такая же проверка идёт в server.ts после слияния с уже сохранённой записью.
+// Лимит MAX — 4000 символов на всё сообщение после экранирования, а не на одно description.
+// Для PATCH та же проверка — checkMergedVacancyConstraints после слияния с сохранённой записью.
 function checkCardLength(data: {
   title: string;
   region_code?: string;
@@ -62,9 +49,6 @@ function checkCardLength(data: {
   description?: string | null;
   contact_info?: string | null;
 }, ctx: z.RefinementCtx) {
-  // VacancyCardFields ждёт "число или null" / "строка или null" (см. cardText.ts) — приводим
-  // необязательное zod-поле (может быть undefined) к null здесь, один раз, вместо того чтобы
-  // VacancyCardFields сам был одновременно optional и nullable.
   const length = vacancyCardTextLength({
     title: data.title,
     regionCode: data.region_code ?? '',
@@ -88,17 +72,14 @@ export const createVacancySchema = z
   .superRefine(checkSalaryRange)
   .superRefine(checkCardLength);
 
-// Редактирование черновика (раздел 3.1 хендоффа) — все поля необязательны, но хотя бы одно
-// должно присутствовать, иначе PATCH с пустым телом ничего не делает и это стоит явно отклонить.
-// Проверка salary_min<=salary_max и длины карточки здесь НЕ делается (partial — нет доступа к уже
-// сохранённым значениям других полей), это выполняется в server.ts после слияния с текущей записью.
+// Межполевые проверки здесь невозможны (partial не видит сохранённых значений) —
+// они в checkMergedVacancyConstraints.
 export const updateVacancySchema = z
   .object(vacancyBaseShape)
   .partial()
   .refine((data) => Object.keys(data).length > 0, { message: 'at least one field is required' });
 
-// Контакт для отклика — телефон, username или ссылка MAX (не только номер), 1–200 символов после
-// trim. Тот же лимит применяет бот (application/service.ts), чтобы правила каналов не расходились.
+// Телефон, username или ссылка MAX. Тот же лимит применяет бот (application/service.ts).
 export const APPLICATION_CONTACT_MAX_LENGTH = 200;
 
 const contactString = (field: string) =>
@@ -108,8 +89,6 @@ const contactString = (field: string) =>
     .min(1, `${field} must not be empty`)
     .max(APPLICATION_CONTACT_MAX_LENGTH);
 
-// Кабинет работника: contact стал обязательным (раньше был nullable/optional) — работодателю
-// бесполезен отклик без способа связи. Намеренное изменение контракта, см. README/OpenAPI.
 export const createApplicationSchema = z.object({
   vacancy_id: z.coerce.number().int().positive('vacancy_id is required').max(POSTGRES_INT4_MAX),
   contact: contactString('contact'),
@@ -125,20 +104,15 @@ export const authMaxSchema = z.object({
   init_data: z.string().min(1, 'init_data is required'),
 });
 
-// GET /api/applications (раздел 3.2 хендоффа) — общий список откликов по всем вакансиям
-// работодателя, с пагинацией и опциональным фильтром по статусу.
 export const listApplicationsQuerySchema = z.object({
   status: APPLICATION_STATUS_ENUM.optional(),
   limit: z.coerce.number().int().positive().max(200).optional().default(50),
   offset: z.coerce.number().int().nonnegative().optional().default(0),
 });
 
-// --- Кабинет работника ---
-
 const POSITIVE_INT = z.coerce.number().int().positive();
 
-// Числовые query-параметры: пустую строку (?salary_from=) считаем отсутствующей, а не нулём —
-// z.coerce.number('') дал бы 0 и молча включил бы зарплатный фильтр.
+// Пустой query-параметр (?salary_from=) — «не задан»: coerce дал бы 0 и включил бы фильтр.
 const optionalQueryInt = (schema: z.ZodNumber) =>
   z.preprocess((v) => (v === '' || v === undefined ? undefined : v), schema.optional());
 
@@ -172,8 +146,7 @@ export const listMyApplicationsQuerySchema = z.object({
   offset: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)).default(0),
 });
 
-// PATCH /api/me — только application_contact; .strict() отклоняет попытки передать id, maxUserId,
-// chatId, role и т.п. явным 400, а не молча игнорирует их.
+// strict: попытка передать id, chatId, role и т.п. — явный 400, а не тихое игнорирование.
 export const updateMeSchema = z
   .object({
     application_contact: contactString('application_contact').nullable(),
@@ -187,9 +160,6 @@ export const benchmarkQuerySchema = z.object({
 
 export const idParamSchema = z.object({ id: POSITIVE_INT.max(POSTGRES_INT4_MAX) });
 
-// Утилита для PATCH /api/vacancies/:id (server.ts) — проверка salary_min<=salary_max и длины
-// карточки ПОСЛЕ слияния уже сохранённых полей с частичным телом запроса. Отдельно от zod-схем
-// выше, потому что partial-схема не видит остальные поля записи.
 export function checkMergedVacancyConstraints(merged: {
   title: string;
   region_code?: string | null;

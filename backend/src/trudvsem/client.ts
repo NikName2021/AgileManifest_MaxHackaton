@@ -14,15 +14,12 @@ interface TrudvsemResponse {
     results?: { vacancies?: { vacancy: TrudvsemVacancy }[] };
 }
 
-// TODO: структура запроса/ответа — по публичной документации opendata.trudvsem.ru,
-// не проверено живым вызовом. Сверить перед финальной сдачей (раздел 8 ТЗ).
+// TODO: формат запроса и ответа взят из документации opendata.trudvsem.ru, живым вызовом не проверен.
 export async function searchTrudvsemVacancies(query: string, limit = 100): Promise<TrudvsemVacancy[]> {
     const url = new URL(BASE);
     url.searchParams.set('text', query);
     url.searchParams.set('limit', String(limit));
 
-    // Без таймаута зависший внешний сервис мог повесить вызывающий запрос (например бенчмарк
-    // внутри диалога создания вакансии) на неопределённое время.
     const res = await withTrudvsemRateLimit(() =>
         fetch(url.toString(), { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
     );

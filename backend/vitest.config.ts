@@ -1,8 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-// Интеграционные тесты идут в ОТДЕЛЬНУЮ БД: TEST_DATABASE_URL обязателен, а имя базы должно
-// заканчиваться на _test — тесты очищают таблицы (TRUNCATE) перед каждым сценарием, и случайный
-// запуск против рабочей/демо-БД уничтожил бы данные.
+// Тесты очищают таблицы перед каждым сценарием — имя базы обязано заканчиваться на _test.
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 if (!testDatabaseUrl) {
   throw new Error('TEST_DATABASE_URL is required, e.g. postgresql://user:pass@localhost:5446/hiring_test?schema=public');
@@ -16,12 +14,11 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     globalSetup: ['test/globalSetup.ts'],
-    // Одна общая тестовая БД — файлы не должны чистить таблицы друг у друга параллельно.
+    // Файлы делят одну БД.
     fileParallelism: false,
     testTimeout: 20_000,
     hookTimeout: 60_000,
-    // Явные значения, чтобы dotenv из config.ts не подтянул их из backend/.env (dotenv не
-    // перезаписывает уже заданные переменные, даже пустые). Секреты здесь фиктивные.
+    // Заданы явно, чтобы dotenv не подтянул значения из backend/.env. Секреты фиктивные.
     env: {
       DATABASE_URL: testDatabaseUrl,
       MAX_BOT_TOKEN: 'test-bot-token',

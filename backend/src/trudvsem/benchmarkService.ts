@@ -26,9 +26,7 @@ export async function getBenchmark(regionCode: string, category: string): Promis
     }
 
     try {
-        // TODO: сейчас ищем только по тексту должности, без привязки к коду региона trudvsem —
-        // сопоставление свободного текста региона со справочником регионов trudvsem не сделано
-        // (см. TODO в vacancyFlow.ts). Для MVP это осознанное упрощение.
+        // TODO: поиск только по тексту должности — регион (свободный текст) не сопоставлен с кодами trudvsem.
         const vacancies = await searchTrudvsemVacancies(category);
 
         const mins = vacancies.map((v) => v.salary_min).filter((v): v is number => typeof v === 'number' && v > 0);
@@ -46,7 +44,7 @@ export async function getBenchmark(regionCode: string, category: string): Promis
 
         return { avgSalaryMin, avgSalaryMax, vacancyCount, isFresh: true };
     } catch (err) {
-        // trudvsem недоступен — отдаём то, что есть в кэше (пусть протухший), иначе молча пропускаем блок
+        // trudvsem недоступен — отдаём устаревший кэш, если он есть.
         if (cached) {
             return {
                 avgSalaryMin: cached.avgSalaryMin,

@@ -11,16 +11,13 @@ export interface ParsedInitData {
   authDate: number;
 }
 
-// Не задокументировано MAX явно (докs не описывают окно годности auth_date) — консервативное
-// значение по аналогии с похожими Web App SDK. Если окажется что MAX держит initData дольше/короче
-// одной сессии открытия мини-аппа, поправить.
+// Окно годности auth_date MAX не документирует — консервативное значение, как в похожих Web App SDK.
 const MAX_INIT_DATA_AGE_SECONDS = 24 * 3600;
 
-// Алгоритм подтверждён документацией dev.max.ru/docs/webapps/validation:
-// 1) secret_key = HMAC_SHA256(key="WebAppData", data=BOT_TOKEN)
-// 2) signature  = HMAC_SHA256(key=secret_key, data=dataCheckString)
-// dataCheckString — все параметры initData (кроме hash), отсортированные по ключу,
-// в виде "key=value", склеенные через \n.
+// dev.max.ru/docs/webapps/validation:
+// secret_key = HMAC_SHA256(key="WebAppData", data=BOT_TOKEN)
+// signature  = HMAC_SHA256(key=secret_key, data=dataCheckString)
+// dataCheckString — параметры initData без hash, отсортированные по ключу, "key=value" через \n.
 export function verifyMaxInitData(initData: string): { ok: true; data: ParsedInitData } | { ok: false; error: string } {
   let params: URLSearchParams;
   try {
@@ -29,11 +26,8 @@ export function verifyMaxInitData(initData: string): { ok: true; data: ParsedIni
     return { ok: false, error: 'malformed initData' };
   }
 
-  // Отклоняем повторяющиеся параметры до любого дальнейшего разбора (раздел 1.1 хендоффа).
-  // params.keys() отдаёт ВСЕ ключи, включая повторы — в отличие от params.get(key), который для
-  // повторяющегося ключа молча возвращает только первое значение, из-за чего dataCheckString ниже
-  // мог бы быть построен не из тех значений, что реально участвовали в подписи на стороне MAX.
-  // Безопаснее явно отказать, чем гадать.
+  // Повторяющиеся ключи отклоняем: params.get() вернул бы только первое значение, и проверялась
+  // бы подпись не тех данных, которые потом используются.
   const rawKeys = Array.from(params.keys());
   if (new Set(rawKeys).size !== rawKeys.length) {
     return { ok: false, error: 'duplicate parameter in initData' };

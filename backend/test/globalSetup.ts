@@ -1,8 +1,6 @@
 import { execSync } from 'node:child_process';
 
-// Применяет миграции к тестовой БД тем же способом, что и прод-контейнер (prisma migrate deploy):
-// так тесты заодно проверяют, что миграции накатываются на чистую базу. Prisma сама создаёт базу,
-// если её ещё нет. Имя базы уже проверено в vitest.config.ts (должно заканчиваться на _test).
+// Миграции — как в прод-контейнере (migrate deploy). Prisma создаёт базу, если её нет.
 export default function setup() {
   execSync('npx prisma migrate deploy', {
     stdio: 'inherit',

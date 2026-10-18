@@ -3,8 +3,7 @@ import type { User } from '@prisma/client';
 import { db } from '../src/db.js';
 import { issueSessionToken } from '../src/auth/session.js';
 
-// Подменённая доставка в MAX (см. vi.mock в тестовых файлах): ни одно сообщение не уходит
-// реальным пользователям, а тесты видят, какие именно попытки отправки были.
+// Мок доставки в MAX: реальные сообщения не уходят, тесты видят попытки отправки.
 export const sendMessageMock = vi.fn(async (_chatId: string, _text: string, _buttons?: unknown) => ({
   message: { body: { mid: `mid-${Math.random().toString(36).slice(2)}` } },
 }));
@@ -30,8 +29,7 @@ export interface TestUser {
   auth: { authorization: string };
 }
 
-// Пользователь «как после входа в мини-приложение и запуска бота»: chatId/dialogChatId заданы,
-// если не сказано иное. Токен — та же подпись сессии, что выдаёт POST /api/auth/max.
+// По умолчанию — пользователь, уже запускавший бота (chatId и dialogChatId заданы).
 export async function createUser(
   name: string,
   options: { chatId?: string; dialogChatId?: string | null; displayName?: string | null } = {}

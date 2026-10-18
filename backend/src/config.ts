@@ -14,22 +14,14 @@ export const config = {
   maxApiBaseUrl: process.env.MAX_API_BASE_URL ?? 'https://platform-api2.max.ru',
   maxBotToken,
   maxWebhookSecret: process.env.MAX_WEBHOOK_SECRET ?? '',
-  // Публичный HTTPS-адрес backend (например, ngrok) — нужен, чтобы зарегистрировать вебхук в MAX.
-  // Без него backend работает (можно тестировать REST API), но события от MAX не будут приходить.
+  // Без него вебхук в MAX не регистрируется: REST работает, события от MAX не приходят.
   publicBaseUrl: process.env.PUBLIC_BASE_URL,
-  // Ник бота для deep link (https://max.ru/<ник>?start=...) — обычно определяется сам через
-  // GET /me при старте (см. max/botInfo.ts), эта переменная — ручной фолбэк, если бот вернул
-  // username в неожиданном поле или недоступен на момент старта.
+  // Приоритетнее username из GET /me.
   botUsernameOverride: process.env.MAX_BOT_USERNAME,
-  // Секрет для подписи собственных сессионных токенов mini-app (не путать с MAX_WEBHOOK_SECRET).
-  // Если не задан явно — выводим из токена бота отдельным HMAC-лейблом, чтобы не переиспользовать
-  // сам токен бота как ключ напрямую. Для реальной сдачи лучше задать SESSION_SECRET явно в .env.
+  // Если не задан — выводится из токена бота отдельным HMAC, чтобы не использовать сам токен как ключ.
   sessionSecret: process.env.SESSION_SECRET ?? createHmac('sha256', 'session-secret-derivation').update(maxBotToken).digest('hex'),
-  // Токен для тестового доступа к /api/* без реального MAX-аккаунта — для проверки жюри
-  // (раздел 11 ТЗ, "тестовые учётки"). Если не задан — тестовый вход отключён.
+  // Доступ к API для жюри без MAX-логина; не задан — отключён.
   testApiToken: process.env.TEST_API_TOKEN,
-  // Origin(ы) frontend для CORS, через запятую (см. server.ts) — раздел 1 фидбека фронтенда:
-  // браузерный fetch с заголовком Authorization с ДРУГОГО origin не пройдёт без явного CORS.
-  // Не задан — разрешаем любой origin (dev/жюри), задан — сужаем до перечисленных.
+  // Список origin через запятую; не задан — CORS разрешает любой origin.
   frontendOrigin: process.env.FRONTEND_ORIGIN,
 };

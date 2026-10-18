@@ -1,6 +1,4 @@
-// Ник бота нужен для deep link (https://max.ru/<ник>?start=...). Определяем один раз при
-// старте через GET /me (см. server.ts) и держим в памяти — постоянные повторные вызовы /me
-// ради ника не нужны.
+// Username бота для deep link: из MAX_BOT_USERNAME или GET /me при старте (server.ts).
 let cachedUsername: string | undefined;
 
 export function setBotUsername(username: string | undefined): void {

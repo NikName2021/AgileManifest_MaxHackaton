@@ -31,15 +31,10 @@ import {
 } from './validation.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
-// Экспортируется для интеграционных тестов (backend/test) — там приложение поднимается через
-// app.inject() без реального порта и без подключения к MAX (см. start() внизу).
+// Экспорт для интеграционных тестов (app.inject без порта и без MAX).
 export const app = Fastify({ logger: process.env.VITEST ? false : true });
 
-// CORS (раздел 1 фидбека фронтенда): frontend и API — разные origin (mini-app во встроенном
-// WebView MAX может грузиться с отдельного хостинга), поэтому браузерные fetch-запросы с
-// Authorization-заголовком не пройдут без явного CORS. FRONTEND_ORIGIN — список через запятую;
-// если не задан, разрешаем всё (`origin: true`) для локальной разработки/жюри без готового
-// прод-адреса фронта — перед реальной сдачей лучше сузить до конкретного origin в .env.
+// Mini-app и API на разных origin. Без FRONTEND_ORIGIN разрешён любой — для продакшена задать явно.
 const allowedOrigins = config.frontendOrigin
   ? config.frontendOrigin.split(',').map((s) => s.trim()).filter(Boolean)
   : true;
@@ -49,17 +44,13 @@ app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type'],
 });
 
-// Требуемые подписки на вебхук — вынесено сюда, чтобы сверять их и при регистрации (start(),
-// ниже), и при возможном будущем переиспользовании списка.
 const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_started'];
 
 registerMaxWebhook(app);
 registerCandidateRoutes(app);
 
-// applyUrl — deep link отклика для опубликованной вакансии (тот же, что в тексте карточки, см.
-// vacancies/cardText.ts). Нужен работодателю, чтобы переслать ссылку вручную, в том числе для
-// карточек, отправленных до появления текстовой ссылки: старые сообщения в MAX не меняются.
-// null — вакансия не опубликована или username бота неизвестен (MAX_BOT_USERNAME).
+// Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
+// null — вакансия не опубликована или username бота неизвестен.
 function withApplyUrl(vacancy: Vacancy) {
   return { ...vacancy, applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null };
 }
@@ -75,8 +66,7 @@ function parseIdParam(request: FastifyRequest, reply: FastifyReply): number | un
 
 const CANDIDATE_SUMMARY_SELECT = { id: true, maxUserId: true, displayName: true, phone: true } as const;
 
-// Служебный healthcheck — пригодится и для Docker, и для проверки, что backend жив.
-// Проверяет не только сам процесс, но и реальную доступность БД (readiness, не просто liveness).
+// Readiness: проверяет и процесс, и доступность БД.
 app.get('/health', async (request, reply) => {
   try {
     await db.$queryRaw`SELECT 1`;
@@ -87,22 +77,8 @@ app.get('/health', async (request, reply) => {
   }
 });
 
-// --- Собственный backend API (раздел 6 ТЗ) ---
-// Мутирующие эндпоинты и всё, что читает чужие данные (например список откликов с контактами
-// кандидатов), защищены requireAuth (см. auth/middleware.ts). Мини-апп получает сессионный токен
-// через POST /api/auth/max (initData -> проверка HMAC-подписи -> собственная сессия), а жюри может
-// тестировать API без реального MAX-логина через TEST_API_TOKEN из .env.
-//
-// Решение по ролям (осознанно, см. раздел 1.1 хендоффа фронтендера): в этой версии MVP роль не
-// хранится отдельным полем в User — любой авторизованный пользователь может как создавать/публиковать
-// вакансии (выступать работодателем), так и откликаться на чужие (выступать кандидатом). Что можно
-// делать с конкретной записью, определяется владением (employerUserId / candidateUserId), а не ролью
-// аккаунта. Если для финала понадобится разделение ролей — это отдельное расширение схемы (поле role
-// на User) и не блокирует текущую интеграцию.
-//
-// Формат ошибок: везде единый конверт { error: { code, message, fields? } } — см. errors.ts.
-// Формат сессии: Authorization: Bearer <token>, НЕ HttpOnly cookie — если существующий адаптер
-// фронтенда рассчитан на cookie, его нужно переключить на заголовок (см. README.md).
+// Роли в User не хранятся: любой пользователь может и публиковать вакансии, и откликаться.
+// Доступ к записи определяется владением (employerUserId / candidateUserId).
 
 app.post('/api/auth/max', async (request, reply) => {
   const parsed = authMaxSchema.safeParse(request.body);
@@ -148,9 +124,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       description: body.description ?? null,
       contactInfo: body.contact_info ?? null,
       status: 'draft',
-      // Лучшее известное на момент создания через REST/мини-апп. Может быть пустой строкой у
-      // пользователей мини-аппа, ещё не писавших боту напрямую (см. findOrCreateUserByMaxId) —
-      // тогда публикация (см. publish.ts) осмысленно упадёт, пока пользователь не откроет чат с ботом.
+      // Пусто, если пользователь ещё не писал боту — тогда publish вернёт employer_chat_missing.
       employerChatId: employer?.dialogChatId || employer?.chatId || null,
     },
   });
@@ -169,9 +143,7 @@ app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply
   return withApplyUrl(vacancy);
 });
 
-// Редактирование черновика (раздел 3.1 хендоффа) — разрешено только пока вакансия в статусе
-// draft. У опубликованной/закрытой вакансии карточка уже могла уйти в MAX или воронка уже идёт —
-// молчаливое расхождение между БД и тем, что видели кандидаты, хуже явного 409.
+// Только черновик: опубликованная карточка уже могла уйти в MAX, правка разошлась бы с ней.
 app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply) => {
   const id = parseIdParam(request, reply);
   if (id === undefined) return reply;
@@ -191,10 +163,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
 
   const body = parsed.data;
 
-  // salary_min<=salary_max и длина карточки проверяются на СЛИЯНИИ уже сохранённых полей с
-  // частичным телом запроса, а не только на переданных полях — раньше PATCH только с salary_min
-  // проходил проверку, даже если новый min становился больше уже сохранённого max (раздел 5
-  // фидбека фронтенда: "диапазон 50 000–60 000, запрос только с salary_min: 70000 проходит").
+  // Межполевые проверки — на слиянии с сохранёнными значениями, а не только на переданных полях.
   const merged = {
     title: body.title ?? existing.title,
     region_code: body.region_code ?? existing.regionCode,
@@ -211,11 +180,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     });
   }
 
-  // Атомарная проверка+обновление одним запросом (раздел 2 фидбека фронтенда): раньше между
-  // findUnique-проверкой статуса выше и update ниже вакансию мог успеть забрать параллельный
-  // publish — окно гонки, пусть и маленькое. updateMany с тем же условием status:'draft' в WHERE
-  // либо применяет изменение атомарно, либо (count===0) означает, что статус уже сменился
-  // между чтением и записью — тогда отдаём тот же 409, что и при первичной проверке.
+  // status: 'draft' в WHERE — защита от параллельного publish между проверкой выше и записью.
   const updateResult = await db.vacancy.updateMany({
     where: { id, status: 'draft' },
     data: {
@@ -255,17 +220,12 @@ app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (reque
         return sendError(reply, 404, 'not_found', err.message);
       }
       if (err.kind === 'no_chat') {
-        // Отдельный код вместо общего upstream_error (раздел 6 фидбека фронтенда) — frontend
-        // может по этому коду явно предложить работодателю открыть личный чат с ботом, вместо
-        // непонятного "сервис недоступен".
         return sendError(reply, 409, 'employer_chat_missing', err.message);
       }
       return sendError(reply, 409, 'conflict', err.message);
     }
     if ((err as any)?.name === 'TimeoutError') {
-      // Таймаут ответа MAX — неизвестно, ушла карточка или нет. Вакансия НЕ откатывается в
-      // draft (см. publish.ts) именно чтобы повторный вызов publish не создал вторую карточку —
-      // явно говорим об этом клиенту, а не отдаём тот же upstream_error, что и на подтверждённый отказ.
+      // Неизвестно, ушла ли карточка: вакансия остаётся published, повторный publish безопасен.
       request.log.error(err, 'MAX did not confirm card delivery before timeout; vacancy stays published for a safe retry');
       return sendError(
         reply,
@@ -297,8 +257,6 @@ app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (r
   const vacancy = await db.vacancy.findUnique({ where: { id: vacancyId } });
   if (!vacancy) return sendError(reply, 404, 'not_found', 'vacancy not found');
   if (vacancy.employerUserId !== request.sessionUserId) {
-    // Список откликов содержит контакты кандидатов (телефон и т.п.) — раньше отдавался без
-    // какой-либо проверки, кто спрашивает.
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
 
@@ -309,8 +267,7 @@ app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (r
   });
 });
 
-// Общий список откликов по всем вакансиям работодателя (раздел 3.2 хендоффа) — раньше был
-// только список по одной вакансии; frontend собирал бы общий список серией запросов без пагинации.
+// Входящие отклики по всем вакансиям работодателя.
 app.get('/api/applications', { preHandler: requireAuth }, async (request, reply) => {
   const parsed = listApplicationsQuerySchema.safeParse(request.query);
   if (!parsed.success) {
@@ -354,19 +311,15 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
   }
   const body = parsed.data;
 
-  // Кандидат — только из серверной сессии; статус, владелец и имя из тела не принимаются (схема их не знает).
   const candidate = await db.user.findUnique({ where: { id: request.sessionUserId! } });
   if (!candidate) return sendError(reply, 401, 'unauthorized', 'session user no longer exists');
 
-  // Те же проверки и та же транзакция, что и у отклика через бота (application/service.ts).
+  // Та же функция, что и у отклика через бота.
   const result = await createApplicationRecord({
     vacancyId: body.vacancy_id,
     candidateUserId: candidate.id,
     contact: body.contact,
-    // Только подтверждённый личный чат с ботом (bot_started). Раньше здесь был "последний
-    // увиденный" chatId, который мог быть групповым — уведомление о статусе ушло бы в группу.
-    // null — кандидат ещё не запускал бота лично: отклик сохраняется, уведомлять его некуда
-    // (frontend видит это по GET /api/me -> hasBotChat=false).
+    // Только личный чат: последний chatId мог быть групповым. null — кандидат не запускал бота.
     candidateChatId: candidate.dialogChatId,
   });
   if (!result.ok) {
@@ -375,7 +328,7 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
   }
   const application = result.application;
 
-  // Уведомление — строго после сохранения. Сбой MAX не отменяет отклик и не превращает ответ в 500.
+  // Сбой MAX не отменяет сохранённый отклик — только notified: false.
   const vacancy = await db.vacancy.findUniqueOrThrow({ where: { id: application.vacancyId }, include: { employer: true } });
   const targetChatId = vacancy.employerChatId || vacancy.employer.chatId;
   let notified = false;
@@ -390,13 +343,12 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
       );
       notified = true;
     } catch (err) {
-      // Не логируем текст сообщения/контакт — только факт сбоя.
+      // Контакт кандидата в лог не пишем.
       request.log.error({ err, applicationId: application.id }, 'failed to notify employer about new application via REST');
     }
   }
 
-  // Явный DTO: candidateChatId (служебный адрес доставки) кандидату не отдаётся.
-  // notified — удалось ли уведомить работодателя.
+  // candidateChatId кандидату не отдаём. notified — уведомление работодателя.
   return reply.code(201).send({
     id: application.id,
     vacancyId: application.vacancyId,
@@ -423,8 +375,7 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
 
-  // applyStatusChange общий с обработчиком кнопок в чате — кандидат получит уведомление
-  // в MAX и при смене статуса через API, не только через кнопки в чате работодателя.
+  // Общая с кнопками в чате функция — кандидат получает уведомление в обоих случаях.
   const result = await applyStatusChange(id, parsed.data.status);
   const { candidate, vacancy, ...updated } = result.application;
   return reply.send({
@@ -447,18 +398,14 @@ app.get('/api/benchmark', async (request, reply) => {
   return benchmark;
 });
 
-// Единый обработчик ошибок — чтобы наружу не утекал сырой стектрейс/формат Fastify,
-// и чтобы неожиданные ошибки (например нарушение внешнего ключа в Prisma) не роняли процесс,
-// а возвращали предсказуемый JSON в том же конверте { error: { code, message } }, что и остальной API.
+// Неожиданные ошибки — в том же конверте, без стектрейса наружу.
 app.setErrorHandler((err: any, request, reply) => {
   request.log.error(err, 'unhandled request error');
 
-  // Валидация тела/параметров Fastify — 400 с понятным сообщением
   if (err.validation) {
     return sendError(reply, 400, 'validation_error', err.message);
   }
 
-  // Частые коды ошибок Prisma
   if (err.code === 'P2002') {
     return sendError(reply, 409, 'conflict', 'duplicate record');
   }
@@ -486,19 +433,13 @@ async function start() {
 
     if (config.publicBaseUrl) {
       try {
-        // Секрет больше НЕ зашиваем в URL query-параметром — по документации dev.max.ru MAX
-        // присылает его исключительно в заголовке X-Max-Bot-Api-Secret на каждом вызове вебхука
-        // (см. max/webhook.ts), а держать секрет в URL было небезопасно: он утекал бы в лог строки
-        // ниже и в любые логи прокси/туннеля, через которые проходит регистрация подписки.
+        // Секрет передаётся при создании подписки, MAX присылает его в заголовке X-Max-Bot-Api-Secret.
         const webhookUrl = `${config.publicBaseUrl}/webhook/max`;
         const existing = (await maxApi.listSubscriptions()) as {
           subscriptions?: { url?: string; update_types?: string[] }[];
         };
         const existingSub = existing?.subscriptions?.find((s) => s.url === webhookUrl);
-        // Сверяем не только URL, но и набор update_types — раньше при добавлении нового типа
-        // события (bot_started) уже зарегистрированная на этот же URL старая подписка считалась
-        // "актуальной" и никогда не обновлялась, то есть deep-link отклик тихо не заработал бы
-        // на уже развёрнутом окружении (раздел 2.6 хендоффа).
+        // Подписку на тот же URL без нужных update_types пересоздаём, иначе новые типы событий не придут.
         const hasAllTypes = existingSub
           ? WEBHOOK_UPDATE_TYPES.every((t) => existingSub.update_types?.includes(t))
           : false;
@@ -507,9 +448,7 @@ async function start() {
           await maxApi.createSubscription(webhookUrl, WEBHOOK_UPDATE_TYPES);
           app.log.info({ webhookUrl }, 'MAX webhook subscription registered');
         } else if (!hasAllTypes) {
-          // POST /subscriptions не документирован как upsert по URL — на всякий случай сначала
-          // удаляем старую подписку на этот URL, потом создаём заново с полным списком типов,
-          // чтобы не получить два независимых webhook-события на один и тот же апдейт.
+          // POST /subscriptions не документирован как upsert — удаляем старую, чтобы не получать события дважды.
           await maxApi.deleteSubscription(webhookUrl).catch((err) => {
             app.log.warn(err, 'failed to delete stale MAX webhook subscription before re-registering (continuing anyway)');
           });
@@ -536,5 +475,4 @@ async function start() {
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }
 
-// Под vitest приложение только импортируется (app.inject), без подключения к MAX и прослушивания порта.
 if (!process.env.VITEST) start();

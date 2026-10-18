@@ -1,7 +1,6 @@
 import type { FastifyReply } from 'fastify';
 
-// Единый формат ошибки для всего REST API (раздел 3.5 хендоффа фронтендера — нужен стабильный
-// контракт, который frontend может парсить одинаково для любого эндпоинта, а не строку как попало).
+// Единый конверт ошибки API: { error: { code, message, fields? } }. Frontend опирается на code.
 export type ErrorCode =
   | 'unauthorized'
   | 'forbidden'
@@ -11,20 +10,14 @@ export type ErrorCode =
   | 'upstream_error'
   | 'service_unavailable'
   | 'internal_error'
-  // Работодатель ещё не писал боту напрямую — публиковать карточку некуда. Отдельный код вместо
-  // общего upstream_error, чтобы frontend мог явно предложить открыть личный чат с ботом.
+  // Работодатель ещё не писал боту — публиковать карточку некуда.
   | 'employer_chat_missing'
-  // Публикация ушла в таймаут — неизвестно, дошла ли карточка до MAX. Вакансия остаётся
-  // published без cardMessageId; повторный вызов /publish безопасен (не создаёт дубликат) и
-  // либо подтвердит доставку, либо повторит отправку.
+  // Таймаут MAX при публикации: вакансия остаётся published, повторный publish не создаст дубль.
   | 'card_delivery_unknown'
-  // Кабинет работника (POST /api/applications): отдельные коды вместо общего conflict, чтобы
-  // frontend различал сценарии без разбора message.
-  // Отклик на собственную вакансию (403).
   | 'self_application_forbidden'
-  // Вакансия существует, но не принимает отклики — черновик или закрыта (409).
+  // Вакансия — черновик или закрыта.
   | 'vacancy_unavailable'
-  // Этот пользователь уже откликался на вакансию — через REST или через бота (409).
+  // Повторный отклик, в том числе через бота.
   | 'already_applied';
 
 export interface ErrorFields {
@@ -47,10 +40,7 @@ export function sendError(
   });
 }
 
-// Превращает результат zod safeParse (ok: false) в fields в духе { fieldName: ["сообщение", ...] }.
-// Не просто смена типа: flat.fieldErrors — Record<string, string[] | undefined> (zod кладёт ключ
-// для КАЖДОГО поля схемы, даже без ошибок, со значением undefined) — цикл ниже реально фильтрует
-// эти undefined/пустые записи, а не просто приводит один эквивалентный тип к другому.
+// zod кладёт в fieldErrors ключ для каждого поля схемы, даже без ошибок — отбрасываем пустые.
 export function zodFieldErrors(flat: { fieldErrors: Record<string, string[] | undefined> }): ErrorFields {
   const fields: ErrorFields = {};
   for (const [key, messages] of Object.entries(flat.fieldErrors)) {

@@ -1,12 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { db } from '../db.js';
 
-// Кабинет работника: каталог чужих опубликованных вакансий, карточка, история своих откликов и
-// профиль. Все ответы — явные DTO (camelCase), без сырых объектов Prisma: наружу не уходят chatId,
-// maxUserId, employerChatId, candidateChatId, cardMessageId и прочие служебные поля доставки.
-//
-// Доступ определяется только userId из проверенной серверной сессии (request.sessionUserId) —
-// режим «работник/работодатель» выбирает интерфейс, а не права.
+// Кабинет работника. Только явные DTO: chatId, maxUserId и служебные поля доставки наружу не уходят.
+// Доступ — по userId из сессии; режим «работник/работодатель» выбирает интерфейс, а не права.
 
 export type ApplyUnavailableReason = 'already_applied' | 'own_vacancy';
 
@@ -63,8 +59,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     description: row.description,
     status: row.status,
     createdAt: row.createdAt,
-    // Отдельного поля «название компании» в модели нет — отдаём только имя пользователя из MAX
-    // как есть (может быть null), не выдавая его за компанию.
+    // Поля «компания» нет — это имя пользователя в MAX.
     employer: { displayName: row.employerDisplayName },
     myApplication,
     canApply: reason === null,
@@ -72,7 +67,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
   };
 }
 
-// Один запрос на все карточки страницы вместо запроса на каждую (N+1).
+// Один запрос на всю страницу, без N+1.
 async function findMyApplications(viewerUserId: number, vacancyIds: number[]): Promise<Map<number, MyApplicationRef>> {
   if (vacancyIds.length === 0) return new Map();
   const rows = await db.application.findMany({
@@ -104,14 +99,12 @@ function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, '\\$&');
 }
 
-// Пустые строки после trim (?q=, ?region_code=) не фильтруют.
 function nonEmpty(value: string | undefined): string | undefined {
   return value ? value : undefined;
 }
 
 export async function listJobs(viewerUserId: number, params: ListJobsParams) {
-  // Видимость в каталоге: только published и только чужие. cardMessageId намеренно не участвует —
-  // это признак доставки карточки в MAX, а не доступности вакансии.
+  // cardMessageId не участвует: это признак доставки карточки, а не доступности вакансии.
   const conditions: Prisma.Sql[] = [
     Prisma.sql`v.status = 'published'`,
     Prisma.sql`v.employer_user_id <> ${viewerUserId}`,
@@ -128,10 +121,8 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   if (category) conditions.push(Prisma.sql`v.category = ${category}`);
   if (params.schedule) conditions.push(Prisma.sql`v.schedule = ${params.schedule}`);
 
-  // Зарплатный фильтр — пересечение диапазонов [lo, hi] вакансии и [salary_from, salary_to] запроса,
-  // где у вакансии с одной границей эта граница служит обеими: lo = COALESCE(min, max),
-  // hi = COALESCE(max, min). Вакансия без обеих границ (NULL) при активном фильтре не проходит —
-  // сравнение с NULL ложно; без фильтра такие вакансии показываются. 0 — реальная сумма, не NULL.
+  // Пересечение диапазонов; единственная граница вакансии служит обеими. Вакансия без зарплаты
+  // при активном фильтре отсекается (сравнение с NULL ложно).
   if (params.salary_from !== undefined) {
     conditions.push(Prisma.sql`COALESCE(v.salary_max, v.salary_min) >= ${params.salary_from}`);
   }
@@ -165,8 +156,7 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   };
 }
 
-// Справочника названий регионов/категорий в проекте нет (region_code — свободный текст из диалога
-// бота, category из REST) — поэтому label совпадает с исходным value, без придуманных расшифровок.
+// Справочника названий нет — label равен value.
 export async function listJobFilters(viewerUserId: number) {
   const where = { status: 'published', employerUserId: { not: viewerUserId } };
   const [regions, categories] = await Promise.all([
@@ -189,10 +179,8 @@ export async function listJobFilters(viewerUserId: number) {
   };
 }
 
-// Карточка для работника. Черновик, закрытая или несуществующая — одинаковый null (-> 404), чтобы
-// подбором ID нельзя было отличить чужой черновик от несуществующей записи. Своя опубликованная
-// вакансия видна с canApply=false (own_vacancy). contactInfo работодателя здесь не отдаётся —
-// только кандидату в истории после его собственного отклика (listMyApplications).
+// Черновик, закрытая и несуществующая — одинаковый null, чтобы подбором ID их нельзя было различить.
+// contactInfo здесь не отдаётся — только в истории после собственного отклика.
 export async function getJob(viewerUserId: number, vacancyId: number): Promise<JobDto | null> {
   const rows = await db.$queryRaw<JobRow[]>`
     SELECT ${JOB_COLUMNS}
@@ -257,8 +245,7 @@ function toProfileDto(user: { id: number; displayName: string | null; applicatio
     id: user.id,
     displayName: user.displayName,
     applicationContact: user.applicationContact,
-    // true — пользователь запускал бота в личном чате (bot_started), бот может ему писать.
-    // false — уведомления о статусе отклика доставить некуда, пока он не откроет чат с ботом.
+    // false — уведомлять некуда, пока пользователь не запустит бота в личном чате.
     hasBotChat: Boolean(user.dialogChatId),
   };
 }
@@ -268,8 +255,7 @@ export async function getProfile(userId: number): Promise<ProfileDto | null> {
   return user ? toProfileDto(user) : null;
 }
 
-// Меняет только сохранённый контакт для предзаполнения формы. Контакты уже отправленных откликов
-// (applications.contact) — отдельные записи и не переписываются.
+// Контакты уже отправленных откликов не меняются.
 export async function updateApplicationContact(userId: number, applicationContact: string | null): Promise<ProfileDto | null> {
   const result = await db.user.updateMany({ where: { id: userId }, data: { applicationContact } });
   if (result.count === 0) return null;

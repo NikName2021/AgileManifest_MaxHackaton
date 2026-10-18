@@ -84,6 +84,14 @@ jobs:
           --to-schema-datamodel prisma/schema.prisma
           --exit-code
 
+      # Интеграционные тесты (backend/test) — в отдельной базе *_test на том же сервере: тесты
+      # очищают таблицы, поэтому базу, на которой проверяются миграции и /health, не трогают.
+      # Доставка в MAX в тестах замокана, реальные сообщения не отправляются.
+      - name: Run backend integration tests
+        env:
+          TEST_DATABASE_URL: postgresql://hiring_ci:hiring_ci_password@127.0.0.1:5432/hiring_ci_test?schema=public
+        run: npm test
+
       - name: Check backend health with PostgreSQL
         shell: bash
         run: |

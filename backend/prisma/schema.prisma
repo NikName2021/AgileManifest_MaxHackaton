@@ -13,6 +13,14 @@ model User {
   chatId       String        @map("chat_id")
   displayName  String?       @map("display_name")
   phone        String?
+  // Сохранённый контакт для предзаполнения формы отклика в кабинете работника (PATCH /api/me).
+  // Отдельно от phone: phone — номер из MAX, сюда же кандидат может положить username/ссылку.
+  applicationContact String?  @map("application_contact")
+  // Личный (dialog) чат пользователя с ботом. В отличие от chatId ("последний увиденный чат",
+  // может оказаться группой), проставляется только из bot_started — по документации MAX deep link
+  // и кнопка «Начать» всегда открывают приватный чат с ботом. Null — пользователь ещё не запускал
+  // бота лично, слать ему уведомления некуда (GET /api/me -> hasBotChat=false).
+  dialogChatId String?       @map("dialog_chat_id")
   createdAt    DateTime      @default(now()) @map("created_at")
 
   vacancies    Vacancy[]     @relation("EmployerVacancies")
@@ -52,6 +60,8 @@ model Vacancy {
 
   applications   Application[]
 
+  // Каталог работника (GET /api/jobs): фильтр по status + сортировка newest (createdAt DESC, id DESC).
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)])
   @@map("vacancies")
 }
 
@@ -70,6 +80,8 @@ model Application {
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@unique([vacancyId, candidateUserId])
+  // История кандидата (GET /api/me/applications): candidateUserId + createdAt DESC, id DESC.
+  @@index([candidateUserId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("applications")
 }
 

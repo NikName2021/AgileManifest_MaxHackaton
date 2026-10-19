@@ -86,7 +86,8 @@ export function Shell() {
             <Brand />
           </Link>
           <span className="header-product">
-            Подбор персонала<span>для сезонной и временной работы</span>
+            {cabinet === 'worker' ? 'Поиск работы' : 'Подбор персонала'}
+            <span>для сезонной и временной работы</span>
           </span>
           <div className="header-account">
             <Link

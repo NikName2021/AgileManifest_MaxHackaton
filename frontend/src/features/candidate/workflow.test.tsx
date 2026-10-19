@@ -136,7 +136,10 @@ describe('cabinet selection and candidate flows', () => {
       target: { value: '@candidate' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Проверить отклик' }))
+    const check = await screen.findByRole('button', { name: 'Проверить отклик' })
+    fireEvent.submit(screen.getByLabelText('Контакт для работодателя').closest('form')!)
+    expect(apply).toHaveBeenCalledOnce()
+    fireEvent.click(check)
     expect(await screen.findByRole('heading', { name: 'Вы откликнулись' })).toBeInTheDocument()
     expect(apply).toHaveBeenCalledOnce()
   })

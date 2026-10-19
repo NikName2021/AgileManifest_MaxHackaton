@@ -62,58 +62,68 @@ function SearchForm({
           />
         </div>
       </label>
-      <div className="job-filter-fields">
-        <label>
-          Регион
-          <select name="region_code" defaultValue={params.get('region_code') ?? ''}>
-            <option value="">Все регионы</option>
-            {options('regions', 'region_code')}
-          </select>
-        </label>
-        <label>
-          Сфера деятельности
-          <select name="category" defaultValue={params.get('category') ?? ''}>
-            <option value="">Все сферы</option>
-            {options('categories', 'category')}
-          </select>
-        </label>
-        <label>
-          Занятость
-          <select name="schedule" defaultValue={params.get('schedule') ?? ''}>
-            <option value="">Любая</option>
-            {Object.entries(scheduleLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Зарплата от, ₽
-          <input
-            name="salary_from"
-            inputMode="numeric"
-            defaultValue={params.get('salary_from') ?? ''}
-            placeholder="Не важно"
-          />
-        </label>
-        <label>
-          Зарплата до, ₽
-          <input
-            name="salary_to"
-            inputMode="numeric"
-            defaultValue={params.get('salary_to') ?? ''}
-            placeholder="Не важно"
-          />
-        </label>
-        <label>
-          Порядок
-          <select name="sort" defaultValue={params.get('sort') ?? 'newest'}>
-            <option value="newest">Сначала новые</option>
-            <option value="salary_desc">По убыванию зарплаты</option>
-          </select>
-        </label>
-      </div>
+      <details className="job-filter-details">
+        <summary>
+          Фильтры и сортировка
+          {['region_code', 'category', 'schedule', 'salary_from', 'salary_to'].some((key) =>
+            params.get(key),
+          )
+            ? ' · применены'
+            : ''}
+        </summary>
+        <div className="job-filter-fields">
+          <label>
+            Регион
+            <select name="region_code" defaultValue={params.get('region_code') ?? ''}>
+              <option value="">Все регионы</option>
+              {options('regions', 'region_code')}
+            </select>
+          </label>
+          <label>
+            Сфера деятельности
+            <select name="category" defaultValue={params.get('category') ?? ''}>
+              <option value="">Все сферы</option>
+              {options('categories', 'category')}
+            </select>
+          </label>
+          <label>
+            Занятость
+            <select name="schedule" defaultValue={params.get('schedule') ?? ''}>
+              <option value="">Любая</option>
+              {Object.entries(scheduleLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Зарплата от, ₽
+            <input
+              name="salary_from"
+              inputMode="numeric"
+              defaultValue={params.get('salary_from') ?? ''}
+              placeholder="Не важно"
+            />
+          </label>
+          <label>
+            Зарплата до, ₽
+            <input
+              name="salary_to"
+              inputMode="numeric"
+              defaultValue={params.get('salary_to') ?? ''}
+              placeholder="Не важно"
+            />
+          </label>
+          <label>
+            Порядок
+            <select name="sort" defaultValue={params.get('sort') ?? 'newest'}>
+              <option value="newest">Сначала новые</option>
+              <option value="salary_desc">По убыванию зарплаты</option>
+            </select>
+          </label>
+        </div>
+      </details>
       {error && (
         <p role="alert" className="candidate-field-error">
           {error}

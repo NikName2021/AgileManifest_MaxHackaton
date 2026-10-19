@@ -29,7 +29,7 @@ function ApplyForm({
   const [notice, setNotice] = useState(''),
     [uncertain, setUncertain] = useState(false)
   async function perform(check = false) {
-    if (lock.current) return
+    if (lock.current || (!check && (uncertain || !job.canApply))) return
     if (!check && (!contact.trim() || contact.trim().length > 200)) {
       setInvalid('Укажите контакт для связи: от 1 до 200 символов.')
       return

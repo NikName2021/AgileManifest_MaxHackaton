@@ -7,7 +7,6 @@ const options = [
   { value: 'dark', title: 'Тёмная', icon: Moon },
 ] as const
 export function SettingsPage() {
-  const { preference, setPreference } = useTheme()
   const { user, mode } = useSession()
   return (
     <>
@@ -18,34 +17,7 @@ export function SettingsPage() {
           <p>Оформление приложения и данные входа.</p>
         </div>
       </div>
-      <section className="settings-panel">
-        <h2>Оформление</h2>
-        <p>В режиме «Как на устройстве» тема меняется вместе с системными настройками.</p>
-        <fieldset className="theme-options">
-          <legend className="sr-only">Тема оформления</legend>
-          {options.map(({ value, title, icon: Icon }) => (
-            <label key={value} className={`theme-option ${preference === value ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="theme"
-                value={value}
-                checked={preference === value}
-                onChange={() => setPreference(value)}
-              />
-              <span className={`theme-preview ${value}`}>
-                <span />
-                <span />
-                <span />
-              </span>
-              <span className="theme-option-label">
-                <Icon size={17} />
-                {title}
-                {preference === value && <Check size={17} className="theme-check" />}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      </section>
+      <AppearanceSettings />
       <section className="settings-panel account-panel">
         <div>
           <h2>Рабочий профиль</h2>
@@ -67,5 +39,39 @@ export function SettingsPage() {
         </dl>
       </section>
     </>
+  )
+}
+
+export function AppearanceSettings() {
+  const { preference, setPreference } = useTheme()
+  return (
+    <section className="settings-panel">
+      <h2>Оформление</h2>
+      <p>В режиме «Как на устройстве» тема меняется вместе с системными настройками.</p>
+      <fieldset className="theme-options">
+        <legend className="sr-only">Тема оформления</legend>
+        {options.map(({ value, title, icon: Icon }) => (
+          <label key={value} className={`theme-option ${preference === value ? 'selected' : ''}`}>
+            <input
+              type="radio"
+              name="theme"
+              value={value}
+              checked={preference === value}
+              onChange={() => setPreference(value)}
+            />
+            <span className={`theme-preview ${value}`}>
+              <span />
+              <span />
+              <span />
+            </span>
+            <span className="theme-option-label">
+              <Icon size={17} />
+              {title}
+              {preference === value && <Check size={17} className="theme-check" />}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+    </section>
   )
 }

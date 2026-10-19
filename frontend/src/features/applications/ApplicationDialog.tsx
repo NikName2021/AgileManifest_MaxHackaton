@@ -1,3 +1,4 @@
+import { Select } from '../../shared/ui/Select'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useBeforeUnload, useBlocker } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
@@ -215,7 +216,8 @@ export function ApplicationDialog({
           </div>
         )}
         <label htmlFor={statusId}>Новый этап</label>
-        <select
+        <Select
+          label="Новый этап"
           id={statusId}
           value={target}
           disabled={busy || needsRefresh || confirming}
@@ -229,7 +231,7 @@ export function ApplicationDialog({
               {applicationLabels[status]}
             </option>
           ))}
-        </select>
+        </Select>
         <p className="application-status-hint">
           {mode === 'preview'
             ? 'В демо статус изменится только в памяти браузера.'

@@ -6,7 +6,8 @@ import { SessionContext } from '../session/context'
 import { SalaryBenchmark } from './SalaryBenchmark'
 import type { SalaryBenchmarkData } from './api'
 
-vi.mock('@maxhub/max-ui', () => ({
+vi.mock('@maxhub/max-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@maxhub/max-ui')>()),
   Button: ({
     variant,
     ...props

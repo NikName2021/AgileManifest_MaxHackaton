@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Button } from '@maxhub/max-ui'
+import { Button, Input } from '@maxhub/max-ui'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
@@ -129,7 +129,7 @@ function ApplyForm({
           >
             <label className="candidate-input">
               Контакт для работодателя
-              <input
+              <Input
                 value={contact}
                 disabled={busy}
                 maxLength={200}

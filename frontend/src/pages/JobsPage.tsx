@@ -1,6 +1,7 @@
+import { Select } from '../shared/ui/Select'
 import { useCallback, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Button } from '@maxhub/max-ui'
+import { Button, Input } from '@maxhub/max-ui'
 import { Search } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
@@ -53,7 +54,7 @@ function SearchForm({
         <span>Должность или слова из описания</span>
         <div>
           <Search size={18} aria-hidden="true" />
-          <input
+          <Input
             name="q"
             type="search"
             maxLength={200}
@@ -74,32 +75,40 @@ function SearchForm({
         <div className="job-filter-fields">
           <label>
             Регион
-            <select name="region_code" defaultValue={params.get('region_code') ?? ''}>
+            <Select
+              label="Регион"
+              name="region_code"
+              defaultValue={params.get('region_code') ?? ''}
+            >
               <option value="">Все регионы</option>
               {options('regions', 'region_code')}
-            </select>
+            </Select>
           </label>
           <label>
             Сфера деятельности
-            <select name="category" defaultValue={params.get('category') ?? ''}>
+            <Select
+              label="Сфера деятельности"
+              name="category"
+              defaultValue={params.get('category') ?? ''}
+            >
               <option value="">Все сферы</option>
               {options('categories', 'category')}
-            </select>
+            </Select>
           </label>
           <label>
             Занятость
-            <select name="schedule" defaultValue={params.get('schedule') ?? ''}>
+            <Select label="Занятость" name="schedule" defaultValue={params.get('schedule') ?? ''}>
               <option value="">Любая</option>
               {Object.entries(scheduleLabels).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             Зарплата от, ₽
-            <input
+            <Input
               name="salary_from"
               inputMode="numeric"
               defaultValue={params.get('salary_from') ?? ''}
@@ -108,7 +117,7 @@ function SearchForm({
           </label>
           <label>
             Зарплата до, ₽
-            <input
+            <Input
               name="salary_to"
               inputMode="numeric"
               defaultValue={params.get('salary_to') ?? ''}
@@ -117,10 +126,10 @@ function SearchForm({
           </label>
           <label>
             Порядок
-            <select name="sort" defaultValue={params.get('sort') ?? 'newest'}>
+            <Select label="Порядок" name="sort" defaultValue={params.get('sort') ?? 'newest'}>
               <option value="newest">Сначала новые</option>
               <option value="salary_desc">По убыванию зарплаты</option>
-            </select>
+            </Select>
           </label>
         </div>
       </details>

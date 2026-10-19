@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { Button } from '@maxhub/max-ui'
+import { Button, Input } from '@maxhub/max-ui'
 import { useSession } from '../features/session/context'
 import { useCabinet } from '../features/cabinet/context'
 import type { Profile } from '../features/candidate/api'
@@ -50,7 +50,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
       </p>
       <label className="candidate-input">
         Телефон или контакт в MAX
-        <input
+        <Input
           maxLength={200}
           value={contact}
           disabled={busy}
@@ -114,7 +114,7 @@ export function WorkerProfilePage() {
         <h2>Ищете сотрудников?</h2>
         <p>В кабинете работодателя можно создавать вакансии и управлять наймом.</p>
         <Button variant="secondary" onClick={switchCabinet}>
-          Сменить режим
+          Выйти
         </Button>
       </section>
     </>

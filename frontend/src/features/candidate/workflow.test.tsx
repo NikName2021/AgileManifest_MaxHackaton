@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, Outlet } from 'react-router-dom'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { SessionContext } from '../session/context'
@@ -18,14 +18,26 @@ vi.mock('@maxhub/max-ui', () => ({
     children,
     asChild,
     variant,
+    iconBefore,
+    iconAfter,
     ...props
   }: ButtonHTMLAttributes<HTMLButtonElement> & {
     asChild?: boolean
     variant?: string
+    iconBefore?: ReactNode
+    iconAfter?: ReactNode
     children: ReactNode
   }) => {
     void variant
-    return asChild ? children : <button {...props}>{children}</button>
+    return asChild ? (
+      children
+    ) : (
+      <button {...props}>
+        {iconBefore}
+        {children}
+        {iconAfter}
+      </button>
+    )
   },
 }))
 beforeEach(() => {
@@ -96,7 +108,7 @@ describe('cabinet selection and candidate flows', () => {
     expect(
       await screen.findByRole('heading', { name: 'Повар в загородный отель' }),
     ).toBeInTheDocument()
-    await router.navigate('/vacancies')
+    await act(() => router.navigate('/vacancies'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
     expect(screen.queryByText('Свои вакансии')).not.toBeInTheDocument()
   })
@@ -110,17 +122,25 @@ describe('cabinet selection and candidate flows', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить контакт' }))
     expect(await screen.findByText('Контакт сохранён.')).toBeInTheDocument()
-    await router.navigate('/jobs/1001')
+    await act(() => router.navigate('/jobs/1001'))
     expect(await screen.findByLabelText('Контакт для работодателя')).toHaveValue('@candidate')
     expect(apply).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
     expect(await screen.findByRole('heading', { name: 'Вы откликнулись' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Сменить режим' }))
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
+    expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: 'Сменить режим' }))
     worker()
-    await router.navigate('/my-applications')
-    expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Найдите свою работу' })).toBeInTheDocument()
+    await act(() => router.navigate('/my-applications'))
+    expect(await screen.findByRole('heading', { name: 'Мои отклики' })).toBeInTheDocument()
+    const application = await screen.findByRole('article')
+    expect(
+      within(application).getByRole('heading', { name: 'Помощник на сбор урожая' }),
+    ).toBeInTheDocument()
+    fireEvent.click(within(application).getByText('Условия и контакты'))
+    expect(within(application).getByText('@candidate')).toBeVisible()
     expect(apply).toHaveBeenCalledExactlyOnceWith(1001, '@candidate')
   })
   it('checks an ambiguous POST before enabling retry and never posts automatically', async () => {
@@ -186,7 +206,7 @@ describe('cabinet selection and candidate flows', () => {
     worker()
     expect(await screen.findByText(/Вакансия больше не доступна/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Отправить отклик' })).not.toBeInTheDocument()
-    await router.navigate('/my-applications')
+    await act(() => router.navigate('/my-applications'))
     expect(await screen.findByText(/Ваш отклик остаётся в истории/)).toBeInTheDocument()
   })
   it('applies server filters and resets offset on a new search', async () => {

@@ -8,20 +8,23 @@
     "build": "tsc -p tsconfig.json",
     "start": "cross-env NODE_EXTRA_CA_CERTS=./russian_ca_bundle.pem node dist/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init"
+    "prisma:migrate": "prisma migrate dev --name init",
+    "test": "vitest run",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",
     "@prisma/client": "^6.5.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.0.0",
-    "zod": "^3.23.8",
-    "prisma": "^6.5.0"
+    "prisma": "^6.5.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
     "cross-env": "^10.1.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^5.0.5"
   }
 }

@@ -1,3 +1,7 @@
+// MAX user_id начавшего диалог (в data сессии). Сессия хранится по chatId — в группе без этой
+// метки чужие ответы продвигали бы диалог, а вакансия записывалась бы не на того пользователя.
+export const OWNER_KEY = 'ownerMaxUserId';
+
 export interface ButtonOptions {
     text: string;
     value: string;

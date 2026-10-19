@@ -55,15 +55,15 @@ api:
       - "owner reads and edits draft: 200, updated fields"
       - "candidate reads employer vacancy: 403, error.code=forbidden"
       - "publish without employer chat: 409, error.code=employer_chat_missing; remains draft"
-      - "apply to draft: 409, error.code=conflict"
+      - "apply to draft: 409, error.code=vacancy_unavailable"
       - "edit published vacancy: 409, error.code=conflict"
       - "candidate applies to synthetic published vacancy: 201, id/status=new/notified=false"
-      - "duplicate application: 409, error.code=conflict"
+      - "duplicate application: 409, error.code=already_applied"
       - "owner lists applications: 200, candidate included; paginated list has items/total/limit/offset"
       - "candidate reads or changes employer funnel: 403, error.code=forbidden"
       - "owner invites candidate: 200, status=invited/notified=false/unchanged=false"
       - "repeat invitation: 200, unchanged=true/notified=false"
-      - "owner closes vacancy: 200, status=closed; apply/publish after close: 409"
+      - "owner closes vacancy: 200, status=closed; apply after close: 409 vacancy_unavailable; publish after close: 409 conflict"
 
   request_format:
     content_type: application/json
@@ -303,14 +303,16 @@ api:
           type: integer
         - name: contact
           in: body
-          required: false
+          required: true
           type: string
+          note: "trim, 1–200 символов: телефон, username или ссылка MAX"
       responses:
-        "201": "Application (with notified: boolean)"
-        "400": "validation error"
+        "201": "{ id, vacancyId, candidateUserId, status=new, contact, createdAt, updatedAt, notified } — notified: удалось ли уведомить работодателя"
+        "400": "validation_error (в т.ч. fields.contact — пустой/отсутствует/длиннее 200)"
         "401": "unauthorized"
-        "404": "vacancy not found"
-        "409": "vacancy not published, or duplicate application"
+        "403": "self_application_forbidden — отклик на собственную вакансию"
+        "404": "not_found — вакансии нет"
+        "409": "vacancy_unavailable (draft/closed) или already_applied (повтор, в т.ч. отклик через бота)"
 
     - method: PATCH
       path: /api/applications/{id}
@@ -333,6 +335,82 @@ api:
         "401": "unauthorized"
         "403": "not owner"
         "404": "not found"
+
+    # --- Кабинет работника (режим «работник» в мини-приложении; права — по владению, не по режиму) ---
+    - method: GET
+      path: /api/jobs
+      contract: "./openapi.yaml#/paths/~1api~1jobs/get"
+      role: candidate
+      auth: bearer
+      params:
+        - { name: q, in: query, required: false, type: string, note: "trim, до 200; ILIKE по title/description; пустая строка не фильтрует" }
+        - { name: region_code, in: query, required: false, type: string, note: "точное совпадение, до 100" }
+        - { name: category, in: query, required: false, type: string, note: "точное совпадение, до 100" }
+        - { name: schedule, in: query, required: false, type: string, enum: [seasonal, temporary, permanent] }
+        - { name: salary_from, in: query, required: false, type: integer, note: ">= 0, ₽; пересечение диапазонов" }
+        - { name: salary_to, in: query, required: false, type: integer, note: ">= 0, ₽; salary_from <= salary_to" }
+        - { name: sort, in: query, required: false, type: string, enum: [newest, salary_desc], default: newest }
+        - { name: limit, in: query, required: false, type: integer, note: "1–100, по умолчанию 20" }
+        - { name: offset, in: query, required: false, type: integer, note: ">= 0, по умолчанию 0" }
+      responses:
+        "200": "{ items: Job[], total, limit, offset } — только published и только чужие вакансии"
+        "400": "validation_error"
+        "401": "unauthorized"
+
+    - method: GET
+      path: /api/jobs/filters
+      contract: "./openapi.yaml#/paths/~1api~1jobs~1filters/get"
+      role: candidate
+      auth: bearer
+      responses:
+        "200": "{ regions: [{ value, label }], categories: [{ value, label }] } — label = value (справочника нет)"
+        "401": "unauthorized"
+
+    - method: GET
+      path: /api/jobs/{id}
+      contract: "./openapi.yaml#/paths/~1api~1jobs~1{id}/get"
+      role: candidate
+      auth: bearer
+      responses:
+        "200": "Job (своя опубликованная — canApply=false, applyUnavailableReason=own_vacancy)"
+        "400": "validation_error — id не положительное целое"
+        "401": "unauthorized"
+        "404": "not_found — черновик, закрыта или не существует"
+
+    - method: GET
+      path: /api/me/applications
+      contract: "./openapi.yaml#/paths/~1api~1me~1applications/get"
+      role: candidate
+      auth: bearer
+      params:
+        - { name: status, in: query, required: false, type: string, enum: [new, contacted, invited, hired, rejected] }
+        - { name: limit, in: query, required: false, type: integer, note: "1–100, по умолчанию 20" }
+        - { name: offset, in: query, required: false, type: integer, note: ">= 0, по умолчанию 0" }
+      responses:
+        "200": "{ items: MyApplication[], total, limit, offset } — только отклики текущей сессии, включая закрытые вакансии"
+        "400": "validation_error"
+        "401": "unauthorized"
+
+    - method: GET
+      path: /api/me
+      contract: "./openapi.yaml#/paths/~1api~1me/get"
+      role: any
+      auth: bearer
+      responses:
+        "200": "{ id, displayName, applicationContact, hasBotChat }"
+        "401": "unauthorized"
+
+    - method: PATCH
+      path: /api/me
+      contract: "./openapi.yaml#/paths/~1api~1me/patch"
+      role: any
+      auth: bearer
+      params:
+        - { name: application_contact, in: body, required: true, type: string, nullable: true, note: "trim, 1–200; null очищает; другие поля — 400" }
+      responses:
+        "200": "Profile"
+        "400": "validation_error"
+        "401": "unauthorized"
 
     - method: GET
       path: /api/benchmark
@@ -357,7 +435,7 @@ api:
     content_type: application/json
     error_shape:
       error:
-        code: "string, one of: unauthorized | forbidden | not_found | validation_error | conflict | upstream_error | service_unavailable | internal_error | employer_chat_missing | card_delivery_unknown"
+        code: "string, one of: unauthorized | forbidden | not_found | validation_error | conflict | upstream_error | service_unavailable | internal_error | employer_chat_missing | card_delivery_unknown | self_application_forbidden | vacancy_unavailable | already_applied"
         message: "human-readable string (English, for debugging/logs)"
         fields: "optional object, present only when code=validation_error and errors map to specific fields — { fieldName: [message, ...] }"
     note: >

@@ -13,6 +13,10 @@ model User {
   chatId       String        @map("chat_id")
   displayName  String?       @map("display_name")
   phone        String?
+  // Контакт для предзаполнения формы отклика; не путать с phone (номер из MAX).
+  applicationContact String?  @map("application_contact")
+  // Личный чат с ботом, только из bot_started. chatId — последний увиденный чат, может быть группой.
+  dialogChatId String?       @map("dialog_chat_id")
   createdAt    DateTime      @default(now()) @map("created_at")
 
   vacancies    Vacancy[]     @relation("EmployerVacancies")
@@ -32,26 +36,24 @@ model Vacancy {
   salaryMin      Int?          @map("salary_min")
   salaryMax      Int?          @map("salary_max")
   description    String?
-  // Отдельное поле контакта работодателя (раздел 3.3 хендоффа) — раньше контакт дописывался
-  // прямо в description произвольным текстом, и REST не мог принять/вернуть его отдельно.
+  // Контакт работодателя для откликнувшихся.
   contactInfo    String?       @map("contact_info")
   status         String        @default("draft") // draft | published | closed
   cardMessageId  String?       @map("card_message_id")
   createdAt      DateTime      @default(now()) @map("created_at")
   reminderSentAt DateTime?     @map("reminder_sent_at")
-  // Чат, где родилась вакансия (или где её опубликовали через REST) — застывает один раз,
-  // уведомления воронки идут именно сюда, а не в "текущий" chatId работодателя из users,
-  // который может перезаписаться, если работодатель потом напишет боту из группового чата.
+  // От него считается напоминание «нет откликов 48 часов».
+  publishedAt    DateTime?     @map("published_at")
+  // Застывший чат для карточки и уведомлений: users.chatId может смениться на групповой.
   employerChatId String?       @map("employer_chat_id")
 
-  // Атомарная метка "кто-то сейчас пытается (пере)доставить карточку в MAX" (publish.ts, claimCardRedelivery) —
-  // без этой метки два параллельных retry публикации одной и той же зависшей (без cardMessageId) вакансии оба могли пройти
-  // проверку "cardMessageId пуст" и оба отправить карточку в MAX (раздел 3 фидбека фронтенда). Null —
-  // никто сейчас не пытается или предыдущая попытка считается зависшей (>30с, STALE_DELIVERY_ATTEMPT_MS).
+  // Блокировка повторной доставки карточки (claimCardRedelivery в publish.ts), защищает от дубля.
   publishDeliveryAttemptAt DateTime? @map("publish_delivery_attempt_at")
 
   applications   Application[]
 
+  // GET /api/jobs
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)])
   @@map("vacancies")
 }
 
@@ -63,13 +65,14 @@ model Application {
   candidate       User     @relation("CandidateApplications", fields: [candidateUserId], references: [id])
   status          String   @default("new") // new | contacted | invited | hired | rejected
   contact         String?
-  // Чат, где кандидат реально прошёл отклик (открыт через deep link — гарантированно личный).
-  // Уведомления о смене статуса шлём сюда, а не в "текущий" chatId кандидата из users.
+  // Чат, где прошёл отклик: сюда уходят уведомления о смене статуса.
   candidateChatId String?  @map("candidate_chat_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@unique([vacancyId, candidateUserId])
+  // GET /api/me/applications
+  @@index([candidateUserId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("applications")
 }
 

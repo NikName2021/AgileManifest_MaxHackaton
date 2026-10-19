@@ -1,16 +1,9 @@
 import { escapeMarkdown } from '../markdown.js';
+import { getBotUsername } from '../max/botInfo.js';
 
-// Лимит документирован MAX (см. README/DATA-API) — 4000 символов на текст сообщения.
-// Раньше ограничивалось только поле description (zod, 4000 симв.) — но итоговая карточка
-// это title+region+schedule+salary+description+contact ПОСЛЕ экранирования markdown, и могла
-// превысить лимит даже при валидном description (раздел 4 фидбека фронтенда).
+// Лимит MAX на текст сообщения — считается по итоговому тексту после экранирования.
 export const MAX_CARD_TEXT_LIMIT = 4000;
 
-// Поля либо всегда заданы (title/regionCode/schedule), либо явно "число или ничего" /
-// "строка или ничего" (`| null`, без `?`) — вызывающая сторона обязана привести отсутствующее
-// значение к null сама (`data.salary_min ?? null`), а не оставлять его undefined. Раньше часть
-// полей была одновременно optional и nullable (`salaryMin?: number | null`), что дублировало
-// один и тот же смысл двумя разными способами без причины.
 export interface VacancyCardFields {
   title: string;
   regionCode: string;
@@ -21,9 +14,7 @@ export interface VacancyCardFields {
   contactInfo: string | null;
 }
 
-// Раньше здесь были truthy-проверки (`vacancy.salaryMin && vacancy.salaryMax`) — API разрешает
-// 0 как валидную сумму (zod: nonnegative), а `0` truthy-проверкой воспринимался как "нет суммы"
-// и карточка молча показывала "по договорённости" вместо реального нуля.
+// 0 — реальная сумма, поэтому сравнение с null, а не truthy-проверка.
 function formatSalary(min: number | null, max: number | null): string {
   const hasMin = min !== null;
   const hasMax = max !== null;
@@ -33,10 +24,28 @@ function formatSalary(min: number | null, max: number | null): string {
   return 'по договорённости';
 }
 
-// Общая сборка текста карточки — используется и для реальной отправки (publish.ts), и для
-// серверной проверки длины ДО сохранения/публикации (server.ts, dialog/vacancyFlow.ts), чтобы
-// оба места гарантированно считали один и тот же текст, включая экранирование markdown.
-export function buildVacancyCardText(vacancy: VacancyCardFields): string {
+// Неожиданное значение из GET /me или MAX_BOT_USERNAME не должно дать битый URL.
+const BOT_USERNAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+// Резерв под ссылку, пока ID вакансии или username неизвестны: максимальные длины.
+const RESERVED_USERNAME = 'x'.repeat(64);
+const RESERVED_VACANCY_ID = 2147483647;
+
+// Deep link отклика для текста карточки, link-кнопки и applyUrl в API. Формат —
+// dev.max.ru/help/deeplinks, payload apply_<id> разбирает webhook.ts. null — username неизвестен.
+export function buildApplyDeepLink(vacancyId: number, botUsername: string | undefined = getBotUsername()): string | null {
+  if (!botUsername || !BOT_USERNAME_RE.test(botUsername)) return null;
+  return `https://max.ru/${botUsername}?start=apply_${vacancyId}`;
+}
+
+function applyLinkBlock(applyUrl: string): string {
+  // MAX теряет inline-кнопки при пересылке, поэтому ссылка дублируется в тексте.
+  // Видимый текст экранируется (иначе "_" съест разметка), сам URL — нет.
+  return `Откликнуться:\n[${escapeMarkdown(applyUrl)}](${applyUrl})`;
+}
+
+// Одна сборка и для отправки, и для проверки длины — чтобы они не разошлись.
+export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: string | null = null): string {
   const salaryText = formatSalary(vacancy.salaryMin, vacancy.salaryMax);
 
   return [
@@ -46,9 +55,13 @@ export function buildVacancyCardText(vacancy: VacancyCardFields): string {
     `Зарплата: ${salaryText}`,
     vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
     vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
+    applyUrl ? applyLinkBlock(applyUrl) : undefined,
   ].filter(Boolean).join('\n');
 }
 
+// Для проверок до отправки — с худшим случаем ссылки, чтобы прошедшая валидацию карточка точно влезла.
 export function vacancyCardTextLength(vacancy: VacancyCardFields): number {
-  return buildVacancyCardText(vacancy).length;
+  const reservedUrl = buildApplyDeepLink(RESERVED_VACANCY_ID, getBotUsername() ?? RESERVED_USERNAME)
+    ?? buildApplyDeepLink(RESERVED_VACANCY_ID, RESERVED_USERNAME)!;
+  return buildVacancyCardText(vacancy, reservedUrl).length;
 }

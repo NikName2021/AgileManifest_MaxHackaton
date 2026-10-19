@@ -11,6 +11,7 @@ import { SessionContext, type Session } from './context'
 import { createVacancyRepository } from '../vacancies/api'
 import { createApplicationRepository } from '../applications/api'
 import { createBenchmarkRepository } from '../benchmark/api'
+import { createCandidateRepository } from '../candidate/api'
 
 type Issue =
   | 'outside'
@@ -24,10 +25,7 @@ type Issue =
 type State =
   { kind: 'loading' } | { kind: 'issue'; issue: Issue } | { kind: 'ready'; session: Session }
 const messages: Record<Issue, [string, string]> = {
-  outside: [
-    'Вход в кабинет работодателя',
-    'Откройте «Сезон» из бота в MAX, чтобы перейти в рабочее пространство работодателя.',
-  ],
+  outside: ['Вход в Сезон', 'Откройте «Сезон» из бота в MAX, чтобы найти работу или сотрудников.'],
   bridge: [
     'Не удалось подключиться к MAX',
     'Проверьте подключение к интернету и попробуйте ещё раз.',
@@ -95,6 +93,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
             vacancies,
             applications,
             benchmark: createBenchmarkRepository(config.apiBaseUrl),
+            candidate: createCandidateRepository(config.apiBaseUrl, credentials.token, expire),
             bridge,
             mode: 'max',
           },
@@ -132,7 +131,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           Сезонный найм.
           <br />В вашем мессенджере.
         </h2>
-        <p>Публикуйте вакансии, получайте контакты кандидатов и ведите подбор в одном кабинете.</p>
+        <p>Ищите работу, откликайтесь на вакансии или находите сотрудников для своего бизнеса.</p>
         <ul>
           <li>
             <span>01</span>Вакансии и условия работы

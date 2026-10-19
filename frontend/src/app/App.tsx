@@ -2,6 +2,12 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { Component, type ReactNode } from 'react'
 import { AppearanceProvider } from '../features/appearance/AppearanceProvider'
 import { SessionGate } from '../features/session/SessionGate'
+import { CabinetGate } from '../features/cabinet/CabinetGate'
+import { JobsPage } from '../pages/JobsPage'
+import { JobPage } from '../pages/JobPage'
+import { MyApplicationsPage } from '../pages/MyApplicationsPage'
+import { WorkerProfilePage } from '../pages/WorkerProfilePage'
+import '../features/candidate/candidate.css'
 import { Shell } from './Shell'
 import { OverviewPage } from '../pages/OverviewPage'
 import { ApplicationsPage } from '../pages/ApplicationsPage'
@@ -18,7 +24,9 @@ const router = createBrowserRouter([
   {
     element: (
       <SessionGate>
-        <Shell />
+        <CabinetGate>
+          <Shell />
+        </CabinetGate>
       </SessionGate>
     ),
     errorElement: (
@@ -29,6 +37,11 @@ const router = createBrowserRouter([
       </main>
     ),
     children: [
+      { path: 'choose', element: null },
+      { path: 'jobs', element: <JobsPage /> },
+      { path: 'jobs/:id', element: <JobPage /> },
+      { path: 'my-applications', element: <MyApplicationsPage /> },
+      { path: 'profile', element: <WorkerProfilePage /> },
       { index: true, element: <OverviewPage /> },
       { path: 'vacancies', element: <VacanciesPage /> },
       { path: 'vacancies/new', element: <VacancyFormPage /> },

@@ -1,0 +1,206 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider, Outlet } from 'react-router-dom'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { SessionContext } from '../session/context'
+import { ThemeContext } from '../appearance/context'
+import { CabinetGate } from '../cabinet/CabinetGate'
+import { useCabinet } from '../cabinet/context'
+import { createPreviewSession } from '../../mocks/session'
+import { JobsPage } from '../../pages/JobsPage'
+import { JobPage } from '../../pages/JobPage'
+import { MyApplicationsPage } from '../../pages/MyApplicationsPage'
+import { WorkerProfilePage } from '../../pages/WorkerProfilePage'
+import { ApiError } from '../../shared/api/client'
+
+vi.mock('@maxhub/max-ui', () => ({
+  Button: ({
+    children,
+    asChild,
+    variant,
+    ...props
+  }: ButtonHTMLAttributes<HTMLButtonElement> & {
+    asChild?: boolean
+    variant?: string
+    children: ReactNode
+  }) => {
+    void variant
+    return asChild ? children : <button {...props}>{children}</button>
+  },
+}))
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn())
+})
+function Frame() {
+  const { switchCabinet } = useCabinet()
+  return (
+    <>
+      <button onClick={switchCabinet}>Сменить режим</button>
+      <Outlet />
+    </>
+  )
+}
+function start(session = createPreviewSession(), path = '/') {
+  const router = createMemoryRouter(
+    [
+      {
+        element: (
+          <CabinetGate>
+            <Frame />
+          </CabinetGate>
+        ),
+        children: [
+          { path: '/', element: <h1>Обзор работодателя</h1> },
+          { path: '/vacancies', element: <h1>Свои вакансии</h1> },
+          { path: '/choose', element: null },
+          { path: '/jobs', element: <JobsPage /> },
+          { path: '/jobs/:id', element: <JobPage /> },
+          { path: '/my-applications', element: <MyApplicationsPage /> },
+          { path: '/profile', element: <WorkerProfilePage /> },
+        ],
+      },
+    ],
+    { initialEntries: [path] },
+  )
+  const rendered = render(
+    <SessionContext value={session}>
+      <ThemeContext value={{ preference: 'system', setPreference: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ThemeContext>
+    </SessionContext>,
+  )
+  return { router, ...rendered }
+}
+function worker() {
+  fireEvent.click(screen.getByRole('button', { name: /Зайти как работник/ }))
+}
+
+describe('cabinet selection and candidate flows', () => {
+  it('asks at every mount, defers candidate requests and keeps employer overview', async () => {
+    const session = createPreviewSession(),
+      jobs = vi.spyOn(session.candidate, 'jobs')
+    const first = start(session)
+    expect(jobs).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
+    expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить режим' }))
+    worker()
+    expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
+    first.unmount()
+    start(session)
+    expect(screen.getByRole('heading', { name: 'Как вы хотите зайти?' })).toBeInTheDocument()
+  })
+  it('guards employer routes in worker mode and preserves a worker deep link after choosing', async () => {
+    const { router } = start(undefined, '/jobs/1002')
+    worker()
+    expect(
+      await screen.findByRole('heading', { name: 'Повар в загородный отель' }),
+    ).toBeInTheDocument()
+    await router.navigate('/vacancies')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
+    expect(screen.queryByText('Свои вакансии')).not.toBeInTheDocument()
+  })
+  it('saves profile contact, requires confirmation and keeps the application across cabinet switches', async () => {
+    const session = createPreviewSession(),
+      apply = vi.spyOn(session.candidate, 'apply')
+    const { router } = start(session, '/profile')
+    worker()
+    fireEvent.change(await screen.findByLabelText('Телефон или контакт в MAX'), {
+      target: { value: '@candidate' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить контакт' }))
+    expect(await screen.findByText('Контакт сохранён.')).toBeInTheDocument()
+    await router.navigate('/jobs/1001')
+    expect(await screen.findByLabelText('Контакт для работодателя')).toHaveValue('@candidate')
+    expect(apply).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
+    expect(await screen.findByRole('heading', { name: 'Вы откликнулись' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Сменить режим' }))
+    fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Сменить режим' }))
+    worker()
+    await router.navigate('/my-applications')
+    expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
+    expect(apply).toHaveBeenCalledExactlyOnceWith(1001, '@candidate')
+  })
+  it('checks an ambiguous POST before enabling retry and never posts automatically', async () => {
+    const session = createPreviewSession(),
+      original = session.candidate.apply
+    const apply = vi.spyOn(session.candidate, 'apply').mockImplementation(async (id, contact) => {
+      await original(id, contact)
+      throw new ApiError('network')
+    })
+    start(session, '/jobs/1001')
+    worker()
+    fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
+      target: { value: '@candidate' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
+    const check = await screen.findByRole('button', { name: 'Проверить отклик' })
+    fireEvent.submit(screen.getByLabelText('Контакт для работодателя').closest('form')!)
+    expect(apply).toHaveBeenCalledOnce()
+    fireEvent.click(check)
+    expect(await screen.findByRole('heading', { name: 'Вы откликнулись' })).toBeInTheDocument()
+    expect(apply).toHaveBeenCalledOnce()
+  })
+  it('preserves saved success when notification fails', async () => {
+    const session = createPreviewSession()
+    session.mode = 'max'
+    start(session, '/jobs/1001')
+    worker()
+    fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
+      target: { value: '@candidate' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
+    expect(await screen.findByText(/Отклик сохранён и доступен работодателю/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отправить отклик' })).not.toBeInTheDocument()
+  })
+  it('validates empty contact and blocks own-vacancy applications', async () => {
+    const session = createPreviewSession(),
+      apply = vi.spyOn(session.candidate, 'apply')
+    const first = start(session, '/jobs/1001')
+    worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Отправить отклик' }))
+    expect(screen.getByText(/Укажите контакт для связи/)).toBeInTheDocument()
+    expect(apply).not.toHaveBeenCalled()
+    first.unmount()
+    const job = await session.candidate.job(1001)
+    vi.spyOn(session.candidate, 'job').mockResolvedValue({
+      ...job,
+      canApply: false,
+      applyUnavailableReason: 'own_vacancy',
+    })
+    start(session, '/jobs/1001')
+    worker()
+    expect(await screen.findByText(/Это ваша вакансия/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отправить отклик' })).not.toBeInTheDocument()
+  })
+  it('shows no apply form for a closed vacancy and retains closed history', async () => {
+    const session = createPreviewSession()
+    await session.candidate.apply(1001, '@candidate')
+    const history = await session.candidate.applications({ limit: 20, offset: 0 })
+    history.items[0].vacancy.status = 'closed'
+    vi.spyOn(session.candidate, 'applications').mockResolvedValue(history)
+    vi.spyOn(session.candidate, 'job').mockRejectedValue(new ApiError('server', 404, 'not_found'))
+    const { router } = start(session, '/jobs/1001')
+    worker()
+    expect(await screen.findByText(/Вакансия больше не доступна/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отправить отклик' })).not.toBeInTheDocument()
+    await router.navigate('/my-applications')
+    expect(await screen.findByText(/Ваш отклик остаётся в истории/)).toBeInTheDocument()
+  })
+  it('applies server filters and resets offset on a new search', async () => {
+    const session = createPreviewSession(),
+      jobs = vi.spyOn(session.candidate, 'jobs')
+    const { router } = start(session, '/jobs?offset=20')
+    worker()
+    fireEvent.change(await screen.findByLabelText('Должность или слова из описания'), {
+      target: { value: 'повар' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Найти вакансии' }))
+    expect(await screen.findByText('Повар в загородный отель')).toBeInTheDocument()
+    expect(screen.queryByText('Помощник на сбор урожая')).not.toBeInTheDocument()
+    expect(jobs.mock.calls.at(-1)?.[0]).toMatchObject({ q: 'повар', offset: 0 })
+    expect(router.state.location.search).not.toContain('offset')
+  })
+})

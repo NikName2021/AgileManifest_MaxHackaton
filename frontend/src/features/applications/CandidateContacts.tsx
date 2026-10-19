@@ -6,7 +6,7 @@ import { useSession } from '../session/context'
 import { candidateContact } from './model'
 import { contactLink } from './contactActions'
 
-function Contact({ value, profile = false }: { value: string; profile?: boolean }) {
+export function Contact({ value, profile = false }: { value: string; profile?: boolean }) {
   const { bridge } = useSession()
   const [message, setMessage] = useState('')
   const [copying, setCopying] = useState(false)

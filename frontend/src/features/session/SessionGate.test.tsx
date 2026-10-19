@@ -130,7 +130,7 @@ describe('launch and authorization states', () => {
         <Content />
       </SessionGate>,
     )
-    await screen.findByText('Вход в кабинет работодателя')
+    await screen.findByText('Вход в Сезон')
     expect(screen.queryByRole('button', { name: 'Открыть демо' })).not.toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalled()
   })

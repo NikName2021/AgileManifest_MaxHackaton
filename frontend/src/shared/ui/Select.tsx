@@ -1,3 +1,4 @@
+import { Input } from './Input'
 import {
   Children,
   Fragment,
@@ -9,7 +10,7 @@ import {
   type ReactNode,
   type SelectHTMLAttributes,
 } from 'react'
-import { Button, Input, Radio } from '@maxhub/max-ui'
+import { Button, Radio } from '@maxhub/max-ui'
 import { ChevronDown, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
@@ -192,6 +193,9 @@ export function Select({
                     value={option.value}
                     checked={current === option.value}
                     disabled={option.disabled}
+                    onClick={() => {
+                      if (current === option.value) close()
+                    }}
                     onChange={() => select(option.value)}
                   />
                   <span>{option.label}</span>

@@ -1,5 +1,6 @@
+import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
-import { Button, Input } from '@maxhub/max-ui'
+import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, BriefcaseBusiness, MapPin, Plus, RefreshCw, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
@@ -68,16 +69,19 @@ export function VacanciesPage() {
         </Button>
       </div>
       <div className="vacancy-toolbar">
-        <label className="vacancy-search">
+        <div className="vacancy-search">
           <Search size={18} />
-          <span className="sr-only">Поиск вакансий</span>
+          <label className="sr-only" htmlFor="vacancy-search">
+            Поиск вакансий
+          </label>
           <Input
+            id="vacancy-search"
             type="search"
             placeholder="Должность, город или сфера"
             value={query}
             onChange={(e) => filter('q', e.target.value)}
           />
-        </label>
+        </div>
         <Button variant="secondary" onClick={reload} disabled={result.state === 'loading'}>
           <RefreshCw size={16} />
           Обновить

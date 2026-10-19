@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight, BriefcaseBusiness, Search } from 'lucide-react'
 import { CabinetContext, type Cabinet } from './context'
@@ -19,9 +19,12 @@ export function CabinetGate({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const { bridge, mode, user } = useSession()
   const choosing = !cabinet || pathname === '/choose'
+  const choice = useRef<HTMLElement>(null)
   useEffect(() => {
     if (choosing) {
       document.title = 'Выбор кабинета · Сезон'
+      choice.current?.focus({ preventScroll: true })
+      window.scrollTo({ top: 0, behavior: 'instant' })
       return bindBackButton(bridge, false, () => {})
     }
   }, [choosing, bridge])
@@ -34,7 +37,7 @@ export function CabinetGate({ children }: { children: ReactNode }) {
   }
   if (choosing)
     return (
-      <main className="cabinet-choice">
+      <main className="cabinet-choice" ref={choice} tabIndex={-1}>
         <aside className="cabinet-intro">
           <Brand />
           <h2>

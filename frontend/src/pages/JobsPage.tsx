@@ -1,7 +1,8 @@
+import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
 import { useCallback, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Button, Input } from '@maxhub/max-ui'
+import { Button } from '@maxhub/max-ui'
 import { Search } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
@@ -50,11 +51,12 @@ function SearchForm({
   }
   return (
     <form className="job-search-form" onSubmit={submit}>
-      <label className="job-search-main">
-        <span>Должность или слова из описания</span>
+      <div className="job-search-main candidate-input">
+        <label htmlFor="job-search">Должность или слова из описания</label>
         <div>
           <Search size={18} aria-hidden="true" />
           <Input
+            id="job-search"
             name="q"
             type="search"
             maxLength={200}
@@ -62,7 +64,7 @@ function SearchForm({
             placeholder="Например, повар или сборщик урожая"
           />
         </div>
-      </label>
+      </div>
       <details className="job-filter-details">
         <summary>
           Фильтры и сортировка
@@ -106,24 +108,26 @@ function SearchForm({
               ))}
             </Select>
           </label>
-          <label>
-            Зарплата от, ₽
+          <div className="candidate-input">
+            <label htmlFor="salary_from">Зарплата от, ₽</label>
             <Input
+              id="salary_from"
               name="salary_from"
               inputMode="numeric"
               defaultValue={params.get('salary_from') ?? ''}
               placeholder="Не важно"
             />
-          </label>
-          <label>
-            Зарплата до, ₽
+          </div>
+          <div className="candidate-input">
+            <label htmlFor="salary_to">Зарплата до, ₽</label>
             <Input
+              id="salary_to"
               name="salary_to"
               inputMode="numeric"
               defaultValue={params.get('salary_to') ?? ''}
               placeholder="Не важно"
             />
-          </label>
+          </div>
           <label>
             Порядок
             <Select label="Порядок" name="sort" defaultValue={params.get('sort') ?? 'newest'}>

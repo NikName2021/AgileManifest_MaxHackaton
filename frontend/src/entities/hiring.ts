@@ -9,6 +9,7 @@ export interface User {
 export interface Vacancy {
   headcount?: number | null
   studentFriendly?: boolean
+  applyUrl?: string | null
   id: number
   title: string
   regionCode: string

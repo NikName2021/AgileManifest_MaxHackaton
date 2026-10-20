@@ -32,6 +32,16 @@ function nullableString(value: unknown): value is string | null {
 function salary(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
 }
+function applyUrl(value: unknown): string | null | undefined {
+  if (value == null) return value as null | undefined
+  if (typeof value !== 'string') throw new ApiError('contract')
+  try {
+    const url = new URL(value)
+    if (!['https://max.ru', 'https://web.max.ru'].includes(url.origin) || url.username || url.password)
+      throw new Error()
+    return url.href
+  } catch { throw new ApiError('contract') }
+}
 export function parseVacancy(value: unknown): Vacancy {
   if (!value || typeof value !== 'object') throw new ApiError('contract')
   const v = value as Record<string, unknown>
@@ -79,6 +89,7 @@ export function parseVacancy(value: unknown): Vacancy {
     cardMessageId: v.cardMessageId,
     createdAt: v.createdAt,
     studentFriendly: v.studentFriendly as boolean | undefined,
+    applyUrl: applyUrl(v.applyUrl),
   }
 }
 

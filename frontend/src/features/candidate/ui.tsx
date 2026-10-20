@@ -4,6 +4,7 @@ import { config } from '../../shared/config'
 import { formatSalary, scheduleLabels } from '../vacancies/model'
 import type { PublicVacancy } from './api'
 import { EmployerBadge } from '../trust/EmployerTrust'
+import { Capacity } from '../capacity/Capacity'
 
 function candidateError(error: unknown) {
   if (!(error instanceof ApiError)) return 'Не удалось загрузить данные. Попробуйте ещё раз.'
@@ -106,6 +107,7 @@ export function JobFacts({ job }: { job: PublicVacancy }) {
       </div>
       <p>Работодатель: {job.employer.displayName?.trim() || 'Имя не указано'}</p>
       <EmployerBadge confirmedHires={job.employer.confirmedHires} />
+      <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
     </>
   )
 }

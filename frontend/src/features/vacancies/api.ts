@@ -4,6 +4,7 @@ import { authUrl } from '../session/auth'
 import { fetchPoster } from '../poster/api'
 
 export interface VacancyInput {
+  headcount?: number | null
   title: string
   region_code: string
   category: string
@@ -34,6 +35,15 @@ export function parseVacancy(value: unknown): Vacancy {
   if (!value || typeof value !== 'object') throw new ApiError('contract')
   const v = value as Record<string, unknown>
   if (
+    v.headcount !== undefined &&
+    v.headcount !== null &&
+    (typeof v.headcount !== 'number' ||
+      !Number.isInteger(v.headcount) ||
+      v.headcount < 1 ||
+      v.headcount > 1000)
+  )
+    throw new ApiError('contract')
+  if (
     typeof v.id !== 'number' ||
     !Number.isSafeInteger(v.id) ||
     v.id <= 0 ||
@@ -53,6 +63,7 @@ export function parseVacancy(value: unknown): Vacancy {
   )
     throw new ApiError('contract')
   return {
+    ...(v.headcount !== undefined ? { headcount: v.headcount as number | null } : {}),
     id: v.id,
     title: v.title,
     regionCode: v.regionCode,

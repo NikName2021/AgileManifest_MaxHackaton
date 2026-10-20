@@ -13,6 +13,7 @@ export const scheduleLabels: Record<Vacancy['schedule'], string> = {
   permanent: 'Постоянная работа',
 }
 export const fieldLabels = {
+  headcount: 'Сколько человек нужно',
   title: 'Название вакансии',
   region_code: 'Город или регион',
   category: 'Сфера деятельности',
@@ -24,8 +25,9 @@ export const fieldLabels = {
 }
 export type VacancyForm = Omit<
   VacancyInput,
-  'salary_min' | 'salary_max' | 'description' | 'contact_info'
+  'salary_min' | 'salary_max' | 'description' | 'contact_info' | 'headcount'
 > & {
+  headcount: string
   salary_min: string
   salary_max: string
   description: string
@@ -34,6 +36,7 @@ export type VacancyForm = Omit<
 export type FieldErrors = Partial<Record<keyof VacancyForm, string>>
 export function formValues(v?: Vacancy): VacancyForm {
   return {
+    headcount: v?.headcount?.toString() ?? '',
     title: v?.title ?? '',
     region_code: v?.regionCode ?? '',
     category: v?.category ?? '',
@@ -46,6 +49,15 @@ export function formValues(v?: Vacancy): VacancyForm {
 }
 export function validateForm(form: VacancyForm): { input: VacancyInput; errors: FieldErrors } {
   const errors: FieldErrors = {}
+  const headcount = form.headcount.trim() ? Number(form.headcount) : null
+  if (
+    headcount !== null &&
+    (!/^\d+$/.test(form.headcount.trim()) ||
+      !Number.isInteger(headcount) ||
+      headcount < 1 ||
+      headcount > 1000)
+  )
+    errors.headcount = 'Введите целое число от 1 до 1000 или оставьте поле пустым.'
   for (const [key, limit] of Object.entries({
     title: 200,
     region_code: 100,
@@ -75,6 +87,7 @@ export function validateForm(form: VacancyForm): { input: VacancyInput; errors: 
   return {
     errors,
     input: {
+      headcount,
       title: form.title.trim(),
       region_code: form.region_code.trim(),
       category: form.category.trim() || 'general',
@@ -111,6 +124,7 @@ export function cardTextLength(v: Vacancy): number {
     `Регион: ${escape(v.regionCode)}`,
     `График: ${escape(v.schedule)}`,
     `Зарплата: ${salary}`,
+    v.headcount ? `Нужно человек: ${v.headcount}` : undefined,
     v.description ? escape(v.description) : undefined,
     v.contactInfo ? `Контакт: ${escape(v.contactInfo)}` : undefined,
   ]

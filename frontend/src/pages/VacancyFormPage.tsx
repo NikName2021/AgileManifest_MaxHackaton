@@ -263,6 +263,11 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
               <h2>
                 <span>02</span>Условия работы
               </h2>
+              {field('headcount', {
+                numeric: true,
+                placeholder: 'Например, 15',
+                hint: 'От 1 до 1000. Когда нужное число людей нанято, сервис закроет вакансию. Пустое поле — без лимита.',
+              })}
               <div className="form-grid">
                 {field('salary_min', {
                   numeric: true,

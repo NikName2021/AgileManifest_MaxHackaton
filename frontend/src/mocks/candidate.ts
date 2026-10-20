@@ -24,6 +24,8 @@ export function createPreviewCandidate(): CandidateRepository {
       status: 'published',
       createdAt: '2026-10-19T08:00:00Z',
       employer: { displayName: 'Демо: фермерское хозяйство', confirmedHires: 5 },
+      headcount: 15,
+      spotsLeft: 3,
       myApplication: null,
       canApply: true,
       applyUnavailableReason: null,

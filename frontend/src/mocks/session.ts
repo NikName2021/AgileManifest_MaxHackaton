@@ -5,6 +5,7 @@ import { ApiError } from '../shared/api/client'
 import { createPreviewApplications } from './applications'
 import { createPreviewCandidate } from './candidate'
 import { createPreviewTeam } from './team'
+import { createPreviewSubscriptions } from './subscriptions'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -69,6 +70,7 @@ export function createPreviewSession(): Session {
     user: { id: 1, display_name: 'Демо-кабинет' },
     vacancies,
     candidate: createPreviewCandidate(),
+    subscriptions: createPreviewSubscriptions(),
     benchmark: {
       async get(_query, signal) {
         signal?.throwIfAborted()

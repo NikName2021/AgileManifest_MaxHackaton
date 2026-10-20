@@ -6,9 +6,11 @@ import type { ApplicationRepository } from '../applications/api'
 import type { BenchmarkRepository } from '../benchmark/api'
 import type { CandidateRepository } from '../candidate/api'
 import type { TeamRepository } from '../team/api'
+import type { SubscriptionRepository } from '../subscriptions/api'
 
 export interface Session {
   team?: TeamRepository
+  subscriptions?: SubscriptionRepository
   user: User
   mode: 'preview' | 'max'
   bridge?: MaxBridge

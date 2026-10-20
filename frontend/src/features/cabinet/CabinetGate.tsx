@@ -9,7 +9,7 @@ import { Button } from '@maxhub/max-ui'
 import { MaxLogo } from '../../shared/ui/MaxLogo'
 
 function isWorkerPath(path: string) {
-  return /^\/(jobs|my-applications|profile)(\/|$)/.test(path)
+  return /^\/(jobs|my-applications|profile|subscriptions)(\/|$)/.test(path)
 }
 
 export function CabinetGate({ children }: { children: ReactNode }) {

@@ -59,6 +59,7 @@ export async function requestJson(url: string, options: RequestInit = {}): Promi
       details.fields && typeof details.fields === 'object' ? Object.keys(details.fields) : [],
     )
   }
+  if (response.status === 204) return null
   try {
     return await response.json()
   } catch {

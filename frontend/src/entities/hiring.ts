@@ -6,6 +6,7 @@ export interface User {
   display_name: string
 }
 export interface Vacancy {
+  studentFriendly?: boolean
   id: number
   title: string
   regionCode: string

@@ -305,6 +305,7 @@ describe('employer vacancy workflow', () => {
       await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
       expect(create).toHaveBeenCalledOnce()
       expect(create.mock.calls[0][0]).toEqual({
+        student_friendly: false,
         title: 'Повар на новый сезон',
         region_code: 'Тула',
         category: 'Общепит',

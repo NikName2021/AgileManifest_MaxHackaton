@@ -4,6 +4,7 @@ import type { VacancyInput, VacancyRepository } from '../features/vacancies/api'
 import { ApiError } from '../shared/api/client'
 import { createPreviewApplications } from './applications'
 import { createPreviewCandidate } from './candidate'
+import { createPreviewPartners } from './partners'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -24,6 +25,7 @@ export function createPreviewSession(): Session {
       salaryMax: input.salary_max,
       description: input.description,
       contactInfo: input.contact_info,
+      studentFriendly: input.student_friendly ?? false,
     }
   }
   function save(row: Vacancy) {
@@ -65,6 +67,7 @@ export function createPreviewSession(): Session {
     user: { id: 1, display_name: 'Демо-кабинет' },
     vacancies,
     candidate: createPreviewCandidate(),
+    partners: createPreviewPartners(),
     benchmark: {
       async get(_query, signal) {
         signal?.throwIfAborted()

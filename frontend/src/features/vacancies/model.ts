@@ -13,6 +13,7 @@ export const scheduleLabels: Record<Vacancy['schedule'], string> = {
   permanent: 'Постоянная работа',
 }
 export const fieldLabels = {
+  student_friendly: 'Подходит студентам',
   title: 'Название вакансии',
   region_code: 'Город или регион',
   category: 'Сфера деятельности',
@@ -24,8 +25,9 @@ export const fieldLabels = {
 }
 export type VacancyForm = Omit<
   VacancyInput,
-  'salary_min' | 'salary_max' | 'description' | 'contact_info'
+  'salary_min' | 'salary_max' | 'description' | 'contact_info' | 'student_friendly'
 > & {
+  student_friendly: string
   salary_min: string
   salary_max: string
   description: string
@@ -34,6 +36,7 @@ export type VacancyForm = Omit<
 export type FieldErrors = Partial<Record<keyof VacancyForm, string>>
 export function formValues(v?: Vacancy): VacancyForm {
   return {
+    student_friendly: v?.studentFriendly ? 'yes' : '',
     title: v?.title ?? '',
     region_code: v?.regionCode ?? '',
     category: v?.category ?? '',
@@ -75,6 +78,7 @@ export function validateForm(form: VacancyForm): { input: VacancyInput; errors: 
   return {
     errors,
     input: {
+      student_friendly: form.student_friendly === 'yes',
       title: form.title.trim(),
       region_code: form.region_code.trim(),
       category: form.category.trim() || 'general',

@@ -71,6 +71,8 @@ function SearchForm({
         </div>
       </div>
       <div className="catalog-filters">
+        <label className="student-check"><input type="checkbox" name="student_friendly" value="true"
+          defaultChecked={params.get('student_friendly') === 'true'} />Для студентов</label>
         <Select label="Регион" name="region_code" defaultValue={params.get('region_code') ?? ''}>
           <option value="">Все регионы</option>
           {options('regions', 'region_code')}
@@ -242,6 +244,7 @@ export function JobsPage() {
                         {job.myApplication && (
                           <span className="candidate-applied">Вы уже откликнулись</span>
                         )}
+                        {job.studentFriendly && <span className="student-badge">Подходит студентам</span>}
                         <div className="job-card-footer">
                           <small>
                             Опубликована {new Date(job.createdAt).toLocaleDateString('ru-RU')}

@@ -10,6 +10,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  GraduationCap,
 } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { bindBackButton } from '../shared/max/bridge'
@@ -40,8 +41,9 @@ export function Shell() {
     preference === 'dark' ||
     (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   const worker = cabinet === 'worker'
-  const home = worker ? '/jobs' : '/'
-  const navigation = worker
+  const partner = cabinet === 'partner'
+  const home = partner ? '/channels' : worker ? '/jobs' : '/'
+  const navigation = partner ? [{ to: '/channels', label: 'Каналы', icon: GraduationCap }] : worker
     ? [
         { to: '/jobs', label: 'Вакансии', icon: BriefcaseBusiness },
         { to: '/my-applications', label: 'Мои отклики', icon: UsersRound },
@@ -65,7 +67,7 @@ export function Shell() {
       : inVacancy
         ? '/vacancies'
         : home
-  const title = worker
+  const title = partner ? 'Каналы партнёра' : worker
     ? inJob
       ? applying
         ? 'Отклик на вакансию'
@@ -91,7 +93,7 @@ export function Shell() {
     })
   }, [bridge, navigate, pathname, title, backTo, home, catalogSearch])
   return (
-    <div className={`app-shell ${worker ? 'worker-shell' : ''}`}>
+    <div className={`app-shell ${partner ? 'partner-shell' : worker ? 'worker-shell' : ''}`}>
       <a href="#main-content" className="skip-link">
         Перейти к содержимому
       </a>
@@ -113,9 +115,9 @@ export function Shell() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <Link className="sidebar-help" to={worker ? '/profile' : '/guide'}>
+          <Link className="sidebar-help" to={partner ? '/channels' : worker ? '/profile' : '/guide'}>
             <CircleHelp size={18} aria-hidden="true" />
-            {worker ? 'Мой профиль' : 'Как работает Сезон'}
+            {partner ? 'Подключение каналов' : worker ? 'Мой профиль' : 'Как работает Сезон'}
           </Link>
           <Button
             variant="secondary"
@@ -136,7 +138,7 @@ export function Shell() {
               <Brand />
             </Link>
             <span className="header-product">
-              {worker ? 'Найдите работу на свой сезон' : 'Ваше пространство найма'}
+              {partner ? 'Работа для ваших студентов' : worker ? 'Найдите работу на свой сезон' : 'Ваше пространство найма'}
             </span>
             <div className="header-account">
               <Button
@@ -151,7 +153,7 @@ export function Shell() {
                   <Moon size={20} aria-hidden="true" />
                 )}
               </Button>
-              <span className="header-role">{worker ? 'Работник' : 'Работодатель'}</span>
+              <span className="header-role">{partner ? 'Партнёр' : worker ? 'Работник' : 'Работодатель'}</span>
               <Button
                 variant="secondary"
                 className="mobile-exit"
@@ -186,7 +188,7 @@ export function Shell() {
           <Outlet />
         </main>
         <footer className="content-footer">
-          <span>Сезон · Кабинет {worker ? 'работника' : 'работодателя'}</span>
+          <span>Сезон · Кабинет {partner ? 'партнёра' : worker ? 'работника' : 'работодателя'}</span>
           <span>Мини-приложение для MAX</span>
         </footer>
       </div>

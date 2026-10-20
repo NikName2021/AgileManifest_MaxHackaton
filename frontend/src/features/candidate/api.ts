@@ -21,6 +21,7 @@ export interface PublicVacancy extends Pick<
   | 'description'
   | 'status'
 > {
+  studentFriendly?: boolean
   employer: { displayName: string | null }
 }
 export interface Job extends PublicVacancy {
@@ -47,6 +48,7 @@ export interface Page<T> {
   offset: number
 }
 export interface JobQuery {
+  student_friendly?: boolean
   q?: string
   region_code?: string
   category?: string
@@ -114,6 +116,7 @@ function ref(body: unknown): ApplicationRef {
 }
 function vacancy(body: unknown): PublicVacancy {
   const v = record(body)
+  if (v.studentFriendly !== undefined && typeof v.studentFriendly !== 'boolean') return fail()
   if (
     !['seasonal', 'temporary', 'permanent'].includes(str(v.schedule)) ||
     !['draft', 'published', 'closed'].includes(str(v.status)) ||
@@ -134,6 +137,7 @@ function vacancy(body: unknown): PublicVacancy {
     description: nullable(v.description),
     status: v.status as Vacancy['status'],
     employer: { displayName: nullable(record(v.employer).displayName) },
+    studentFriendly: v.studentFriendly as boolean | undefined,
   }
 }
 export function parseJob(body: unknown): Job {

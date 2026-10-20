@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, BriefcaseBusiness, Search } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Search, GraduationCap } from 'lucide-react'
 import { CabinetContext, type Cabinet } from './context'
 import { Brand } from '../../shared/ui/Brand'
 import { useSession } from '../session/context'
@@ -10,6 +10,12 @@ import { MaxLogo } from '../../shared/ui/MaxLogo'
 
 function isWorkerPath(path: string) {
   return /^\/(jobs|my-applications|profile)(\/|$)/.test(path)
+}
+function cabinetForPath(path: string): Cabinet {
+  return /^\/channels(\/|$)/.test(path) ? 'partner' : isWorkerPath(path) ? 'worker' : 'employer'
+}
+function home(value: Cabinet) {
+  return value === 'partner' ? '/channels' : value === 'worker' ? '/jobs' : '/'
 }
 
 export function CabinetGate({ children }: { children: ReactNode }) {
@@ -30,8 +36,8 @@ export function CabinetGate({ children }: { children: ReactNode }) {
   }, [choosing, bridge])
   function choose(value: Cabinet) {
     setCabinet(value)
-    const matches = isWorkerPath(pathname) === (value === 'worker') && pathname !== '/choose'
-    void navigate(matches ? pathname + search : value === 'worker' ? '/jobs' : '/', {
+    const matches = cabinetForPath(pathname) === value && pathname !== '/choose'
+    void navigate(matches ? pathname + search : home(value), {
       replace: true,
     })
   }
@@ -53,7 +59,7 @@ export function CabinetGate({ children }: { children: ReactNode }) {
             <Brand />
           </div>
           <div className="cabinet-choice-heading">
-            <span className="eyebrow">ОДИН АККАУНТ. ДВА КАБИНЕТА.</span>
+            <span className="eyebrow">ОДИН АККАУНТ. ВАШИ ВОЗМОЖНОСТИ.</span>
             <h1>С чего начнём?</h1>
             <p>Выберите, что хотите сделать. Вернуться к выбору можно через «Выйти».</p>
           </div>
@@ -74,6 +80,14 @@ export function CabinetGate({ children }: { children: ReactNode }) {
                 <ArrowRight aria-hidden="true" />
               </button>
             </Button>
+            <Button asChild>
+              <button className="cabinet-option" onClick={() => choose('partner')}>
+                <GraduationCap size={30} aria-hidden="true" />
+                <strong>Зайти как партнёр</strong>
+                <span>Каналы вуза и студотряда</span>
+                <ArrowRight aria-hidden="true" />
+              </button>
+            </Button>
           </div>
           <div className="choice-logo">
             <MaxLogo />
@@ -86,11 +100,8 @@ export function CabinetGate({ children }: { children: ReactNode }) {
         </div>
       </main>
     )
-  if (
-    (isWorkerPath(pathname) && cabinet !== 'worker') ||
-    (!isWorkerPath(pathname) && cabinet === 'worker')
-  )
-    return <Navigate to={cabinet === 'worker' ? '/jobs' : '/'} replace />
+  if (cabinetForPath(pathname) !== cabinet)
+    return <Navigate to={home(cabinet)} replace />
   return (
     <CabinetContext
       value={{

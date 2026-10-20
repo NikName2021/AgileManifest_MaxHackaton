@@ -1,5 +1,6 @@
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
+import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { Button, Textarea } from '@maxhub/max-ui'
@@ -192,6 +193,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
           <p>Сначала детали. Публикацию подтвердите на следующем экране.</p>
         </div>
       </div>
+      <VacancySteps current={1} />
       {source && (
         <div className="vacancy-notice vacancy-copy-note">
           <p>

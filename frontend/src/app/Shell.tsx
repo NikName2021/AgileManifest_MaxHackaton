@@ -33,7 +33,7 @@ const titles: Record<string, string> = {
   '/settings': 'Настройки',
 }
 export function Shell() {
-  const { user, mode, bridge } = useSession()
+  const { mode, bridge } = useSession()
   const { cabinet, switchCabinet } = useCabinet()
   const { preference, setPreference } = useTheme()
   const dark =
@@ -48,15 +48,18 @@ export function Shell() {
         { to: '/profile', label: 'Профиль', icon: Settings2 },
       ]
     : employerNavigation
-  const { pathname, state } = useLocation()
+  const { pathname, search, state } = useLocation()
   const inJob = /^\/jobs\/[^/]+$/.test(pathname)
+  const applying = inJob && new URLSearchParams(search).get('step') === 'apply'
   const catalogSearch = typeof state?.catalogSearch === 'string' ? state.catalogSearch : ''
   const navigate = useNavigate()
   const main = useRef<HTMLElement>(null)
   const inVacancy = pathname.startsWith('/vacancies/')
   const isCopy = /^\/vacancies\/\d+\/copy$/.test(pathname)
   const backTo = inJob
-    ? `/jobs${catalogSearch ? '?' + catalogSearch : ''}`
+    ? applying
+      ? pathname
+      : `/jobs${catalogSearch ? '?' + catalogSearch : ''}`
     : pathname.endsWith('/edit') || isCopy
       ? pathname.replace(/\/(edit|copy)$/, '')
       : inVacancy
@@ -64,7 +67,9 @@ export function Shell() {
         : home
   const title = worker
     ? inJob
-      ? 'Вакансия'
+      ? applying
+        ? 'Отклик на вакансию'
+        : 'Вакансия'
       : pathname === '/my-applications'
         ? 'Мои отклики'
         : pathname === '/profile'
@@ -82,9 +87,9 @@ export function Shell() {
     main.current?.focus({ preventScroll: true })
     window.scrollTo({ top: 0, behavior: 'instant' })
     return bindBackButton(bridge, pathname !== home, () => {
-      void navigate(backTo)
+      void navigate(backTo, { state: { catalogSearch } })
     })
-  }, [bridge, navigate, pathname, title, backTo, home])
+  }, [bridge, navigate, pathname, title, backTo, home, catalogSearch])
   return (
     <div className={`app-shell ${worker ? 'worker-shell' : ''}`}>
       <a href="#main-content" className="skip-link">
@@ -94,7 +99,6 @@ export function Shell() {
         <Link to={home} className="brand-link" aria-label="Сезон — на главную">
           <Brand />
         </Link>
-        <span className="sidebar-caption">{worker ? 'ПОИСК РАБОТЫ' : 'УПРАВЛЕНИЕ НАЙМОМ'}</span>
         <nav aria-label="Основная навигация" className="sidebar-nav">
           {navigation.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -113,15 +117,6 @@ export function Shell() {
             <CircleHelp size={18} aria-hidden="true" />
             {worker ? 'Мой профиль' : 'Как работает Сезон'}
           </Link>
-          <div className="sidebar-identity">
-            <span className="user-avatar" aria-hidden="true">
-              {user.display_name.slice(0, 1).toLocaleUpperCase('ru')}
-            </span>
-            <span className="user-name">
-              {user.display_name}
-              <small>{worker ? 'Работник' : 'Работодатель'}</small>
-            </span>
-          </div>
           <Button
             variant="secondary"
             iconBefore={<LogOut size={18} aria-hidden="true" />}
@@ -160,10 +155,11 @@ export function Shell() {
               <Button
                 variant="secondary"
                 className="mobile-exit"
-                iconBefore={<LogOut size={17} aria-hidden="true" />}
+                aria-label="Выйти"
+                title="Выйти"
                 onClick={switchCabinet}
               >
-                Выйти
+                <LogOut size={20} aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -175,7 +171,7 @@ export function Shell() {
           </div>
         )}
         <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
-          {(inVacancy || inJob) && (
+          {(inVacancy || (inJob && !applying)) && (
             <Link className="back-link" to={backTo}>
               <ArrowLeft size={16} />
               {inJob

@@ -115,7 +115,7 @@ describe('employer vacancy workflow', () => {
     await act(() => router.navigate(-1))
     await screen.findByRole('heading', { name: 'Бариста' })
     expect(screen.getByRole('combobox')).toHaveTextContent('По названию')
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
+    fireEvent.focus(window)
     await screen.findByRole('heading', { name: 'Бариста' })
     expect(titles()).toEqual(['Бариста', 'Повар'])
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Нет такой вакансии' } })

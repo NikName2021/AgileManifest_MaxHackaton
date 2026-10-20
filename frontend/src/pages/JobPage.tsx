@@ -1,6 +1,6 @@
 import { Input } from '../shared/ui/Input'
-import { useCallback, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
@@ -15,11 +15,15 @@ function ApplyForm({
   profile,
   onSaved,
   onBusy,
+  expanded,
+  onExpand,
 }: {
   job: Job
   profile?: Profile
   onSaved: (job: Job) => void
   onBusy: (busy: boolean) => void
+  expanded: boolean
+  onExpand: () => void
 }) {
   const { candidate, mode } = useSession()
   const [contact, setContact] = useState(profile?.applicationContact ?? '')
@@ -96,6 +100,17 @@ function ApplyForm({
       onBusy(false)
     }
   }
+  if (!expanded && job.canApply && !job.myApplication)
+    return (
+      <section className="candidate-apply-panel">
+        <h2>Заинтересовала вакансия?</h2>
+        <p>Оставьте контакт, чтобы работодатель мог с вами связаться.</p>
+        <Button className="primary-button" onClick={onExpand}>
+          Откликнуться
+        </Button>
+        <div className="vacancy-notice">Контакт передаётся только работодателю этой вакансии.</div>
+      </section>
+    )
   return (
     <section className="candidate-apply-panel">
       <h2>
@@ -177,6 +192,10 @@ export function JobPage() {
   const { id = '' } = useParams(),
     { candidate } = useSession()
   const [busy, setBusy] = useState(false)
+  const [params, setParams] = useSearchParams()
+  const { state } = useLocation()
+  const expanded = params.get('step') === 'apply'
+  const stepHeading = useRef<HTMLHeadingElement>(null)
   const load = useCallback(
     (signal: AbortSignal) =>
       /^\d+$/.test(id) && Number.isSafeInteger(Number(id)) && Number(id) > 0
@@ -188,6 +207,10 @@ export function JobPage() {
     profile = useResource(candidate.profile, 'profile')
   useRefreshOnReturn(resource.refresh, busy)
   const { result } = resource
+  const submitted = result.state === 'ready' && Boolean(result.data.myApplication)
+  useEffect(() => {
+    if (expanded && result.state === 'ready') stepHeading.current?.focus()
+  }, [expanded, result.state, submitted])
   return (
     <>
       <RefreshStatus
@@ -205,7 +228,7 @@ export function JobPage() {
         </>
       )}
       {result.state === 'ready' && (
-        <div className="job-detail-layout">
+        <div className={`job-detail-layout ${expanded ? 'application-step' : ''}`}>
           <article className="job-detail">
             <span className="eyebrow">ВАКАНСИЯ</span>
             <h1>{result.data.title}</h1>
@@ -217,6 +240,17 @@ export function JobPage() {
             <p>Период и условия оплаты уточняйте у работодателя.</p>
           </article>
           <aside>
+            {expanded && (
+              <div className="application-step-heading">
+                <Button variant="ghost" disabled={busy} onClick={() => setParams({}, { state })}>
+                  ← К условиям вакансии
+                </Button>
+                <h1 ref={stepHeading} tabIndex={-1}>
+                  {result.data.myApplication ? 'Отклик отправлен' : 'Как с вами связаться?'}
+                </h1>
+                <p>{result.data.title}</p>
+              </div>
+            )}
             {profile.result.state === 'loading' ? (
               <Loading />
             ) : (
@@ -235,6 +269,8 @@ export function JobPage() {
                   profile={profile.result.state === 'ready' ? profile.result.data : undefined}
                   onSaved={resource.replace}
                   onBusy={setBusy}
+                  expanded={expanded}
+                  onExpand={() => setParams({ step: 'apply' }, { state })}
                 />
               </>
             )}

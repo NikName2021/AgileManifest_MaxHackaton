@@ -122,10 +122,10 @@ describe('cabinet selection and candidate flows', () => {
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
     await screen.findByRole('heading', { name: 'Сохранение вакансии' })
     fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
-    expect(screen.queryByRole('heading', { name: 'Как вы хотите зайти?' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'С чего начнём?' })).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
     fireEvent.click(screen.getByRole('button', { name: 'Сохранение завершено' }))
-    expect(await screen.findByRole('heading', { name: 'Как вы хотите зайти?' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'С чего начнём?' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/choose')
   })
   it('asks at every mount, defers candidate requests and keeps employer overview', async () => {
@@ -140,7 +140,7 @@ describe('cabinet selection and candidate flows', () => {
     expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
     first.unmount()
     start(session)
-    expect(screen.getByRole('heading', { name: 'Как вы хотите зайти?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'С чего начнём?' })).toBeInTheDocument()
   })
   it('guards employer routes in worker mode and preserves a worker deep link after choosing', async () => {
     const { router } = start(undefined, '/jobs/1002')
@@ -163,6 +163,7 @@ describe('cabinet selection and candidate flows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить контакт' }))
     expect(await screen.findByText('Контакт сохранён.')).toBeInTheDocument()
     await act(() => router.navigate('/jobs/1001'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     expect(await screen.findByLabelText('Контакт для работодателя')).toHaveValue('@candidate')
     expect(apply).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
@@ -192,6 +193,7 @@ describe('cabinet selection and candidate flows', () => {
     })
     start(session, '/jobs/1001')
     worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
       target: { value: '@candidate' },
     })
@@ -208,6 +210,7 @@ describe('cabinet selection and candidate flows', () => {
     session.mode = 'max'
     start(session, '/jobs/1001')
     worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
       target: { value: '@candidate' },
     })
@@ -220,6 +223,7 @@ describe('cabinet selection and candidate flows', () => {
       apply = vi.spyOn(session.candidate, 'apply')
     const first = start(session, '/jobs/1001')
     worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Отправить отклик' }))
     expect(screen.getByText(/Укажите контакт для связи/)).toBeInTheDocument()
     expect(apply).not.toHaveBeenCalled()

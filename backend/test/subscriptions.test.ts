@@ -6,6 +6,7 @@ vi.mock('../src/max/client.js', async () => {
 });
 
 import { app } from '../src/server.js';
+import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { setBotUsername } from '../src/max/botInfo.js';
 import { notifySubscribers } from '../src/subscriptions/service.js';
@@ -17,6 +18,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await settleBroadcasts();
   await app.close();
   await db.$disconnect();
 });

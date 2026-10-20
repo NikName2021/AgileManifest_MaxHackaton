@@ -19,7 +19,13 @@ export const maxApiMock = {
   deleteSubscription: vi.fn(async () => ({})),
 };
 
+// Фоновая рассылка после публикации из прошлого теста ещё может читать таблицы — без ожидания
+// TRUNCATE ловил deadlock (40P01) в CI. Импорт ленивый: helpers загружается внутри фабрики
+// vi.mock клиента MAX, а модуль рассылки сам зависит от этого клиента — статический импорт
+// замыкал загрузку в цикл, и тесты зависали до старта.
 export async function resetDb() {
+  const { settleBroadcasts } = await import('../src/vacancies/broadcast.js');
+  await settleBroadcasts();
   await db.$executeRawUnsafe(
     'TRUNCATE TABLE channel_deliveries, partner_channels, subscription_deliveries, job_subscriptions, team_invites, team_marks, applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
   );

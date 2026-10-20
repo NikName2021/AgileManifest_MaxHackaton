@@ -59,6 +59,8 @@ export async function createApplicationRecord(input: {
     candidateUserId: number;
     contact: string;
     candidateChatId: string | null;
+    // invited — отклик по приглашению работодателя («Моя бригада»), минуя «Новый».
+    status?: 'new' | 'invited';
 }): Promise<CreateApplicationResult> {
     try {
         return await db.$transaction(async (tx) => {
@@ -76,7 +78,7 @@ export async function createApplicationRecord(input: {
                 data: {
                     vacancyId: input.vacancyId,
                     candidateUserId: input.candidateUserId,
-                    status: 'new',
+                    status: input.status ?? 'new',
                     contact: input.contact,
                     candidateChatId: input.candidateChatId,
                 },
@@ -275,7 +277,7 @@ export async function applyStatusChange(applicationId: number, status: string): 
     // Условный UPDATE: при двух одновременных одинаковых сменах уведомление уйдёт один раз.
     const changed = await db.application.updateMany({
         where: { id: applicationId, status: { not: status } },
-        data: { status },
+        data: { status, ...(status === 'hired' ? { hiredAt: new Date() } : {}) },
     });
     const application = await db.application.findUniqueOrThrow({
         where: { id: applicationId },

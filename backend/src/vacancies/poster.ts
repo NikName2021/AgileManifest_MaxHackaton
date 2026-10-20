@@ -48,8 +48,8 @@ export async function renderPosterSvg(vacancy: Vacancy, url: string): Promise<st
     vacancy.regionCode ? `Где: ${vacancy.regionCode}` : null,
     vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : null,
   ].filter((l): l is string => l !== null).flatMap((l) => wrap(l, 38, 2));
-  // Бейджи — до 6 штук, по два в строке, чтобы плакат оставался читаемым.
-  const badges = resolveBadges(vacancy.badges, vacancy.studentFriendly).slice(0, 6);
+  // Бейджи (не больше 4) — по два в строке, чтобы плакат оставался читаемым.
+  const badges = resolveBadges(vacancy.badges, vacancy.studentFriendly).slice(0, 4);
   for (let i = 0; i < badges.length; i += 2) {
     details.push(badges.slice(i, i + 2).map((b) => `${b.emoji} ${b.label}`).join('   '));
   }

@@ -1044,7 +1044,7 @@ paths:
                   groups:
                     type: array
                     items: { $ref: '#/components/schemas/BadgeGroup' }
-                  maxPerVacancy: { type: integer, example: 12 }
+                  maxPerVacancy: { type: integer, example: 4 }
 
   /api/applications/{id}/timeline:
     get:
@@ -1730,9 +1730,11 @@ components:
           description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
         badges:
           type: array
-          maxItems: 12
+          maxItems: 4
           items: { type: string }
-          description: Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются
+          description: >
+            Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются. Всего на
+            вакансии не больше 4 бейджей, включая «Подходит студентам» при student_friendly = true.
           example: [housing_free, meals_3, tickets_paid]
 
     VacancyPatchInput:
@@ -1778,9 +1780,11 @@ components:
           description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
         badges:
           type: array
-          maxItems: 12
+          maxItems: 4
           items: { type: string }
-          description: Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются
+          description: >
+            Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются. Всего на
+            вакансии не больше 4 бейджей, включая «Подходит студентам» при student_friendly = true.
           example: [housing_free, meals_3, tickets_paid]
 
     Application:

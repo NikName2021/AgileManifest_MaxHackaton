@@ -11,13 +11,20 @@ export interface TeamMember {
   hasBotChat: boolean
 }
 export const outcomes = {
-  sent: 'Приглашение отправлено', already_invited: 'Уже приглашён', already_applied: 'Уже откликнулся',
-  no_bot_chat: 'Нет чата с ботом', not_in_team: 'Больше не входит в команду',
-  delivery_failed: 'Не удалось доставить', limit_exceeded: 'Лимит 100 приглашений за запрос',
+  sent: 'Приглашение отправлено',
+  already_invited: 'Уже приглашён',
+  already_applied: 'Уже откликнулся',
+  no_bot_chat: 'Нет чата с ботом',
+  not_in_team: 'Больше не входит в команду',
+  delivery_failed: 'Не удалось доставить',
+  limit_exceeded: 'Лимит 100 приглашений за запрос',
 }
 export const inviteStatuses = {
-  sent: 'Ждём ответа', accepted: 'Готов выйти', declined: 'Не в этот раз',
-  expired: 'Вакансия закрыта', undelivered: 'Не доставлено',
+  sent: 'Ждём ответа',
+  accepted: 'Готов выйти',
+  declined: 'Не в этот раз',
+  expired: 'Вакансия закрыта',
+  undelivered: 'Не доставлено',
 }
 export interface TeamInvite {
   id: number
@@ -26,7 +33,10 @@ export interface TeamInvite {
   createdAt: string
   respondedAt: string | null
 }
-export interface InviteResult { sent: number; results: { candidateId: number; outcome: keyof typeof outcomes }[] }
+export interface InviteResult {
+  sent: number
+  results: { candidateId: number; outcome: keyof typeof outcomes }[]
+}
 export interface TeamRepository {
   list(signal?: AbortSignal): Promise<TeamMember[]>
   mark(id: number, reliable: boolean): Promise<void>
@@ -53,14 +63,25 @@ export function parseTeam(body: unknown): TeamMember[] {
   const v = obj(body)
   if (!Array.isArray(v.items) || v.total !== v.items.length) throw new ApiError('contract')
   return v.items.map((item) => {
-    const m = obj(item), last = obj(m.lastVacancy)
-    if (typeof m.reliable !== 'boolean' || typeof m.hasBotChat !== 'boolean' || typeof last.title !== 'string')
+    const m = obj(item),
+      last = obj(m.lastVacancy)
+    if (
+      typeof m.reliable !== 'boolean' ||
+      typeof m.hasBotChat !== 'boolean' ||
+      typeof last.title !== 'string'
+    )
       throw new ApiError('contract')
     const date = nullable(m.lastHiredAt)
     if (date !== null && !Number.isFinite(Date.parse(date))) throw new ApiError('contract')
-    return { candidate: candidate(m.candidate), contact: nullable(m.contact), hiredCount: num(m.hiredCount),
-      lastHiredAt: date, lastVacancy: { id: num(last.id), title: last.title },
-      reliable: m.reliable, hasBotChat: m.hasBotChat }
+    return {
+      candidate: candidate(m.candidate),
+      contact: nullable(m.contact),
+      hiredCount: num(m.hiredCount),
+      lastHiredAt: date,
+      lastVacancy: { id: num(last.id), title: last.title },
+      reliable: m.reliable,
+      hasBotChat: m.hasBotChat,
+    }
   })
 }
 export function parseInviteResult(body: unknown): InviteResult {
@@ -68,35 +89,60 @@ export function parseInviteResult(body: unknown): InviteResult {
   if (!Array.isArray(v.results)) throw new ApiError('contract')
   const results = v.results.map((item) => {
     const r = obj(item)
-    if (typeof r.outcome !== 'string' || !Object.hasOwn(outcomes, r.outcome)) throw new ApiError('contract')
+    if (typeof r.outcome !== 'string' || !Object.hasOwn(outcomes, r.outcome))
+      throw new ApiError('contract')
     return { candidateId: num(r.candidateId), outcome: r.outcome as keyof typeof outcomes }
   })
   if (v.sent !== results.filter((r) => r.outcome === 'sent').length) throw new ApiError('contract')
   return { sent: v.sent as number, results }
 }
-export function createTeamRepository(base: string, token: string, expire: () => void): TeamRepository {
-  const root = authUrl(base, '/api', import.meta.env.PROD), send = authenticatedRequest(token, expire)
+export function createTeamRepository(
+  base: string,
+  token: string,
+  expire: () => void,
+): TeamRepository {
+  const root = authUrl(base, '/api', import.meta.env.PROD),
+    send = authenticatedRequest(token, expire)
   return {
-    async list(signal) { return parseTeam(await send(`${root}/team`, { signal })) },
+    async list(signal) {
+      return parseTeam(await send(`${root}/team`, { signal }))
+    },
     async mark(id, reliable) {
-      const v = obj(await send(`${root}/team/${num(id)}`, { method: 'PATCH', body: JSON.stringify({ reliable }) }))
+      const v = obj(
+        await send(`${root}/team/${num(id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ reliable }),
+        }),
+      )
       if (v.candidateId !== id || v.reliable !== reliable) throw new ApiError('contract')
     },
     async invite(id, ids) {
-      return parseInviteResult(await send(`${root}/vacancies/${num(id)}/team-invites`, {
-        method: 'POST', body: JSON.stringify(ids ? { candidate_ids: ids.map(num) } : {}),
-      }))
+      return parseInviteResult(
+        await send(`${root}/vacancies/${num(id)}/team-invites`, {
+          method: 'POST',
+          body: JSON.stringify(ids ? { candidate_ids: ids.map(num) } : {}),
+        }),
+      )
     },
     async invites(id, signal) {
       const v = obj(await send(`${root}/vacancies/${num(id)}/team-invites`, { signal }))
       if (!Array.isArray(v.items)) throw new ApiError('contract')
       return v.items.map((item) => {
         const r = obj(item)
-        if (typeof r.status !== 'string' || !Object.hasOwn(inviteStatuses, r.status) ||
-          typeof r.createdAt !== 'string' || !Number.isFinite(Date.parse(r.createdAt)))
+        if (
+          typeof r.status !== 'string' ||
+          !Object.hasOwn(inviteStatuses, r.status) ||
+          typeof r.createdAt !== 'string' ||
+          !Number.isFinite(Date.parse(r.createdAt))
+        )
           throw new ApiError('contract')
-        return { id: num(r.id), candidate: candidate(r.candidate), status: r.status as TeamInvite['status'],
-          createdAt: r.createdAt, respondedAt: nullable(r.respondedAt) }
+        return {
+          id: num(r.id),
+          candidate: candidate(r.candidate),
+          status: r.status as TeamInvite['status'],
+          createdAt: r.createdAt,
+          respondedAt: nullable(r.respondedAt),
+        }
       })
     },
   }

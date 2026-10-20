@@ -98,7 +98,11 @@ export function SessionGate({ children }: { children: ReactNode }) {
             benchmark: createBenchmarkRepository(config.apiBaseUrl),
             candidate: createCandidateRepository(config.apiBaseUrl, credentials.token, expire),
             team: createTeamRepository(config.apiBaseUrl, credentials.token, expire),
-            subscriptions: createSubscriptionRepository(config.apiBaseUrl, credentials.token, expire),
+            subscriptions: createSubscriptionRepository(
+              config.apiBaseUrl,
+              credentials.token,
+              expire,
+            ),
             partners: createPartnerRepository(config.apiBaseUrl, credentials.token, expire),
             bridge,
             mode: 'max',

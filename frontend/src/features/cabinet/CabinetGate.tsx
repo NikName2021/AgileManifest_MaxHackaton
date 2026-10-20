@@ -100,8 +100,7 @@ export function CabinetGate({ children }: { children: ReactNode }) {
         </div>
       </main>
     )
-  if (cabinetForPath(pathname) !== cabinet)
-    return <Navigate to={home(cabinet)} replace />
+  if (cabinetForPath(pathname) !== cabinet) return <Navigate to={home(cabinet)} replace />
   return (
     <CabinetContext
       value={{

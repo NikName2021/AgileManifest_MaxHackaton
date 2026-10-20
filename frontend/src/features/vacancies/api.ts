@@ -37,10 +37,16 @@ function applyUrl(value: unknown): string | null | undefined {
   if (typeof value !== 'string') throw new ApiError('contract')
   try {
     const url = new URL(value)
-    if (!['https://max.ru', 'https://web.max.ru'].includes(url.origin) || url.username || url.password)
+    if (
+      !['https://max.ru', 'https://web.max.ru'].includes(url.origin) ||
+      url.username ||
+      url.password
+    )
       throw new Error()
     return url.href
-  } catch { throw new ApiError('contract') }
+  } catch {
+    throw new ApiError('contract')
+  }
 }
 export function parseVacancy(value: unknown): Vacancy {
   if (!value || typeof value !== 'object') throw new ApiError('contract')

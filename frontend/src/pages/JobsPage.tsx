@@ -73,8 +73,15 @@ function SearchForm({
         </div>
       </div>
       <div className="catalog-filters">
-        <label className="student-check"><input type="checkbox" name="student_friendly" value="true"
-          defaultChecked={params.get('student_friendly') === 'true'} />Для студентов</label>
+        <label className="student-check">
+          <input
+            type="checkbox"
+            name="student_friendly"
+            value="true"
+            defaultChecked={params.get('student_friendly') === 'true'}
+          />
+          Для студентов
+        </label>
         <Select label="Регион" name="region_code" defaultValue={params.get('region_code') ?? ''}>
           <option value="">Все регионы</option>
           {options('regions', 'region_code')}
@@ -183,7 +190,9 @@ export function JobsPage() {
           <p>Вакансии от работодателей. Без лишних шагов.</p>
         </div>
       </div>
-      <Link className="text-link" to={`/subscriptions?${params}`}>Подписаться на новые вакансии →</Link>
+      <Link className="text-link" to={`/subscriptions?${params}`}>
+        Подписаться на новые вакансии →
+      </Link>
       <SearchForm
         key={`${key}:${formRevision}`}
         params={params}
@@ -249,7 +258,9 @@ export function JobsPage() {
                           <span className="candidate-applied">Вы уже откликнулись</span>
                         )}
                         <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
-                        {job.studentFriendly && <span className="student-badge">Подходит студентам</span>}
+                        {job.studentFriendly && (
+                          <span className="student-badge">Подходит студентам</span>
+                        )}
                         <div className="job-card-footer">
                           <small>
                             Опубликована {new Date(job.createdAt).toLocaleDateString('ru-RU')}

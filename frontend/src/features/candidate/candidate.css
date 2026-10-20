@@ -237,11 +237,34 @@
 .worker-shell .mobile-nav {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-.subscription-form { max-width: 680px; margin: 24px 0; padding: 20px; border: 1px solid var(--border); border-radius: 10px; }
-.subscription-form fieldset { display: grid; gap: 16px; border: 0; padding: 0; min-width: 0; }
-.subscription-form label { display: grid; gap: 8px; }
-.subscription-form .subscription-check { display: flex; gap: 10px; align-items: center; }
-.subscription-check input { width: 20px; height: 20px; accent-color: #471aff; }
+.subscription-form {
+  max-width: 680px;
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.subscription-form fieldset {
+  display: grid;
+  gap: 16px;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.subscription-form label {
+  display: grid;
+  gap: 8px;
+}
+.subscription-form .subscription-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.subscription-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: #471aff;
+}
 @media (max-width: 900px) {
   .job-detail-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -295,4 +318,7 @@
   .header-account .help-link {
     display: none;
   }
+}
+.subscription-form {
+  background: var(--surface);
 }

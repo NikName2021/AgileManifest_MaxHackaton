@@ -46,14 +46,16 @@ export function Shell() {
   const worker = cabinet === 'worker'
   const partner = cabinet === 'partner'
   const home = partner ? '/channels' : worker ? '/jobs' : '/'
-  const navigation = partner ? [{ to: '/channels', label: 'Каналы', icon: GraduationCap }] : worker
-    ? [
-        { to: '/jobs', label: 'Вакансии', icon: BriefcaseBusiness },
-        { to: '/my-applications', label: 'Мои отклики', icon: UsersRound },
-        { to: '/subscriptions', label: 'Подписки', icon: Bell },
-        { to: '/profile', label: 'Профиль', icon: Settings2 },
-      ]
-    : employerNavigation
+  const navigation = partner
+    ? [{ to: '/channels', label: 'Каналы', icon: GraduationCap }]
+    : worker
+      ? [
+          { to: '/jobs', label: 'Вакансии', icon: BriefcaseBusiness },
+          { to: '/my-applications', label: 'Мои отклики', icon: UsersRound },
+          { to: '/subscriptions', label: 'Подписки', icon: Bell },
+          { to: '/profile', label: 'Профиль', icon: Settings2 },
+        ]
+      : employerNavigation
   const { pathname, search, state } = useLocation()
   const inJob = /^\/jobs\/[^/]+$/.test(pathname)
   const applying = inJob && new URLSearchParams(search).get('step') === 'apply'
@@ -71,25 +73,27 @@ export function Shell() {
       : inVacancy
         ? '/vacancies'
         : home
-  const title = partner ? 'Каналы партнёра' : worker
-    ? inJob
-      ? applying
-        ? 'Отклик на вакансию'
-        : 'Вакансия'
-      : pathname === '/my-applications'
-        ? 'Мои отклики'
-        : pathname === '/subscriptions'
-          ? 'Подписки на вакансии'
-        : pathname === '/profile'
-          ? 'Профиль работника'
-          : 'Поиск работы'
-    : isCopy
-      ? 'Копия вакансии'
-      : pathname === '/vacancies/new'
-        ? 'Новая вакансия'
-        : inVacancy
-          ? 'Вакансия'
-          : (titles[pathname] ?? 'Страница не найдена')
+  const title = partner
+    ? 'Каналы партнёра'
+    : worker
+      ? inJob
+        ? applying
+          ? 'Отклик на вакансию'
+          : 'Вакансия'
+        : pathname === '/my-applications'
+          ? 'Мои отклики'
+          : pathname === '/subscriptions'
+            ? 'Подписки на вакансии'
+            : pathname === '/profile'
+              ? 'Профиль работника'
+              : 'Поиск работы'
+      : isCopy
+        ? 'Копия вакансии'
+        : pathname === '/vacancies/new'
+          ? 'Новая вакансия'
+          : inVacancy
+            ? 'Вакансия'
+            : (titles[pathname] ?? 'Страница не найдена')
   useEffect(() => {
     document.title = `${title} · Сезон`
     main.current?.focus({ preventScroll: true })
@@ -121,7 +125,10 @@ export function Shell() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <Link className="sidebar-help" to={partner ? '/channels' : worker ? '/profile' : '/guide'}>
+          <Link
+            className="sidebar-help"
+            to={partner ? '/channels' : worker ? '/profile' : '/guide'}
+          >
             <CircleHelp size={18} aria-hidden="true" />
             {partner ? 'Подключение каналов' : worker ? 'Мой профиль' : 'Как работает Сезон'}
           </Link>
@@ -144,7 +151,11 @@ export function Shell() {
               <Brand />
             </Link>
             <span className="header-product">
-              {partner ? 'Работа для ваших студентов' : worker ? 'Найдите работу на свой сезон' : 'Ваше пространство найма'}
+              {partner
+                ? 'Работа для ваших студентов'
+                : worker
+                  ? 'Найдите работу на свой сезон'
+                  : 'Ваше пространство найма'}
             </span>
             <div className="header-account">
               <Button
@@ -159,7 +170,9 @@ export function Shell() {
                   <Moon size={20} aria-hidden="true" />
                 )}
               </Button>
-              <span className="header-role">{partner ? 'Партнёр' : worker ? 'Работник' : 'Работодатель'}</span>
+              <span className="header-role">
+                {partner ? 'Партнёр' : worker ? 'Работник' : 'Работодатель'}
+              </span>
               <Button
                 variant="secondary"
                 className="mobile-exit"
@@ -194,7 +207,9 @@ export function Shell() {
           <Outlet />
         </main>
         <footer className="content-footer">
-          <span>Сезон · Кабинет {partner ? 'партнёра' : worker ? 'работника' : 'работодателя'}</span>
+          <span>
+            Сезон · Кабинет {partner ? 'партнёра' : worker ? 'работника' : 'работодателя'}
+          </span>
           <span>Мини-приложение для MAX</span>
         </footer>
       </div>

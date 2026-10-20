@@ -1887,3 +1887,14 @@ p {
     padding: 22px;
   }
 }
+.job-search-form .student-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-basis: 100%;
+}
+.job-search-form .student-check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}

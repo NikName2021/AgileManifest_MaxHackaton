@@ -111,26 +111,33 @@ export function formatSalary(min: number | null, max: number | null): string {
   if (max !== null) return `до ${money.format(max)} ₽`
   return 'По договорённости'
 }
-// Mirrors the current server card composition to check MAX's 4000-character text limit.
-// Keep this in sync with backend/src/vacancies/publish.ts; rendering below stays plain text.
+// Reserve room for the trust badge and the longest application link, as the server does.
+// Keep in sync with backend/src/vacancies/cardText.ts.
 export function cardTextLength(v: Vacancy): number {
   const escape = (text: string) => text.replace(/([\\`*_[\]()~>#+\-=|{}.!])/g, '\\$1')
   const salary =
-    v.salaryMin && v.salaryMax
+    v.salaryMin !== null && v.salaryMax !== null
       ? `${v.salaryMin}–${v.salaryMax} ₽`
-      : v.salaryMin
+      : v.salaryMin !== null
         ? `от ${v.salaryMin} ₽`
-        : v.salaryMax
+        : v.salaryMax !== null
           ? `до ${v.salaryMax} ₽`
           : 'по договорённости'
+  const schedule = { seasonal: 'сезонная', temporary: 'временная', permanent: 'постоянная' }[
+    v.schedule
+  ]
+  const link = `https://max.ru/${'x'.repeat(64)}?start=apply_2147483647`
   return [
     `**${escape(v.title)}**`,
+    '✓ Надёжный работодатель',
     `Регион: ${escape(v.regionCode)}`,
-    `График: ${escape(v.schedule)}`,
+    `График: ${escape(schedule)}`,
     `Зарплата: ${salary}`,
     v.headcount ? `Нужно человек: ${v.headcount}` : undefined,
+    v.studentFriendly ? 'Подходит студентам' : undefined,
     v.description ? escape(v.description) : undefined,
     v.contactInfo ? `Контакт: ${escape(v.contactInfo)}` : undefined,
+    `Откликнуться:\n[${escape(link)}](${link})`,
   ]
     .filter(Boolean)
     .join('\n').length

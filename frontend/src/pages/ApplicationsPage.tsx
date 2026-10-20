@@ -297,9 +297,12 @@ export function ApplicationsPage() {
                           month: 'short',
                         })}
                       </time>
-                      <div><span className={`application-status ${item.status}`}>
-                        {applicationLabels[item.status]}
-                      </span><ShiftSummary shift={item} /></div>
+                      <div>
+                        <span className={`application-status ${item.status}`}>
+                          {applicationLabels[item.status]}
+                        </span>
+                        <ShiftSummary shift={item} />
+                      </div>
                       <Button
                         variant="ghost"
                         size="small"

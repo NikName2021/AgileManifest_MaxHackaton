@@ -275,8 +275,15 @@ export function ApplicationDialog({
       <ShiftEditor
         application={current}
         disabled={busy || needsRefresh || confirming}
-        onBusy={(value) => { lock.current = value; setBusy(value) }}
-        onSaved={(actual, message) => { setCurrent(actual); setNotice(message); onChanged(message) }}
+        onBusy={(value) => {
+          lock.current = value
+          setBusy(value)
+        }}
+        onSaved={(actual, message) => {
+          setCurrent(actual)
+          setNotice(message)
+          onChanged(message)
+        }}
       />
     </dialog>
   )

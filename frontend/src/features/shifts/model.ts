@@ -11,7 +11,8 @@ export function parseShift(value: Record<string, unknown>): Shift {
     (startAt != null && (typeof startAt !== 'string' || !Number.isFinite(Date.parse(startAt)))) ||
     (shiftNote != null && typeof shiftNote !== 'string') ||
     (attendance != null && !['pending', 'confirmed', 'declined'].includes(String(attendance)))
-  ) throw new ApiError('contract')
+  )
+    throw new ApiError('contract')
   return {
     startAt: startAt as Shift['startAt'],
     shiftNote: shiftNote as Shift['shiftNote'],
@@ -21,8 +22,13 @@ export function parseShift(value: Record<string, unknown>): Shift {
 export function shiftInput(iso?: string | null) {
   if (!iso) return ''
   const parts = new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(new Date(iso))
   const part = (type: string) => parts.find((p) => p.type === type)?.value
   return `${part('year')}-${part('month')}-${part('day')}T${part('hour')}:${part('minute')}`

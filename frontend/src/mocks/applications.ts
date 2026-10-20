@@ -20,7 +20,11 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
     async setShift(id, startAt, note) {
       const row = rows.get(id)
       if (!row || !['invited', 'hired'].includes(row.status)) throw new ApiError('server', 409)
-      const shift = { startAt, shiftNote: startAt ? note : null, attendance: startAt ? 'pending' as const : null }
+      const shift = {
+        startAt,
+        shiftNote: startAt ? note : null,
+        attendance: startAt ? ('pending' as const) : null,
+      }
       rows.set(id, { ...row, ...shift })
       return { ...shift, notified: false }
     },

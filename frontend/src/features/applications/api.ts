@@ -25,7 +25,11 @@ export interface StatusResult {
   unchanged: boolean
 }
 export interface ApplicationRepository {
-  setShift?(id: number, startAt: string | null, note: string | null): Promise<Shift & { notified: boolean }>
+  setShift?(
+    id: number,
+    startAt: string | null,
+    note: string | null,
+  ): Promise<Shift & { notified: boolean }>
   list(query: ApplicationQuery, signal?: AbortSignal): Promise<ApplicationPage>
   forVacancy(id: number, signal?: AbortSignal): Promise<VacancyApplications>
   updateStatus(id: number, status: ApplicationStatus): Promise<StatusResult>
@@ -126,10 +130,17 @@ export function createApplicationRepository(
   const request = authenticatedRequest(token, onUnauthorized)
   return {
     async setShift(applicationId, startAt, note) {
-      const value = record(await request(`${root}/applications/${id(applicationId)}/shift`, {
-        method: 'PATCH', body: JSON.stringify({ start_at: startAt, note }),
-      }))
-      if (value.id !== applicationId || typeof value.notified !== 'boolean' || !('startAt' in value))
+      const value = record(
+        await request(`${root}/applications/${id(applicationId)}/shift`, {
+          method: 'PATCH',
+          body: JSON.stringify({ start_at: startAt, note }),
+        }),
+      )
+      if (
+        value.id !== applicationId ||
+        typeof value.notified !== 'boolean' ||
+        !('startAt' in value)
+      )
         throw new ApiError('contract')
       return { ...parseShift(value), notified: value.notified }
     },

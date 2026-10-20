@@ -12,6 +12,7 @@ import { CandidateError, Loading, Pagination } from '../features/candidate/ui'
 import { jobQuery } from '../features/candidate/query'
 import { formatSalary, scheduleLabels } from '../features/vacancies/model'
 import type { JobFilters } from '../features/candidate/api'
+import { Capacity } from '../features/capacity/Capacity'
 
 function SearchForm({
   params,
@@ -242,6 +243,7 @@ export function JobsPage() {
                         {job.myApplication && (
                           <span className="candidate-applied">Вы уже откликнулись</span>
                         )}
+                        <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
                         <div className="job-card-footer">
                           <small>
                             Опубликована {new Date(job.createdAt).toLocaleDateString('ru-RU')}

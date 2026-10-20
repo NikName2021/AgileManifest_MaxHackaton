@@ -16,6 +16,7 @@ export function createPreviewSession(): Session {
   }
   function fields(input: VacancyInput) {
     return {
+      headcount: input.headcount ?? null,
       title: input.title,
       regionCode: input.region_code,
       category: input.category,

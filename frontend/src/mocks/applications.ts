@@ -51,7 +51,21 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
         updatedAt: unchanged ? row.updatedAt : new Date().toISOString(),
       }
       rows.set(id, updated)
-      return { application: await current(updated), notified: false, unchanged }
+      const vacancy = await vacancies.get(updated.vacancyId)
+      const hired = [...rows.values()].filter(
+        (item) => item.vacancyId === vacancy.id && item.status === 'hired',
+      ).length
+      const vacancyClosed =
+        status === 'hired' &&
+        vacancy.status === 'published' &&
+        Boolean(vacancy.headcount && hired >= vacancy.headcount)
+      if (vacancyClosed) {
+        await vacancies.close(vacancy.id)
+        for (const [key, item] of rows)
+          if (item.vacancyId === vacancy.id && ['new', 'contacted'].includes(item.status))
+            rows.set(key, { ...item, status: 'rejected' })
+      }
+      return { application: await current(updated), notified: false, unchanged, vacancyClosed }
     },
   }
   async function loadApplicationExamples() {

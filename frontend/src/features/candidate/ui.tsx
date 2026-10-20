@@ -3,6 +3,7 @@ import { ApiError } from '../../shared/api/client'
 import { config } from '../../shared/config'
 import { formatSalary, scheduleLabels } from '../vacancies/model'
 import type { PublicVacancy } from './api'
+import { Capacity } from '../capacity/Capacity'
 
 function candidateError(error: unknown) {
   if (!(error instanceof ApiError)) return 'Не удалось загрузить данные. Попробуйте ещё раз.'
@@ -104,6 +105,7 @@ export function JobFacts({ job }: { job: PublicVacancy }) {
         {job.category && job.category !== 'general' && <span>{job.category}</span>}
       </div>
       <p>Работодатель: {job.employer.displayName?.trim() || 'Имя не указано'}</p>
+      <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
     </>
   )
 }

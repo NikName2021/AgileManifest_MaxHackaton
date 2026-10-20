@@ -18,6 +18,7 @@ export interface VacancyApplications {
   items: Application[]
 }
 export interface StatusResult {
+  vacancyClosed?: boolean
   application: Application
   notified: boolean
   unchanged: boolean
@@ -161,12 +162,20 @@ export function createApplicationRepository(
       )
       if (
         typeof value.notified !== 'boolean' ||
+        (value.vacancyClosed !== undefined && typeof value.vacancyClosed !== 'boolean') ||
         (value.unchanged !== undefined && typeof value.unchanged !== 'boolean')
       )
         throw new ApiError('contract')
       const application = parseApplication(value)
       if (application.id !== applicationId) throw new ApiError('contract')
-      return { application, notified: value.notified, unchanged: value.unchanged === true }
+      return {
+        application,
+        notified: value.notified,
+        unchanged: value.unchanged === true,
+        ...(value.vacancyClosed !== undefined
+          ? { vacancyClosed: value.vacancyClosed as boolean }
+          : {}),
+      }
     },
   }
 }

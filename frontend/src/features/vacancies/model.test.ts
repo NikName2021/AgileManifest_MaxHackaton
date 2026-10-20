@@ -4,6 +4,16 @@ import { ApiError } from '../../shared/api/client'
 import type { Vacancy } from '../../entities/hiring'
 
 describe('vacancy form validation', () => {
+  it('accepts a crew target and refuses zero, fractions and excessive targets', () => {
+    for (const headcount of ['0', '-1', '1.5', '1001'])
+      expect(
+        validateForm({ ...formValues(), title: 'Сборщик', headcount }).errors.headcount,
+      ).toBeTruthy()
+    expect(
+      validateForm({ ...formValues(), title: 'Сборщик', headcount: '15' }).input.headcount,
+    ).toBe(15)
+    expect(formValues({ headcount: 15 } as Vacancy).headcount).toBe('15')
+  })
   it('distinguishes missing bot chat from a conflict and unknown card delivery', () => {
     expect(errorText(new ApiError('server', 409, 'employer_chat_missing'))).toContain(
       'Сначала начните личный чат',

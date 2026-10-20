@@ -21,7 +21,7 @@ export function statusNotice(result: StatusResult, demo: boolean): StatusNotice 
       tone: 'neutral',
       text: 'Этот статус уже установлен. Повторное уведомление не отправлялось.',
     }
-  const saved = `Статус «${applicationLabels[result.application.status]}» сохранён.`
+  const saved = `Статус «${applicationLabels[result.application.status]}» сохранён.${result.vacancyClosed ? ' Все места заняты — вакансия автоматически закрыта. Остальные кандидаты на этапах «Новый» и «На связи» завершили отбор.' : ''}`
   if (demo) return { tone: 'success', text: `${saved} Это демо: сообщения в MAX не отправляются.` }
   if (result.notified) return { tone: 'success', text: `${saved} Уведомление отправлено в MAX.` }
   if (notificationExpected(result.application.status))

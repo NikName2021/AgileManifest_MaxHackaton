@@ -22,6 +22,8 @@ export interface PublicVacancy extends Pick<
   | 'status'
 > {
   employer: { displayName: string | null }
+  headcount?: number | null
+  spotsLeft?: number | null
 }
 export interface Job extends PublicVacancy {
   status: 'published'
@@ -124,6 +126,12 @@ function vacancy(body: unknown): PublicVacancy {
   const salaryMax = v.salaryMax === null ? null : integer(v.salaryMax)
   if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) return fail()
   return {
+    ...(v.headcount !== undefined
+      ? { headcount: v.headcount === null ? null : integer(v.headcount, 1) }
+      : {}),
+    ...(v.spotsLeft !== undefined
+      ? { spotsLeft: v.spotsLeft === null ? null : integer(v.spotsLeft) }
+      : {}),
     id: integer(v.id, 1),
     title: str(v.title),
     regionCode: str(v.regionCode),

@@ -1,3 +1,4 @@
+import { Input } from '../shared/ui/Input'
 import { useRef, useState, type FormEvent } from 'react'
 import { Button } from '@maxhub/max-ui'
 import { useSession } from '../features/session/context'
@@ -48,9 +49,10 @@ function ProfileForm({ profile }: { profile: Profile }) {
         Подставим его в форму. Перед каждым откликом вы сможете проверить и изменить контакт. Уже
         отправленные отклики останутся без изменений.
       </p>
-      <label className="candidate-input">
-        Телефон или контакт в MAX
-        <input
+      <div className="candidate-input">
+        <label htmlFor="profile-contact">Телефон или контакт в MAX</label>
+        <Input
+          id="profile-contact"
           maxLength={200}
           value={contact}
           disabled={busy}
@@ -60,7 +62,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
           }}
           placeholder="+7 …, @имя или ссылка MAX"
         />
-      </label>
+      </div>
       <p>Чтобы удалить сохранённый контакт, очистите поле и сохраните.</p>
       {error !== undefined && <CandidateError error={error} />}
       <div className="vacancy-actions">
@@ -114,7 +116,7 @@ export function WorkerProfilePage() {
         <h2>Ищете сотрудников?</h2>
         <p>В кабинете работодателя можно создавать вакансии и управлять наймом.</p>
         <Button variant="secondary" onClick={switchCabinet}>
-          Сменить режим
+          Выйти
         </Button>
       </section>
     </>

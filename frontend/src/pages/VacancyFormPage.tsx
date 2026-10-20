@@ -1,6 +1,8 @@
+import { Input } from '../shared/ui/Input'
+import { Select } from '../shared/ui/Select'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
-import { Button } from '@maxhub/max-ui'
+import { Button, Textarea } from '@maxhub/max-ui'
 import { ArrowRight, Check, FilePenLine, Send } from 'lucide-react'
 import type { Vacancy } from '../entities/hiring'
 import { useSession } from '../features/session/context'
@@ -164,9 +166,9 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
           {key === 'title' && <span aria-hidden="true"> *</span>}
         </label>
         {options.multiline ? (
-          <textarea {...props} rows={7} />
+          <Textarea {...props} rows={7} />
         ) : (
-          <input {...props} type="text" inputMode={options.numeric ? 'numeric' : undefined} />
+          <Input {...props} type="text" inputMode={options.numeric ? 'numeric' : undefined} />
         )}
         <div id={`help-${key}`} className={errors[key] ? 'field-error' : 'field-hint'}>
           {errors[key] ?? options.hint}
@@ -234,7 +236,8 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
               </div>
               <div className="vacancy-field">
                 <label htmlFor="vacancy-schedule">Тип занятости</label>
-                <select
+                <Select
+                  label="Тип занятости"
                   id="vacancy-schedule"
                   name="schedule"
                   value={values.schedule}
@@ -245,7 +248,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                       {label}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {errors.schedule && <span className="field-error">{errors.schedule}</span>}
               </div>
             </section>

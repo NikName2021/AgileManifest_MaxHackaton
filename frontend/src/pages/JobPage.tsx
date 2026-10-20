@@ -1,3 +1,4 @@
+import { Input } from '../shared/ui/Input'
 import { useCallback, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
@@ -127,9 +128,10 @@ function ApplyForm({
               void perform()
             }}
           >
-            <label className="candidate-input">
-              Контакт для работодателя
-              <input
+            <div className="candidate-input">
+              <label htmlFor="application-contact">Контакт для работодателя</label>
+              <Input
+                id="application-contact"
                 value={contact}
                 disabled={busy}
                 maxLength={200}
@@ -141,7 +143,7 @@ function ApplyForm({
                 aria-invalid={!!invalid}
                 aria-describedby="contact-help"
               />
-            </label>
+            </div>
             <p id="contact-help">
               Подтвердите контакт перед отправкой. Его получит работодатель этой вакансии.
             </p>

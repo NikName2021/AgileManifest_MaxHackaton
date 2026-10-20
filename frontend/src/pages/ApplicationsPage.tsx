@@ -1,3 +1,4 @@
+import { Select } from '../shared/ui/Select'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
@@ -176,7 +177,8 @@ export function ApplicationsPage() {
       <div className="applications-toolbar">
         <div className="application-vacancy-filter">
           <label htmlFor="application-vacancy">Вакансия</label>
-          <select
+          <Select
+            label="Вакансия"
             id="application-vacancy"
             value={vacancyId ?? ''}
             onChange={(event) => filter('vacancy', event.target.value)}
@@ -193,7 +195,7 @@ export function ApplicationsPage() {
                 {v.status === 'closed' ? ' · закрыта' : ''}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <Button
           variant="secondary"

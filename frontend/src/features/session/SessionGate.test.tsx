@@ -15,7 +15,8 @@ vi.mock('../../shared/config', () => ({
   },
 }))
 // Test the gate independently of MAX UI's rendering implementation.
-vi.mock('@maxhub/max-ui', () => ({
+vi.mock('@maxhub/max-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@maxhub/max-ui')>()),
   Button: ({ children, onClick, className }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button onClick={onClick} className={className}>
       {children}

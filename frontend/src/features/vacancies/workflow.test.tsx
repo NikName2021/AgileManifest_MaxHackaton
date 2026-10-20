@@ -10,18 +10,25 @@ import { VacancyPage } from '../../pages/VacancyPage'
 import { ApiError } from '../../shared/api/client'
 import type { Vacancy } from '../../entities/hiring'
 
-vi.mock('@maxhub/max-ui', () => ({
+vi.mock('@maxhub/max-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@maxhub/max-ui')>()),
   Button: ({
     children,
     asChild,
     variant: _variant,
+    iconBefore: _iconBefore,
+    iconAfter: _iconAfter,
     ...props
   }: ButtonHTMLAttributes<HTMLButtonElement> & {
     asChild?: boolean
     variant?: string
+    iconBefore?: ReactNode
+    iconAfter?: ReactNode
     children: ReactNode
   }) => {
     void _variant
+    void _iconBefore
+    void _iconAfter
     return asChild ? children : <button {...props}>{children}</button>
   },
 }))
@@ -95,8 +102,11 @@ describe('employer vacancy workflow', () => {
       screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
     await screen.findByRole('heading', { name: 'Бариста' })
     expect(titles()).toEqual(['Бариста', 'Повар'])
-    expect(screen.getByRole('combobox', { name: 'Сортировка вакансий' })).toHaveValue('oldest')
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'title' } })
+    expect(screen.getByRole('combobox', { name: 'Сортировка вакансий' })).toHaveTextContent(
+      'Сначала старые',
+    )
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('radio', { name: 'По названию' }))
     expect(new URLSearchParams(router.state.location.search).get('q')).toBe('Тула')
     expect(new URLSearchParams(router.state.location.search).get('status')).toBe('draft')
     expect(list).toHaveBeenCalledOnce()
@@ -104,7 +114,7 @@ describe('employer vacancy workflow', () => {
     await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
     await act(() => router.navigate(-1))
     await screen.findByRole('heading', { name: 'Бариста' })
-    expect(screen.getByRole('combobox')).toHaveValue('title')
+    expect(screen.getByRole('combobox')).toHaveTextContent('По названию')
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
     await screen.findByRole('heading', { name: 'Бариста' })
     expect(titles()).toEqual(['Бариста', 'Повар'])
@@ -112,7 +122,8 @@ describe('employer vacancy workflow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Сбросить фильтры' }))
     expect(router.state.location.search).toBe('?sort=title')
     expect(titles()).toEqual(['Бариста', 'Повар'])
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'newest' } })
+    fireEvent.click(screen.getByRole('combobox'))
+    fireEvent.click(screen.getByRole('radio', { name: 'Сначала новые' }))
     expect(router.state.location.search).toBe('')
     expect(titles()).toEqual(['Повар', 'Бариста'])
   })
@@ -121,7 +132,7 @@ describe('employer vacancy workflow', () => {
     await seed(session)
     const router = start(session, '/vacancies?sort=unknown')
     await screen.findByRole('heading', { name: 'Повар' })
-    expect(screen.getByRole('combobox')).toHaveValue('newest')
+    expect(screen.getByRole('combobox')).toHaveTextContent('Сначала новые')
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'all' } })
     expect(new URLSearchParams(router.state.location.search).get('q')).toBe('all')
     expect(screen.getByRole('heading', { name: 'Ничего не нашлось' })).toBeInTheDocument()
@@ -283,7 +294,7 @@ describe('employer vacancy workflow', () => {
       expect(screen.getByLabelText(/Название вакансии/)).toHaveValue('Повар')
       expect(screen.getByLabelText(/Город или регион/)).toHaveValue('Тула')
       expect(screen.getByLabelText(/Сфера деятельности/)).toHaveValue('Общепит')
-      expect(screen.getByLabelText(/Тип занятости/)).toHaveValue('seasonal')
+      expect(screen.getByLabelText(/Тип занятости/)).toHaveTextContent('Сезонная работа')
       expect(screen.getByLabelText(/Зарплата от/)).toHaveValue('50000')
       expect(screen.getByLabelText(/Зарплата до/)).toHaveValue('')
       expect(screen.getByLabelText(/Описание работы/)).toHaveValue('За месяц')

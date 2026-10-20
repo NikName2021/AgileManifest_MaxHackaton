@@ -1,3 +1,5 @@
+import { Input } from '../shared/ui/Input'
+import { Select } from '../shared/ui/Select'
 import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, BriefcaseBusiness, MapPin, Plus, RefreshCw, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -67,16 +69,19 @@ export function VacanciesPage() {
         </Button>
       </div>
       <div className="vacancy-toolbar">
-        <label className="vacancy-search">
+        <div className="vacancy-search">
           <Search size={18} />
-          <span className="sr-only">Поиск вакансий</span>
-          <input
+          <label className="sr-only" htmlFor="vacancy-search">
+            Поиск вакансий
+          </label>
+          <Input
+            id="vacancy-search"
             type="search"
             placeholder="Должность, город или сфера"
             value={query}
             onChange={(e) => filter('q', e.target.value)}
           />
-        </label>
+        </div>
         <Button variant="secondary" onClick={reload} disabled={result.state === 'loading'}>
           <RefreshCw size={16} />
           Обновить
@@ -105,7 +110,8 @@ export function VacanciesPage() {
         </div>
         <label className="vacancy-sort">
           <span>Порядок</span>
-          <select
+          <Select
+            label="Сортировка вакансий"
             aria-label="Сортировка вакансий"
             value={sort}
             onChange={(event) => filter('sort', event.target.value)}
@@ -115,7 +121,7 @@ export function VacanciesPage() {
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
       <RefreshStatus refreshing={isRefreshing} failed={Boolean(refreshError)} retry={refresh} />

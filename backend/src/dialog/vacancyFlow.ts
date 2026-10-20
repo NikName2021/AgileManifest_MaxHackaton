@@ -1,5 +1,6 @@
 import { OWNER_KEY, type DialogFlow } from './types.js';
 import { normalizeRegion } from '../regions/dictionary.js';
+import { employerTrust } from '../employers/trust.js';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT, buildVacancyCardText, buildApplyDeepLink } from '../vacancies/cardText.js';
 import { draftDecisionButtons } from './preview.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
@@ -159,7 +160,10 @@ export const vacancyFlow: DialogFlow = {
                     .join('\n\n'),
             },
             {
-                text: buildVacancyCardText(vacancy, buildApplyDeepLink(vacancy.id)),
+                text: buildVacancyCardText(
+                    { ...vacancy, trustedEmployer: (await employerTrust(employer.id)).trusted },
+                    buildApplyDeepLink(vacancy.id)
+                ),
                 buttons: draftDecisionButtons(vacancy.id),
             },
         ];

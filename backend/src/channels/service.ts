@@ -4,6 +4,7 @@ import { maxApi, type InlineButton } from '../max/client.js';
 import { findOrCreateUserByMaxId } from '../users/service.js';
 import { buildApplyDeepLink, buildVacancyCardText } from '../vacancies/cardText.js';
 import { regionDto, type RegionDto } from '../regions/service.js';
+import { employerTrust } from '../employers/trust.js';
 
 export interface PartnerChannelDto {
   id: number;
@@ -104,7 +105,8 @@ export async function notifyPartnerChannels(vacancyId: number): Promise<number> 
     },
   });
   const url = buildApplyDeepLink(vacancy.id, undefined, 'ch');
-  const text = buildVacancyCardText(vacancy, url);
+  const { trusted } = await employerTrust(vacancy.employerUserId);
+  const text = buildVacancyCardText({ ...vacancy, trustedEmployer: trusted }, url);
 
   let sent = 0;
   for (const channel of channels) {

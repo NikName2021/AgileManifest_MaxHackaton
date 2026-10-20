@@ -3,6 +3,7 @@ import { maxApi, type InlineButton } from '../max/client.js';
 import { buildVacancyCardText, buildApplyDeepLink, MAX_CARD_TEXT_LIMIT } from './cardText.js';
 import type { Vacancy } from '@prisma/client';
 import { onVacancyPublished } from './broadcast.js';
+import { employerTrust } from '../employers/trust.js';
 
 export type PublishErrorKind = 'not_found' | 'conflict' | 'no_chat';
 
@@ -39,6 +40,7 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         contactInfo: vacancy.contactInfo,
         headcount: vacancy.headcount,
         studentFriendly: vacancy.studentFriendly,
+        trustedEmployer: (await employerTrust(vacancy.employerUserId)).trusted,
     }, applyUrl);
     // Старые записи могли сохраниться до резерва под ссылку — проверяем итоговый текст ещё раз.
     if (text.length > MAX_CARD_TEXT_LIMIT) {

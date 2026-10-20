@@ -111,3 +111,22 @@ describe('набор бригады (headcount)', () => {
     }
   });
 });
+
+describe('подходит студентам', () => {
+  it('отметка видна в карточке и каталоге, фильтр student_friendly', async () => {
+    const created = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'Вожатый', student_friendly: true } });
+    const id = created.json().id as number;
+    expect(created.json().studentFriendly).toBe(true);
+    await app.inject({ method: 'POST', url: `/api/vacancies/${id}/publish`, headers: A.auth });
+    await vacancy(null);
+    const card = sendMessageMock.mock.calls.find((c) => String(c[1]).includes('Вожатый'));
+    expect(card?.[1]).toContain('Подходит студентам');
+
+    const students = (await app.inject({ method: 'GET', url: '/api/jobs?student_friendly=true', headers: workers[0].auth })).json();
+    expect(students.items.map((j: { id: number }) => j.id)).toEqual([id]);
+    expect(students.items[0].studentFriendly).toBe(true);
+    expect((await app.inject({ method: 'GET', url: '/api/jobs?student_friendly=false', headers: workers[0].auth })).json().total).toBe(1);
+    expect((await app.inject({ method: 'GET', url: '/api/jobs', headers: workers[0].auth })).json().total).toBe(2);
+    expect((await app.inject({ method: 'GET', url: '/api/jobs?student_friendly=yes', headers: workers[0].auth })).statusCode).toBe(400);
+  });
+});

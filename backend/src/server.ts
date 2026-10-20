@@ -135,6 +135,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       description: body.description ?? null,
       contactInfo: body.contact_info ?? null,
       headcount: body.headcount ?? null,
+      studentFriendly: body.student_friendly ?? false,
       status: 'draft',
       // Пусто, если пользователь ещё не писал боту — тогда publish вернёт employer_chat_missing.
       employerChatId: employer?.dialogChatId || employer?.chatId || null,
@@ -185,6 +186,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     description: body.description !== undefined ? body.description : existing.description,
     contact_info: body.contact_info !== undefined ? body.contact_info : existing.contactInfo,
     headcount: body.headcount !== undefined ? body.headcount : existing.headcount,
+    student_friendly: body.student_friendly ?? existing.studentFriendly,
   };
   const constraintCheck = checkMergedVacancyConstraints(merged);
   if (!constraintCheck.ok) {
@@ -207,6 +209,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
       description: merged.description,
       contactInfo: merged.contact_info,
       headcount: merged.headcount,
+      studentFriendly: merged.student_friendly,
     },
   });
   if (updateResult.count === 0) {

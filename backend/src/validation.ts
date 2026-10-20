@@ -18,6 +18,7 @@ const vacancyBaseShape = {
   description: z.string().trim().max(4000).nullable().optional(),
   contact_info: z.string().trim().max(300).nullable().optional(),
   headcount: z.number().int().min(1).max(1000).nullable().optional(),
+  student_friendly: z.boolean().optional(),
 };
 
 function checkSalaryRange<T extends { salary_min?: number | null; salary_max?: number | null }>(
@@ -50,6 +51,7 @@ function checkCardLength(data: {
   description?: string | null;
   contact_info?: string | null;
   headcount?: number | null;
+  student_friendly?: boolean;
 }, ctx: z.RefinementCtx) {
   const length = vacancyCardTextLength({
     title: data.title,
@@ -60,6 +62,7 @@ function checkCardLength(data: {
     description: data.description ?? null,
     contactInfo: data.contact_info ?? null,
     headcount: data.headcount ?? null,
+    studentFriendly: data.student_friendly ?? false,
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     ctx.addIssue({
@@ -129,6 +132,7 @@ export const listJobsQuerySchema = z
     schedule: SCHEDULE_ENUM.optional(),
     salary_from: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)),
     salary_to: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)),
+    student_friendly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
     sort: JOB_SORT_ENUM.optional().default('newest'),
     limit: optionalQueryInt(z.coerce.number().int().min(1).max(100)).default(20),
     offset: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)).default(0),
@@ -181,6 +185,7 @@ export function checkMergedVacancyConstraints(merged: {
   description?: string | null;
   contact_info?: string | null;
   headcount?: number | null;
+  student_friendly?: boolean;
 }): { ok: true } | { ok: false; field: string; message: string } {
   if (
     merged.salary_min !== null &&
@@ -201,6 +206,7 @@ export function checkMergedVacancyConstraints(merged: {
     description: merged.description ?? null,
     contactInfo: merged.contact_info ?? null,
     headcount: merged.headcount ?? null,
+    studentFriendly: merged.student_friendly ?? false,
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     return {

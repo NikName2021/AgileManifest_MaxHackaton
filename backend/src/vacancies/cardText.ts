@@ -14,6 +14,7 @@ export interface VacancyCardFields {
   contactInfo: string | null;
   // Сколько человек нужно; null — не указано.
   headcount?: number | null;
+  studentFriendly?: boolean;
 }
 
 // 0 — реальная сумма, поэтому сравнение с null, а не truthy-проверка.
@@ -73,6 +74,7 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
     `График: ${escapeMarkdown(scheduleLabel(vacancy.schedule))}`,
     `Зарплата: ${salaryText}`,
     vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : undefined,
+    vacancy.studentFriendly ? 'Подходит студентам' : undefined,
     vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
     vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
     applyUrl ? applyLinkBlock(applyUrl) : undefined,

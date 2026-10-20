@@ -27,6 +27,7 @@ export interface JobDto {
   headcount: number | null;
   // null — headcount не указан.
   spotsLeft: number | null;
+  studentFriendly: boolean;
   status: string;
   createdAt: Date;
   employer: { displayName: string | null };
@@ -47,6 +48,7 @@ interface JobRow {
   description: string | null;
   headcount: number | null;
   hiredCount: number;
+  studentFriendly: boolean;
   status: string;
   createdAt: Date;
   employerUserId: number;
@@ -68,6 +70,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     description: row.description,
     headcount: row.headcount,
     spotsLeft: row.headcount === null ? null : Math.max(0, row.headcount - row.hiredCount),
+    studentFriendly: row.studentFriendly,
     status: row.status,
     createdAt: row.createdAt,
     // Поля «компания» нет — это имя пользователя в MAX.
@@ -90,7 +93,7 @@ async function findMyApplications(viewerUserId: number, vacancyIds: number[]): P
 
 const JOB_COLUMNS = Prisma.sql`
   v.id, v.title, v.region_code AS "regionCode", v.region_subject AS "regionSubject", v.category, v.schedule,
-  v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.status,
+  v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.student_friendly AS "studentFriendly", v.status,
   (SELECT COUNT(*)::int FROM applications a WHERE a.vacancy_id = v.id AND a.status = 'hired') AS "hiredCount",
   v.created_at AS "createdAt", v.employer_user_id AS "employerUserId",
   u.display_name AS "employerDisplayName"`;
@@ -100,6 +103,7 @@ export interface ListJobsParams {
   region_code?: string;
   category?: string;
   schedule?: string;
+  student_friendly?: boolean;
   salary_from?: number;
   salary_to?: number;
   sort: 'newest' | 'salary_desc';
@@ -133,6 +137,7 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   const category = nonEmpty(params.category);
   if (category) conditions.push(Prisma.sql`v.category = ${category}`);
   if (params.schedule) conditions.push(Prisma.sql`v.schedule = ${params.schedule}`);
+  if (params.student_friendly !== undefined) conditions.push(Prisma.sql`v.student_friendly = ${params.student_friendly}`);
 
   // Пересечение диапазонов; единственная граница вакансии служит обеими. Вакансия без зарплаты
   // при активном фильтре отсекается (сравнение с NULL ложно).
@@ -242,6 +247,7 @@ export async function listMyApplications(
             salaryMax: true,
             description: true,
             headcount: true,
+            studentFriendly: true,
             contactInfo: true,
             status: true,
             employer: { select: { displayName: true } },

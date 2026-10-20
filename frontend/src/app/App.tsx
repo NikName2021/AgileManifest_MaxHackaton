@@ -13,6 +13,7 @@ import { OverviewPage } from '../pages/OverviewPage'
 import { ApplicationsPage } from '../pages/ApplicationsPage'
 import { TeamPage } from '../pages/TeamPage'
 import { SubscriptionsPage } from '../pages/SubscriptionsPage'
+import { PartnerChannelsPage } from '../pages/PartnerChannelsPage'
 import { GuidePage } from '../pages/GuidePage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: 'vacancies/:id/copy', element: <VacancyFormPage copy /> },
       { path: 'applications', element: <ApplicationsPage /> },
       { path: 'team', element: <TeamPage /> },
+      { path: 'channels', element: <PartnerChannelsPage /> },
       { path: 'guide', element: <GuidePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFoundPage /> },

@@ -291,6 +291,12 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                 placeholder: 'Задачи, график, период оплаты, требования и что вы предлагаете…',
                 hint: 'Будущему сотруднику важно представить свой рабочий день.',
               })}
+              <label className="student-check">
+                <input type="checkbox" checked={values.student_friendly === 'yes'}
+                  onChange={(e) => change('student_friendly', e.target.checked ? 'yes' : '')} />
+                Подходит студентам
+              </label>
+              <p className="field-hint">Например, без опыта, с гибким графиком или на каникулы. Уточните условия в описании.</p>
             </section>
             <section className="form-section">
               <h2>

@@ -5,6 +5,7 @@ import { fetchPoster } from '../poster/api'
 
 export interface VacancyInput {
   headcount?: number | null
+  student_friendly?: boolean
   title: string
   region_code: string
   category: string
@@ -55,6 +56,7 @@ export function parseVacancy(value: unknown): Vacancy {
     !['draft', 'published', 'closed'].includes(String(v.status)) ||
     !salary(v.salaryMin) ||
     !salary(v.salaryMax) ||
+    (v.studentFriendly !== undefined && typeof v.studentFriendly !== 'boolean') ||
     !nullableString(v.description) ||
     !nullableString(v.contactInfo) ||
     !nullableString(v.cardMessageId) ||
@@ -76,6 +78,7 @@ export function parseVacancy(value: unknown): Vacancy {
     contactInfo: v.contactInfo,
     cardMessageId: v.cardMessageId,
     createdAt: v.createdAt,
+    studentFriendly: v.studentFriendly as boolean | undefined,
   }
 }
 

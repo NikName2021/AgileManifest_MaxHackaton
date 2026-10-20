@@ -100,6 +100,7 @@ export function JobFacts({ job }: { job: PublicVacancy }) {
   return (
     <>
       <strong className="vacancy-salary">{formatSalary(job.salaryMin, job.salaryMax)}</strong>
+      {job.studentFriendly && <span className="student-badge">Подходит студентам</span>}
       <div className="vacancy-meta">
         <span>{job.regionCode || 'Регион не указан'}</span>
         <span>{scheduleLabels[job.schedule]}</span>

@@ -6,6 +6,7 @@ import { createPreviewApplications } from './applications'
 import { createPreviewCandidate } from './candidate'
 import { createPreviewTeam } from './team'
 import { createPreviewSubscriptions } from './subscriptions'
+import { createPreviewPartners } from './partners'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -27,6 +28,7 @@ export function createPreviewSession(): Session {
       salaryMax: input.salary_max,
       description: input.description,
       contactInfo: input.contact_info,
+      studentFriendly: input.student_friendly ?? false,
     }
   }
   function save(row: Vacancy) {
@@ -71,6 +73,7 @@ export function createPreviewSession(): Session {
     vacancies,
     candidate: createPreviewCandidate(),
     subscriptions: createPreviewSubscriptions(),
+    partners: createPreviewPartners(),
     benchmark: {
       async get(_query, signal) {
         signal?.throwIfAborted()

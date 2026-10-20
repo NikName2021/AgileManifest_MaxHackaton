@@ -14,6 +14,7 @@ import { createBenchmarkRepository } from '../benchmark/api'
 import { createCandidateRepository } from '../candidate/api'
 import { createTeamRepository } from '../team/api'
 import { createSubscriptionRepository } from '../subscriptions/api'
+import { createPartnerRepository } from '../partners/api'
 
 type Issue =
   | 'outside'
@@ -98,6 +99,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
             candidate: createCandidateRepository(config.apiBaseUrl, credentials.token, expire),
             team: createTeamRepository(config.apiBaseUrl, credentials.token, expire),
             subscriptions: createSubscriptionRepository(config.apiBaseUrl, credentials.token, expire),
+            partners: createPartnerRepository(config.apiBaseUrl, credentials.token, expire),
             bridge,
             mode: 'max',
           },

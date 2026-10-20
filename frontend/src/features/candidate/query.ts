@@ -31,6 +31,7 @@ export function jobQuery(params: URLSearchParams): { query: JobQuery; error?: st
   return {
     error,
     query: {
+      ...(params.get('student_friendly') === 'true' ? { student_friendly: true } : {}),
       q,
       region_code: region,
       category,

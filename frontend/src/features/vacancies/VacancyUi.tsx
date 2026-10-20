@@ -46,6 +46,7 @@ export function VacancyPreview({ vacancy }: { vacancy: Vacancy }) {
           Нужно человек: <strong>{vacancy.headcount}</strong>
         </p>
       )}
+      {vacancy.studentFriendly && <span className="student-badge">Подходит студентам</span>}
       <strong className="vacancy-salary">
         {formatSalary(vacancy.salaryMin, vacancy.salaryMax)}
       </strong>

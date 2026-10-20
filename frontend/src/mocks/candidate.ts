@@ -8,6 +8,7 @@ export function createPreviewCandidate(): CandidateRepository {
     displayName: 'Демо-кабинет',
     applicationContact: null,
     hasBotChat: false,
+    employerTrust: { confirmedHires: 3 },
   }
   const jobs: Job[] = [
     {
@@ -22,7 +23,7 @@ export function createPreviewCandidate(): CandidateRepository {
         'Демонстрационная вакансия. Сбор и сортировка урожая, работа в команде. Обучение на месте. Условия проживания и график обсуждаются с работодателем.',
       status: 'published',
       createdAt: '2026-10-19T08:00:00Z',
-      employer: { displayName: 'Демо: фермерское хозяйство' },
+      employer: { displayName: 'Демо: фермерское хозяйство', confirmedHires: 5 },
       myApplication: null,
       canApply: true,
       applyUnavailableReason: null,

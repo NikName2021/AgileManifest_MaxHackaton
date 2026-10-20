@@ -21,7 +21,7 @@ export interface PublicVacancy extends Pick<
   | 'description'
   | 'status'
 > {
-  employer: { displayName: string | null }
+  employer: { displayName: string | null; confirmedHires?: number }
 }
 export interface Job extends PublicVacancy {
   status: 'published'
@@ -35,6 +35,7 @@ export interface MyApplication extends ApplicationRef {
   vacancy: PublicVacancy & { contactInfo: string | null }
 }
 export interface Profile {
+  employerTrust?: { confirmedHires: number }
   id: number
   displayName: string | null
   applicationContact: string | null
@@ -133,7 +134,12 @@ function vacancy(body: unknown): PublicVacancy {
     salaryMax,
     description: nullable(v.description),
     status: v.status as Vacancy['status'],
-    employer: { displayName: nullable(record(v.employer).displayName) },
+    employer: {
+      displayName: nullable(record(v.employer).displayName),
+      ...(record(v.employer).confirmedHires !== undefined
+        ? { confirmedHires: integer(record(v.employer).confirmedHires) }
+        : {}),
+    },
   }
 }
 export function parseJob(body: unknown): Job {
@@ -162,6 +168,9 @@ export function parseJob(body: unknown): Job {
 export function parseProfile(body: unknown): Profile {
   const v = record(body)
   return {
+    ...(v.employerTrust !== undefined
+      ? { employerTrust: { confirmedHires: integer(record(v.employerTrust).confirmedHires) } }
+      : {}),
     id: integer(v.id, 1),
     displayName: nullable(v.displayName),
     applicationContact: nullable(v.applicationContact),

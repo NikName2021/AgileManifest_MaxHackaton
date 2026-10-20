@@ -15,13 +15,23 @@ export interface VacancyCardFields {
 }
 
 // 0 — реальная сумма, поэтому сравнение с null, а не truthy-проверка.
-function formatSalary(min: number | null, max: number | null): string {
+export function formatSalary(min: number | null, max: number | null): string {
   const hasMin = min !== null;
   const hasMax = max !== null;
   if (hasMin && hasMax) return `${min}–${max} ₽`;
   if (hasMin) return `от ${min} ₽`;
   if (hasMax) return `до ${max} ₽`;
   return 'по договорённости';
+}
+
+const SCHEDULE_LABELS: Record<string, string> = {
+  seasonal: 'сезонная',
+  temporary: 'временная',
+  permanent: 'постоянная',
+};
+
+export function scheduleLabel(schedule: string): string {
+  return SCHEDULE_LABELS[schedule] ?? schedule;
 }
 
 // Неожиданное значение из GET /me или MAX_BOT_USERNAME не должно дать битый URL.
@@ -51,7 +61,7 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
   return [
     `**${escapeMarkdown(vacancy.title)}**`,
     `Регион: ${escapeMarkdown(vacancy.regionCode)}`,
-    `График: ${escapeMarkdown(vacancy.schedule)}`,
+    `График: ${escapeMarkdown(scheduleLabel(vacancy.schedule))}`,
     `Зарплата: ${salaryText}`,
     vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
     vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,

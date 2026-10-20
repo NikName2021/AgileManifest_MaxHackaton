@@ -620,6 +620,10 @@ paths:
                     salaryMin: 50000
                     salaryMax: 70000
                     description: Условия работы
+                    subject: { code: '23', name: Краснодарский край }
+                    headcount: 15
+                    spotsLeft: 12
+                    studentFriendly: false
                     status: published
                     createdAt: '2026-10-17T09:00:00.000Z'
                     employer: { displayName: Иван }
@@ -1587,9 +1591,9 @@ components:
           nullable: true
           description: Код субъекта РФ, распознанный по regionCode (GET /api/regions); null — не распознан
         subject:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Region'
-          nullable: true
+            - { type: object, nullable: true, enum: [null] }
         headcount:
           type: integer
           nullable: true
@@ -1834,9 +1838,9 @@ components:
         title: { type: string }
         regionCode: { type: string, description: 'Исходный текст региона, как ввёл работодатель' }
         subject:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Region'
-          nullable: true
+            - { type: object, nullable: true, enum: [null] }
           description: Распознанный субъект РФ
         category: { type: string }
         schedule: { type: string, enum: [seasonal, temporary, permanent] }
@@ -1850,9 +1854,9 @@ components:
         createdAt: { type: string, format: date-time }
         employer: { $ref: '#/components/schemas/EmployerPublic' }
         myApplication:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/MyApplicationRef'
-          nullable: true
+            - { type: object, nullable: true, enum: [null] }
           description: Собственный отклик текущего пользователя, если он есть
         canApply: { type: boolean }
         applyUnavailableReason:
@@ -1886,9 +1890,9 @@ components:
             title: { type: string }
             regionCode: { type: string }
             subject:
-              allOf:
+              anyOf:
                 - $ref: '#/components/schemas/Region'
-              nullable: true
+                - { type: object, nullable: true, enum: [null] }
             headcount: { type: integer, nullable: true }
             studentFriendly: { type: boolean }
             category: { type: string }
@@ -2008,9 +2012,9 @@ components:
       properties:
         id: { type: integer }
         region:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Region'
-          nullable: true
+            - { type: object, nullable: true, enum: [null] }
           description: null — вся Россия
         category: { type: string, nullable: true }
         schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null] }
@@ -2024,15 +2028,15 @@ components:
       properties:
         id: { type: integer }
         title: { type: string, nullable: true }
-        isChannel: { type: boolean, description: true — канал, false — групповой чат }
+        isChannel: { type: boolean, description: 'true — канал, false — групповой чат' }
         active: { type: boolean, description: Публикуются ли сюда вакансии }
         region:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Region'
-          nullable: true
+            - { type: object, nullable: true, enum: [null] }
           description: null — вакансии из всех регионов
         studentOnly: { type: boolean, description: Только вакансии с отметкой «подходит студентам» }
-        removed: { type: boolean, description: Бота удалили из чата — публикация невозможна, пока его не добавят снова }
+        removed: { type: boolean, description: 'Бота удалили из чата — публикация невозможна, пока его не добавят снова' }
         createdAt: { type: string, format: date-time }
 
     FilterOption:

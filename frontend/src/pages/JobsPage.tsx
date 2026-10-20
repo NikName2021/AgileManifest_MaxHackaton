@@ -12,6 +12,7 @@ import { CandidateError, Loading, Pagination } from '../features/candidate/ui'
 import { jobQuery } from '../features/candidate/query'
 import { formatSalary, scheduleLabels } from '../features/vacancies/model'
 import type { JobFilters } from '../features/candidate/api'
+import { EmployerBadge } from '../features/trust/EmployerTrust'
 
 function SearchForm({
   params,
@@ -224,6 +225,7 @@ export function JobsPage() {
                           </span>
                           <div>
                             <strong>{job.employer.displayName?.trim() || 'Работодатель'}</strong>
+                            <EmployerBadge confirmedHires={job.employer.confirmedHires} />
                             <small>{job.regionCode || 'Регион не указан'}</small>
                           </div>
                         </div>

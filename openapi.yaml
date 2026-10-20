@@ -29,7 +29,7 @@ info:
     Суммы зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц
     (как и бенчмарк «Работы России»). Если появится оплата за смену/час, нужно отдельное поле
     salary_period — до этого фильтр сравнивает суммы как есть.
-  version: 0.7.0
+  version: 0.8.0
 servers:
   - url: http://localhost:3000
     description: Локальная разработка / Docker Compose
@@ -578,6 +578,10 @@ paths:
           in: query
           description: Верхняя граница, ₽ (целое >= 0); при обеих границах salary_from <= salary_to, иначе 400
           schema: { type: integer, minimum: 0, maximum: 2147483647 }
+        - name: badges
+          in: query
+          description: Ключи бейджей через запятую; вакансия должна иметь все (например housing_free,meals_3)
+          schema: { type: string }
         - name: student_friendly
           in: query
           description: true — только вакансии с отметкой «подходит студентам», false — только без неё
@@ -624,6 +628,9 @@ paths:
                     headcount: 15
                     spotsLeft: 12
                     studentFriendly: false
+                    badges:
+                      - { key: housing_free, emoji: 🏠, label: Жильё бесплатно }
+                      - { key: meals_3, emoji: 🍲, label: 3-разовое питание }
                     status: published
                     createdAt: '2026-10-17T09:00:00.000Z'
                     employer: { displayName: Иван, trusted: true, confirmedHires: 7 }
@@ -1015,6 +1022,59 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Вакансия не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/badges:
+    get:
+      summary: Справочник бейджей вакансии по группам (жильё, питание, дорога, оплата и т.д.)
+      operationId: listBadges
+      security: []
+      responses:
+        '200':
+          description: Справочник
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups, maxPerVacancy]
+                properties:
+                  groups:
+                    type: array
+                    items: { $ref: '#/components/schemas/BadgeGroup' }
+                  maxPerVacancy: { type: integer, example: 12 }
+
+  /api/applications/{id}/timeline:
+    get:
+      summary: Дорожная карта отклика — видят кандидат и работодатель вакансии
+      operationId: getApplicationTimeline
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Дорожная карта
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApplicationTimeline' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Чужой отклик
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Отклик не найден
           content:
             application/json:
               schema:
@@ -1525,6 +1585,8 @@ components:
               description: >
                 Присутствует только при code=validation_error и только когда ошибку можно
                 привязать к конкретным полям тела/query — { "имя_поля": ["сообщение", ...] }.
+                Все тела запросов строгие: лишнее поле — { "имя": ["unknown field"] }; прочие
+                ошибки уровня всего объекта — под ключом "_".
               additionalProperties:
                 type: array
                 items:
@@ -1601,6 +1663,10 @@ components:
           description: Сколько человек нужно; когда нанято столько же, вакансия закрывается сама
         studentFriendly:
           type: boolean
+        badges:
+          type: array
+          items: { $ref: '#/components/schemas/Badge' }
+          description: Бейджи в порядке справочника; studentFriendly показывается бейджем students_ok
         publishedAt:
           type: string
           format: date-time
@@ -1625,8 +1691,12 @@ components:
         title+region_code+schedule+зарплата+description+contact_info собираются в текст карточки
         MAX (после markdown-экранирования) — итоговая длина не должна превышать 4000 символов
         (документированный лимит MAX на сообщение), иначе 400 validation_error с полем description.
-        salary_min/salary_max — JSON-числа (строки вроде "" или "50000" отклоняются 400),
-        ограничены диапазоном Postgres Int (максимум 2147483647).
+        salary_min/salary_max — целые JSON-числа от 0 до 10 000 000 ₽ (строки вроде "" или
+        "50000" отклоняются 400). Текстовые поля нормализуются: в однострочных (title,
+        region_code, category, contact_info) пробелы и переносы схлопываются в один пробел; длина
+        считается после этого. Управляющие и невидимые символы отклоняются; непустое значение
+        должно содержать букву или цифру. Пустые description и contact_info сохраняются как null.
+        Лишние поля — 400.
       properties:
         title:
           type: string
@@ -1658,6 +1728,12 @@ components:
         student_friendly:
           type: boolean
           description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
+        badges:
+          type: array
+          maxItems: 12
+          items: { type: string }
+          description: Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются
+          example: [housing_free, meals_3, tickets_paid]
 
     VacancyPatchInput:
       type: object
@@ -1700,6 +1776,12 @@ components:
         student_friendly:
           type: boolean
           description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
+        badges:
+          type: array
+          maxItems: 12
+          items: { type: string }
+          description: Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются
+          example: [housing_free, meals_3, tickets_paid]
 
     Application:
       type: object
@@ -1843,7 +1925,7 @@ components:
     Job:
       type: object
       description: Вакансия в каталоге работника. Служебные поля доставки и контакты не включаются.
-      required: [id, title, regionCode, subject, category, schedule, salaryMin, salaryMax, description, headcount, spotsLeft, studentFriendly, status, createdAt, employer, myApplication, canApply, applyUnavailableReason]
+      required: [id, title, regionCode, subject, category, schedule, salaryMin, salaryMax, description, headcount, spotsLeft, studentFriendly, badges, status, createdAt, employer, myApplication, canApply, applyUnavailableReason]
       properties:
         id: { type: integer }
         title: { type: string }
@@ -1861,6 +1943,9 @@ components:
         headcount: { type: integer, nullable: true }
         spotsLeft: { type: integer, nullable: true, description: 'headcount минус нанятые; null — headcount не указан' }
         studentFriendly: { type: boolean }
+        badges:
+          type: array
+          items: { $ref: '#/components/schemas/Badge' }
         status: { type: string, enum: [published] }
         createdAt: { type: string, format: date-time }
         employer: { $ref: '#/components/schemas/EmployerPublic' }
@@ -1877,7 +1962,7 @@ components:
 
     MyApplication:
       type: object
-      required: [id, status, contact, createdAt, updatedAt, vacancy]
+      required: [id, status, contact, createdAt, updatedAt, vacancy, timeline]
       properties:
         id: { type: integer }
         status:
@@ -1891,11 +1976,12 @@ components:
         startAt: { type: string, format: date-time, nullable: true, description: Время выхода на смену }
         shiftNote: { type: string, nullable: true }
         attendance: { type: string, nullable: true, enum: [pending, confirmed, declined, null] }
+        timeline: { $ref: '#/components/schemas/ApplicationTimeline' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         vacancy:
           type: object
-          required: [id, title, regionCode, subject, category, schedule, salaryMin, salaryMax, description, headcount, studentFriendly, contactInfo, status, employer]
+          required: [id, title, regionCode, subject, category, schedule, salaryMin, salaryMax, description, headcount, studentFriendly, badges, contactInfo, status, employer]
           properties:
             id: { type: integer }
             title: { type: string }
@@ -1906,6 +1992,9 @@ components:
                 - { type: object, nullable: true, enum: [null] }
             headcount: { type: integer, nullable: true }
             studentFriendly: { type: boolean }
+            badges:
+              type: array
+              items: { $ref: '#/components/schemas/Badge' }
             category: { type: string }
             schedule: { type: string, enum: [seasonal, temporary, permanent] }
             salaryMin: { type: integer, nullable: true }
@@ -2017,6 +2106,83 @@ components:
           properties:
             id: { type: integer }
             displayName: { type: string, nullable: true }
+
+    Badge:
+      type: object
+      required: [key, emoji, label]
+      properties:
+        key: { type: string, example: housing_free, description: Стабильный ключ — его передают в badges вакансии }
+        emoji: { type: string, example: 🏠 }
+        label: { type: string, example: Жильё бесплатно }
+
+    BadgeGroup:
+      type: object
+      required: [key, label, emoji, items]
+      properties:
+        key: { type: string, example: housing }
+        label: { type: string, example: Жильё и быт }
+        emoji: { type: string, example: 🏠 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Badge' }
+
+    TimelineStep:
+      type: object
+      required: [key, emoji, label, hint, state, reachedAt]
+      properties:
+        key:
+          type: string
+          enum: [applied, viewed, contacted, invited, shift_confirmed, hired]
+        emoji: { type: string, example: 📨 }
+        label: { type: string, example: Отклик отправлен }
+        hint: { type: string, description: Пояснение для подсказки }
+        state:
+          type: string
+          enum: [done, current, upcoming, skipped]
+          description: >
+            done — пройден; current — кандидат сейчас здесь; upcoming — впереди; skipped —
+            работодатель перешёл дальше, минуя этап (например, нанял сразу без приглашения)
+        reachedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Когда этап достигнут (UTC); frontend показывает его по наведению, например «14.35»
+
+    ApplicationTimeline:
+      type: object
+      required: [current, outcome, steps]
+      description: >
+        Дорожная карта отклика. Этапы всегда в одном порядке: applied → viewed → contacted →
+        invited → shift_confirmed → hired. «viewed» — первый раз, когда работодатель открыл
+        список откликов в мини-приложении или сменил этап (в том числе кнопкой в чате). Если
+        работодатель вернул кандидата на этап назад, current тоже откатывается.
+      properties:
+        current:
+          type: string
+          enum: [applied, viewed, contacted, invited, shift_confirmed, hired]
+        outcome:
+          type: object
+          nullable: true
+          description: Итог — нанят, отказ или вакансия закрыта; null — процесс идёт
+          required: [key, emoji, label, reachedAt]
+          properties:
+            key: { type: string, enum: [hired, rejected, vacancy_closed] }
+            emoji: { type: string }
+            label: { type: string }
+            reachedAt: { type: string, format: date-time, nullable: true }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/TimelineStep' }
+      example:
+        current: invited
+        outcome: null
+        steps:
+          - { key: applied, emoji: 📨, label: Отклик отправлен, hint: Работодатель получил ваш контакт, state: done, reachedAt: '2026-10-21T09:12:00.000Z' }
+          - { key: viewed, emoji: 👀, label: Работодатель посмотрел, hint: Отклик открыт в кабинете работодателя, state: done, reachedAt: '2026-10-21T10:03:00.000Z' }
+          - { key: contacted, emoji: 📞, label: На связи, hint: Работодатель связался с вами, state: skipped, reachedAt: null }
+          - { key: invited, emoji: ✉️, label: Приглашение, hint: Вас пригласили на работу или собеседование, state: current, reachedAt: '2026-10-21T11:40:00.000Z' }
+          - { key: shift_confirmed, emoji: ✅, label: Выход подтверждён, hint: Вы подтвердили, что выйдете на смену, state: upcoming, reachedAt: null }
+          - { key: hired, emoji: 🎉, label: Нанят, hint: Вас приняли на работу, state: upcoming, reachedAt: null }
 
     Region:
       type: object

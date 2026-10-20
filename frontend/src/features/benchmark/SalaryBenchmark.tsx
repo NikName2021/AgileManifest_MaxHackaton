@@ -51,8 +51,8 @@ function BenchmarkPanel({ position, region }: BenchmarkQuery) {
         {demo && <span className="benchmark-demo">Демо</span>}
       </div>
       <p className="benchmark-intro">
-        Средние границы зарплат в вакансиях «Работы России» по названию должности, без фильтра по
-        региону.
+        Средние границы зарплат в вакансиях «Работы России» по названию должности и региону. Если
+        региональных данных недостаточно, сервис использует выборку по России.
       </p>
       {demo && (
         <p className="benchmark-hint">
@@ -77,6 +77,13 @@ function BenchmarkPanel({ position, region }: BenchmarkQuery) {
         )}
         {state.kind === 'ready' && (
           <>
+            <p className="benchmark-hint">
+              {state.data.scope === 'region'
+                ? `Выборка: ${state.data.regionName}.`
+                : state.data.scope === 'country'
+                  ? 'Выборка по России: для выбранного региона недостаточно данных или он не распознан.'
+                  : 'Сервис не указал регион выборки.'}
+            </p>
             {!state.data.isFresh && (
               <p className="benchmark-warning">
                 Источник временно недоступен. Показаны сохранённые данные, которые могли устареть.

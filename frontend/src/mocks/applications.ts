@@ -17,6 +17,13 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
     }
   }
   const applications: ApplicationRepository = {
+    async setShift(id, startAt, note) {
+      const row = rows.get(id)
+      if (!row || !['invited', 'hired'].includes(row.status)) throw new ApiError('server', 409)
+      const shift = { startAt, shiftNote: startAt ? note : null, attendance: startAt ? 'pending' as const : null }
+      rows.set(id, { ...row, ...shift })
+      return { ...shift, notified: false }
+    },
     async list(query) {
       const matching = Array.from(rows.values()).filter(
         (row) => !query.status || row.status === query.status,

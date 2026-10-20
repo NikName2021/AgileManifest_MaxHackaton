@@ -2,6 +2,7 @@ import type { ApplicationStatus, Vacancy } from '../../entities/hiring'
 import { isApplicationStatus } from '../applications/api'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
+import { parseShift, type Shift } from '../shifts/model'
 
 export interface ApplicationRef {
   id: number
@@ -32,7 +33,7 @@ export interface Job extends PublicVacancy {
   canApply: boolean
   applyUnavailableReason: 'already_applied' | 'own_vacancy' | null
 }
-export interface MyApplication extends ApplicationRef {
+export interface MyApplication extends ApplicationRef, Shift {
   contact: string | null
   vacancy: PublicVacancy & { contactInfo: string | null }
 }
@@ -191,6 +192,7 @@ export function parseMyApplication(body: unknown): MyApplication {
   return {
     ...ref(v),
     contact: nullable(v.contact),
+    ...parseShift(v),
     vacancy: { ...vacancy(job), contactInfo: nullable(job.contactInfo) },
   }
 }

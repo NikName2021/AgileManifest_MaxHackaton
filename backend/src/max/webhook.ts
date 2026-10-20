@@ -4,8 +4,12 @@ import { maxApi } from './client.js';
 import { config } from '../config.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
-import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
+import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat, type ApplicationSource } from '../application/service.js';
 import { handleTeamInviteResponse } from '../team/service.js';
+import { handleDraftDecision } from '../dialog/preview.js';
+import { subscribeLike, unsubscribe } from '../subscriptions/service.js';
+import { handleBotAdded, handleBotRemoved, isPartnerChat } from '../channels/service.js';
+import { handleAttendanceAnswer } from '../shifts/service.js';
 
 // Сравнение за постоянное время; хеши уравнивают длину.
 function secretsEqual(received: unknown, expected: string): boolean {
@@ -54,12 +58,15 @@ function extractContactFromMessage(update: any): string | undefined {
 
 // Payload deep link — "apply_123" без двоеточия: отличается от callback-кнопки "apply:123"
 // и не зависит от кодирования спецсимволов в start=.
-function parseDeepLinkApplyPayload(payload: unknown): number | undefined {
+const LINK_SOURCES: Record<string, ApplicationSource> = { qr: 'qr', sub: 'subscription', ch: 'channel' };
+
+function parseDeepLinkApplyPayload(payload: unknown): { vacancyId: number; source: ApplicationSource } | undefined {
     if (typeof payload !== 'string') return undefined;
-    const match = /^apply_(\d+)$/.exec(payload);
+    const match = /^apply_(\d+)(?:_([a-z]+))?$/.exec(payload);
     if (!match) return undefined;
-    const id = Number(match[1]);
-    return Number.isFinite(id) ? id : undefined;
+    const vacancyId = Number(match[1]);
+    if (!Number.isFinite(vacancyId)) return undefined;
+    return { vacancyId, source: (match[2] && LINK_SOURCES[match[2]]) || 'link' };
 }
 
 export function registerMaxWebhook(app: FastifyInstance) {
@@ -100,13 +107,16 @@ export function registerMaxWebhook(app: FastifyInstance) {
         const senderId = update.message?.sender?.user_id ?? update.user?.user_id ?? update.sender?.user_id;
         const senderName = update.message?.sender?.name ?? update.user?.name ?? update.sender?.name;
 
-        if (chatId && senderId) {
+        // Сообщения в канале или чате партнёра бота не касаются — не отвечаем туда.
+        if (chatId && senderId && !(await isPartnerChat(chatId))) {
           await upsertUser(String(senderId), String(chatId), senderName);
 
           if (text === '/новая_вакансия') {
             await startFlow(chatId, 'new_vacancy', String(senderId));
           } else if (text === '/отмена') {
             await cancelFlow(chatId);
+          } else if (text === '/отписаться') {
+            await unsubscribe(chatId, String(senderId), 'all');
           } else {
             // Сначала диалог создания вакансии, потом ожидание контакта после отклика.
             const dialogHandled = await handleAnswer(chatId, String(senderId), text);
@@ -130,9 +140,9 @@ export function registerMaxWebhook(app: FastifyInstance) {
         if (chatId && senderId) {
           await upsertUser(String(senderId), chatId, senderName, { isDialog: true });
 
-          const vacancyId = parseDeepLinkApplyPayload(update.payload);
-          if (vacancyId !== undefined) {
-            await handleApplyClick(chatId, String(senderId), vacancyId);
+          const deepLink = parseDeepLinkApplyPayload(update.payload);
+          if (deepLink) {
+            await handleApplyClick(chatId, String(senderId), deepLink.vacancyId, deepLink.source);
           } else {
             await maxApi.sendMessage(
               chatId,
@@ -141,6 +151,19 @@ export function registerMaxWebhook(app: FastifyInstance) {
             );
           }
         }
+      }
+
+      if (update.update_type === 'bot_added') {
+        const chatId = toStringId(update.chat_id);
+        const userId = toStringId(update.user?.user_id);
+        if (chatId && userId) {
+          await handleBotAdded(chatId, { id: userId, name: update.user?.name }, update.is_channel === true);
+        }
+      }
+
+      if (update.update_type === 'bot_removed') {
+        const chatId = toStringId(update.chat_id);
+        if (chatId) await handleBotRemoved(chatId);
       }
 
       if (update.update_type === 'message_callback') {
@@ -164,16 +187,28 @@ export function registerMaxWebhook(app: FastifyInstance) {
         }
 
         if (chatId && payload?.startsWith('apply:')) {
-          const vacancyId = Number(payload.slice('apply:'.length));
+          // apply:<id> — кнопка на карточке, apply:<id>:sub — в рассылке по подписке.
+          const [, idStr, tag] = payload.split(':');
+          const vacancyId = Number(idStr);
           if (Number.isFinite(vacancyId) && senderId) {
-            await handleApplyClick(chatId, String(senderId), vacancyId);
+            await handleApplyClick(chatId, String(senderId), vacancyId, tag === 'sub' ? 'subscription' : 'card');
           }
+        } else if (chatId && senderId && /^subscribe_like:\d+$/.test(payload ?? '')) {
+          await subscribeLike(chatId, String(senderId), Number(payload.split(':')[1]));
+        } else if (chatId && senderId && /^attend:\d+:(yes|no)$/.test(payload ?? '')) {
+          const [, idStr, answer] = payload.split(':');
+          await handleAttendanceAnswer(chatId, String(senderId), Number(idStr), answer);
+        } else if (chatId && senderId && /^unsub:\d+$/.test(payload ?? '')) {
+          await unsubscribe(chatId, String(senderId), Number(payload.split(':')[1]));
         } else if (chatId && payload?.startsWith('app_status:')) {
           const [, applicationIdStr, status] = payload.split(':');
           const applicationId = Number(applicationIdStr);
           if (Number.isFinite(applicationId) && status && senderId) {
             await handleStatusChangeFromChat(chatId, String(senderId), applicationId, status);
           }
+        } else if (chatId && senderId && /^draft_(publish|keep):\d+$/.test(payload ?? '')) {
+          const [action, idStr] = payload.slice('draft_'.length).split(':');
+          await handleDraftDecision(chatId, String(senderId), Number(idStr), action);
         } else if (chatId && payload?.startsWith('team_invite:')) {
           const [, inviteIdStr, answer] = payload.split(':');
           const inviteId = Number(inviteIdStr);

@@ -45,6 +45,11 @@ export function funnelButtons(applicationId: number): InlineButton[][] {
     ];
 }
 
+// Откуда пришёл отклик: card — кнопка на карточке в чате, link — ссылка без метки, qr — QR-объявление,
+// subscription — рассылка по подписке, channel — канал партнёра, miniapp — мини-приложение,
+// team — ответ на приглашение «Моей бригады».
+export type ApplicationSource = 'card' | 'link' | 'qr' | 'subscription' | 'channel' | 'miniapp' | 'team';
+
 export type CreateApplicationError = 'not_found' | 'vacancy_unavailable' | 'self_application_forbidden' | 'already_applied';
 
 export type CreateApplicationResult =
@@ -61,6 +66,7 @@ export async function createApplicationRecord(input: {
     candidateChatId: string | null;
     // invited — отклик по приглашению работодателя («Моя бригада»), минуя «Новый».
     status?: 'new' | 'invited';
+    source?: ApplicationSource;
 }): Promise<CreateApplicationResult> {
     try {
         return await db.$transaction(async (tx) => {
@@ -79,6 +85,7 @@ export async function createApplicationRecord(input: {
                     vacancyId: input.vacancyId,
                     candidateUserId: input.candidateUserId,
                     status: input.status ?? 'new',
+                    source: input.source ?? null,
                     contact: input.contact,
                     candidateChatId: input.candidateChatId,
                 },
@@ -93,7 +100,7 @@ export async function createApplicationRecord(input: {
 
 // Шаг 1 отклика через бота: кандидат нажал «Откликнуться», просим контакт.
 
-export async function handleApplyClick(candidateChatId: string, candidateMaxUserId: string, vacancyId: number) {
+export async function handleApplyClick(candidateChatId: string, candidateMaxUserId: string, vacancyId: number, source: ApplicationSource = 'card') {
     const candidate = await db.user.findUnique({ where: { maxUserId: candidateMaxUserId } });
     if (!candidate) {
         await maxApi.sendMessage(candidateChatId, 'Не получилось оформить отклик, попробуйте ещё раз чуть позже.');
@@ -126,8 +133,8 @@ export async function handleApplyClick(candidateChatId: string, candidateMaxUser
 
     await db.pendingApplication.upsert({
         where: { chatId: candidateChatId },
-        update: { vacancyId },
-        create: { chatId: candidateChatId, vacancyId },
+        update: { vacancyId, source },
+        create: { chatId: candidateChatId, vacancyId, source },
     });
 
     // TODO: реальный вид payload при нажатии request_contact подтверждён частично (vcf_info) —
@@ -188,6 +195,7 @@ export async function resolvePendingApplication(
             candidateUserId: candidate.id,
             contact,
             candidateChatId: chatId,
+            source: (pending.source as ApplicationSource | null) ?? undefined,
         });
         if (!result.ok) {
             await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});
@@ -213,7 +221,8 @@ export async function resolvePendingApplication(
     try {
         await maxApi.sendMessage(
             chatId,
-            `Отклик отправлен! Работодатель получит ваш контакт и свяжется по вакансии «${escapeMarkdown(vacancy.title)}».`
+            `Отклик отправлен! Работодатель получит ваш контакт и свяжется по вакансии «${escapeMarkdown(vacancy.title)}».`,
+            [[{ type: 'callback', text: 'Присылать похожие вакансии', payload: `subscribe_like:${vacancy.id}` }]]
         );
     } catch (err) {
         console.error('failed to send confirmation to candidate', vacancy.id, err);
@@ -270,6 +279,8 @@ export interface ApplyStatusChangeResult {
     notifyError?: string;
     // Статус уже был таким — ни записи, ни повторного уведомления.
     unchanged?: boolean;
+    // Этот найм заполнил все места (headcount) — вакансия закрыта автоматически.
+    vacancyClosed?: boolean;
 }
 
 // Общая точка для REST и кнопок в чате. Сбой доставки в MAX не откатывает статус — только notified: false.
@@ -287,19 +298,64 @@ export async function applyStatusChange(applicationId: number, status: string): 
         return { application, notified: false, unchanged: true };
     }
 
+    const notification = await notifyCandidate(application, status);
+    const vacancyClosed = status === 'hired' ? await closeIfFilled(application.vacancyId) : false;
+    return { application, ...notification, vacancyClosed };
+}
+
+async function notifyCandidate(
+    application: Application & { vacancy: Vacancy; candidate: User },
+    status: string
+): Promise<{ notified: boolean; notifyError?: string }> {
     const candidateText = statusMessageForCandidate(status, application.vacancy.title);
     // Фолбэк — только личный чат: последний chatId мог быть групповым.
     const targetChatId = application.candidateChatId || application.candidate.dialogChatId;
-
-    if (!candidateText || !targetChatId) {
-        return { application, notified: false };
-    }
+    if (!candidateText || !targetChatId) return { notified: false };
 
     try {
         await maxApi.sendMessage(targetChatId, candidateText);
-        return { application, notified: true };
+        return { notified: true };
     } catch (err: any) {
-        console.error('failed to notify candidate about status change', applicationId, err);
-        return { application, notified: false, notifyError: err?.message ?? String(err) };
+        console.error('failed to notify candidate about status change', application.id, err);
+        return { notified: false, notifyError: err?.message ?? String(err) };
     }
+}
+
+// Все места заняты — закрываем вакансию и вежливо отвечаем тем, кто ещё ждёт (Новый, На связи).
+// «Приглашённых» не трогаем: работодатель уже договаривался с ними сам. При одновременных наймах
+// закрытие и рассылка происходят один раз — у остальных updateMany вернёт count === 0.
+async function closeIfFilled(vacancyId: number): Promise<boolean> {
+    const vacancy = await db.vacancy.findUniqueOrThrow({ where: { id: vacancyId }, include: { employer: true } });
+    if (!vacancy.headcount || vacancy.status !== 'published') return false;
+    const hired = await db.application.count({ where: { vacancyId, status: 'hired' } });
+    if (hired < vacancy.headcount) return false;
+
+    const closed = await db.vacancy.updateMany({ where: { id: vacancyId, status: 'published' }, data: { status: 'closed' } });
+    if (closed.count === 0) return false;
+
+    const waiting = await db.application.findMany({
+        where: { vacancyId, status: { in: ['new', 'contacted'] } },
+        include: { candidate: true },
+    });
+    await db.application.updateMany({
+        where: { id: { in: waiting.map((a) => a.id) }, status: { in: ['new', 'contacted'] } },
+        data: { status: 'rejected' },
+    });
+    const title = escapeMarkdown(vacancy.title);
+    for (const a of waiting) {
+        const chatId = a.candidateChatId || a.candidate.dialogChatId;
+        if (!chatId) continue;
+        await maxApi
+            .sendMessage(chatId, `Спасибо за отклик на «${title}»! Набор уже закрыт — все места заняты. Удачи в поиске работы!`)
+            .catch((err) => console.error('failed to send filled-vacancy notice', a.id, err));
+    }
+
+    const employerChatId = vacancy.employerChatId || vacancy.employer.dialogChatId || vacancy.employer.chatId;
+    if (employerChatId) {
+        const rest = waiting.length ? ` Остальным ${waiting.length} кандидатам отправлен вежливый отказ.` : '';
+        await maxApi
+            .sendMessage(employerChatId, `Набор на «${title}» закрыт: все ${vacancy.headcount} мест заняты.${rest}`)
+            .catch((err) => console.error('failed to notify employer about filled vacancy', vacancyId, err));
+    }
+    return true;
 }

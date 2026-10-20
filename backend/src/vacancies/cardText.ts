@@ -12,6 +12,9 @@ export interface VacancyCardFields {
   salaryMax: number | null;
   description: string | null;
   contactInfo: string | null;
+  // Сколько человек нужно; null — не указано.
+  headcount?: number | null;
+  studentFriendly?: boolean;
 }
 
 // 0 — реальная сумма, поэтому сравнение с null, а не truthy-проверка.
@@ -43,9 +46,16 @@ const RESERVED_VACANCY_ID = 2147483647;
 
 // Deep link отклика для текста карточки, link-кнопки и applyUrl в API. Формат —
 // dev.max.ru/help/deeplinks, payload apply_<id> разбирает webhook.ts. null — username неизвестен.
-export function buildApplyDeepLink(vacancyId: number, botUsername: string | undefined = getBotUsername()): string | null {
+// Метка в payload (apply_<id>_<метка>) показывает, откуда пришёл отклик.
+export type LinkSource = 'qr' | 'sub' | 'ch';
+
+export function buildApplyDeepLink(
+  vacancyId: number,
+  botUsername: string | undefined = getBotUsername(),
+  source?: LinkSource
+): string | null {
   if (!botUsername || !BOT_USERNAME_RE.test(botUsername)) return null;
-  return `https://max.ru/${botUsername}?start=apply_${vacancyId}`;
+  return `https://max.ru/${botUsername}?start=apply_${vacancyId}${source ? `_${source}` : ''}`;
 }
 
 function applyLinkBlock(applyUrl: string): string {
@@ -63,6 +73,8 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
     `Регион: ${escapeMarkdown(vacancy.regionCode)}`,
     `График: ${escapeMarkdown(scheduleLabel(vacancy.schedule))}`,
     `Зарплата: ${salaryText}`,
+    vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : undefined,
+    vacancy.studentFriendly ? 'Подходит студентам' : undefined,
     vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
     vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
     applyUrl ? applyLinkBlock(applyUrl) : undefined,

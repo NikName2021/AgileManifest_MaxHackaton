@@ -29,7 +29,7 @@ info:
     Суммы зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц
     (как и бенчмарк «Работы России»). Если появится оплата за смену/час, нужно отдельное поле
     salary_period — до этого фильтр сравнивает суммы как есть.
-  version: 0.5.0
+  version: 0.6.0
 servers:
   - url: http://localhost:3000
     description: Локальная разработка / Docker Compose
@@ -557,7 +557,7 @@ paths:
           schema: { type: string, maxLength: 200 }
         - name: region_code
           in: query
-          description: Точное совпадение с regionCode (значения — из GET /api/jobs/filters)
+          description: Код субъекта (совпадение с regionSubject) или исходный текст региона; значения — из GET /api/jobs/filters
           schema: { type: string, maxLength: 100 }
         - name: category
           in: query
@@ -578,6 +578,10 @@ paths:
           in: query
           description: Верхняя граница, ₽ (целое >= 0); при обеих границах salary_from <= salary_to, иначе 400
           schema: { type: integer, minimum: 0, maximum: 2147483647 }
+        - name: student_friendly
+          in: query
+          description: true — только вакансии с отметкой «подходит студентам», false — только без неё
+          schema: { type: string, enum: ['true', 'false'] }
         - name: sort
           in: query
           description: >
@@ -616,6 +620,10 @@ paths:
                     salaryMin: 50000
                     salaryMax: 70000
                     description: Условия работы
+                    subject: { code: '23', name: Краснодарский край }
+                    headcount: 15
+                    spotsLeft: 12
+                    studentFriendly: false
                     status: published
                     createdAt: '2026-10-17T09:00:00.000Z'
                     employer: { displayName: Иван }
@@ -1011,6 +1019,418 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/regions:
+    get:
+      summary: Справочник субъектов РФ (85) для выбора региона
+      operationId: listRegions
+      security: []
+      responses:
+        '200':
+          description: Субъекты, по алфавиту
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Region' }
+
+  /api/vacancies/{id}/poster.svg:
+    get:
+      summary: >
+        Объявление A4 для печати (SVG): название, зарплата, график, место, сколько человек нужно и
+        QR-код ссылки на отклик с меткой qr. Только для своей опубликованной вакансии. Запрос с
+        Bearer-токеном — в <img src> напрямую не встраивается, нужно получить blob.
+      operationId: getVacancyPoster
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: SVG-документ
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Чужая запись
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: code=vacancy_unavailable — вакансия не опубликована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: code=service_unavailable — username бота неизвестен (MAX_BOT_USERNAME)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/vacancies/{id}/qr.svg:
+    get:
+      summary: Только QR-код ссылки на отклик (метка qr), SVG
+      operationId: getVacancyQr
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: SVG-документ
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Чужая запись
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Конфликт состояния
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Сервис недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/vacancies/{id}/stats:
+    get:
+      summary: Отклики по источникам и по этапам (только владелец)
+      operationId: getVacancyStats
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Статистика
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  bySource:
+                    type: object
+                    additionalProperties: { type: integer }
+                    description: Ключи — значения Application.source; unknown — отклики до v0.6.0
+                  byStatus:
+                    type: object
+                    additionalProperties: { type: integer }
+              example:
+                total: 5
+                bySource: { qr: 2, card: 2, miniapp: 1 }
+                byStatus: { new: 3, invited: 1, hired: 1 }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Чужая запись
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/applications/{id}/shift:
+    patch:
+      summary: >
+        Назначить время выхода на смену приглашённому или нанятому кандидату. Кандидат сразу
+        получает в личный чат время, место и кнопки «Приду» / «Не смогу»; если не ответит —
+        напоминание примерно за 18 часов до выхода. Ответ уходит работодателю в чат. Новое время
+        сбрасывает прошлый ответ; start_at = null снимает назначение.
+      operationId: setApplicationShift
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [start_at]
+              additionalProperties: false
+              properties:
+                start_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: ISO 8601 со смещением, в будущем; в сообщениях показывается по МСК
+                note:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                  description: Где и что взять с собой
+            example:
+              start_at: '2026-06-21T07:00:00+03:00'
+              note: 'ул. Садовая 5, перчатки'
+      responses:
+        '200':
+          description: Назначено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+                  startAt: { type: string, format: date-time, nullable: true }
+                  shiftNote: { type: string, nullable: true }
+                  attendance: { type: string, nullable: true, enum: [pending, null] }
+                  notified: { type: boolean, description: Удалось ли сообщить кандидату }
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Чужая запись
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: code=conflict — кандидат не в статусе invited или hired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/me/subscriptions:
+    get:
+      summary: Подписки текущего пользователя на новые вакансии
+      operationId: listSubscriptions
+      responses:
+        '200':
+          description: Подписки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Subscription' }
+                  hasBotChat:
+                    type: boolean
+                    description: false — рассылка невозможна, пока пользователь не запустит бота в личном чате
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: >
+        Подписаться на новые вакансии. При публикации подходящей вакансии бот присылает её в личный
+        чат с кнопками «Откликнуться» и «Отписаться» — одному человеку одну вакансию один раз.
+        Не больше 5 подписок на пользователя.
+      operationId: createSubscription
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                region_code: { type: string, nullable: true, description: 'Код субъекта или текст («Кубань»); нераспознанный — 400' }
+                category: { type: string, nullable: true }
+                schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null] }
+                salary_from: { type: integer, nullable: true, minimum: 0 }
+                student_only: { type: boolean }
+            example:
+              region_code: '23'
+              schedule: seasonal
+              salary_from: 3000
+      responses:
+        '201':
+          description: Подписка создана
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscription' }
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: code=subscription_limit_reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/me/subscriptions/{id}:
+    delete:
+      summary: Удалить свою подписку
+      operationId: deleteSubscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '204':
+          description: Удалено
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/partner-channels:
+    get:
+      summary: >
+        Чаты и каналы, куда пользователь добавил бота (вуз, штаб студотрядов, центр занятости).
+        Канал появляется автоматически по событию MAX bot_added; публикация выключена, пока
+        владелец её не включит.
+      operationId: listPartnerChannels
+      responses:
+        '200':
+          description: Каналы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PartnerChannel' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/partner-channels/{id}:
+    patch:
+      summary: >
+        Настроить канал: включить публикацию, регион, только студенческие вакансии. Подходящие
+        вакансии публикуются туда при публикации, один раз, с кнопкой-ссылкой «Откликнуться».
+      operationId: updatePartnerChannel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                active: { type: boolean }
+                region_code: { type: string, nullable: true }
+                student_only: { type: boolean }
+      responses:
+        '200':
+          description: Обновлено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PartnerChannel' }
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Не найдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Бота удалили из чата — сначала добавьте его снова
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/benchmark:
     get:
       summary: Рыночный бенчмарк по зарплате (кэш, потом trudvsem.ru «Работа России»)
@@ -1094,6 +1514,7 @@ components:
                 - self_application_forbidden
                 - vacancy_unavailable
                 - already_applied
+                - subscription_limit_reached
             message:
               type: string
               description: Человекочитаемое сообщение (на английском, для логов/дебага, не для показа конечному пользователю как есть)
@@ -1165,6 +1586,24 @@ components:
             Чат MAX, застывший в момент публикации/создания — именно сюда уходят все будущие
             уведомления по этой вакансии, независимо от того, из какого чата работодатель
             пишет боту позже.
+        regionSubject:
+          type: string
+          nullable: true
+          description: Код субъекта РФ, распознанный по regionCode (GET /api/regions); null — не распознан
+        subject:
+          anyOf:
+            - $ref: '#/components/schemas/Region'
+            - { type: object, nullable: true, enum: [null] }
+        headcount:
+          type: integer
+          nullable: true
+          description: Сколько человек нужно; когда нанято столько же, вакансия закрывается сама
+        studentFriendly:
+          type: boolean
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1172,7 +1611,7 @@ components:
           type: string
           nullable: true
           description: >
-            Только в GET /api/vacancies и GET /api/vacancies/{id}. Deep link отклика
+            Во всех ответах с вакансией работодателя. Deep link отклика
             https://max.ru/<botUsername>?start=apply_<id> — тот же, что в тексте карточки. null, если
             вакансия не опубликована или username бота неизвестен. Нужен, чтобы переслать ссылку
             вручную, в том числе для карточек, отправленных до появления текстовой ссылки.
@@ -1209,6 +1648,15 @@ components:
         contact_info:
           type: string
           nullable: true
+        headcount:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 1000
+          description: Сколько человек нужно (строка «Нужно человек» в карточке)
+        student_friendly:
+          type: boolean
+          description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
 
     VacancyPatchInput:
       type: object
@@ -1242,6 +1690,15 @@ components:
         contact_info:
           type: string
           nullable: true
+        headcount:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 1000
+          description: Сколько человек нужно (строка «Нужно человек» в карточке)
+        student_friendly:
+          type: boolean
+          description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
 
     Application:
       type: object
@@ -1293,6 +1750,29 @@ components:
           format: date-time
           nullable: true
           description: Последний перевод в статус hired (для «Моей бригады»).
+        source:
+          type: string
+          nullable: true
+          enum: [card, link, qr, subscription, channel, miniapp, team, null]
+          description: >
+            Откуда отклик: card — кнопка на карточке в чате, link — ссылка, qr — QR-объявление,
+            subscription — рассылка по подписке, channel — канал партнёра, miniapp — мини-приложение,
+            team — ответ на приглашение бригады. null — отклики до v0.6.0.
+        startAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Назначенное время выхода на смену (PATCH /api/applications/{id}/shift)
+        shiftNote:
+          type: string
+          nullable: true
+        attendance:
+          type: string
+          nullable: true
+          enum: [pending, confirmed, declined, null]
+        vacancyClosed:
+          type: boolean
+          description: Только в ответе PATCH /api/applications/{id} — этот найм заполнил все места и вакансия закрыта
         createdAt:
           type: string
           format: date-time
@@ -1352,23 +1832,31 @@ components:
     Job:
       type: object
       description: Вакансия в каталоге работника. Служебные поля доставки и контакты не включаются.
-      required: [id, title, regionCode, category, schedule, salaryMin, salaryMax, description, status, createdAt, employer, myApplication, canApply, applyUnavailableReason]
+      required: [id, title, regionCode, subject, category, schedule, salaryMin, salaryMax, description, headcount, spotsLeft, studentFriendly, status, createdAt, employer, myApplication, canApply, applyUnavailableReason]
       properties:
         id: { type: integer }
         title: { type: string }
-        regionCode: { type: string, description: 'Исходное значение (свободный текст или код), справочника нет' }
+        regionCode: { type: string, description: 'Исходный текст региона, как ввёл работодатель' }
+        subject:
+          anyOf:
+            - $ref: '#/components/schemas/Region'
+            - { type: object, nullable: true, enum: [null] }
+          description: Распознанный субъект РФ
         category: { type: string }
         schedule: { type: string, enum: [seasonal, temporary, permanent] }
         salaryMin: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
         salaryMax: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
         description: { type: string, nullable: true }
+        headcount: { type: integer, nullable: true }
+        spotsLeft: { type: integer, nullable: true, description: 'headcount минус нанятые; null — headcount не указан' }
+        studentFriendly: { type: boolean }
         status: { type: string, enum: [published] }
         createdAt: { type: string, format: date-time }
         employer: { $ref: '#/components/schemas/EmployerPublic' }
         myApplication:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/MyApplicationRef'
-          nullable: true
+            - { type: object, nullable: true, enum: [null] }
           description: Собственный отклик текущего пользователя, если он есть
         canApply: { type: boolean }
         applyUnavailableReason:
@@ -1389,15 +1877,24 @@ components:
           type: string
           nullable: true
           description: Контакт, подтверждённый кандидатом при отклике (null — только у старых откликов до v0.4.0)
+        startAt: { type: string, format: date-time, nullable: true, description: Время выхода на смену }
+        shiftNote: { type: string, nullable: true }
+        attendance: { type: string, nullable: true, enum: [pending, confirmed, declined, null] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         vacancy:
           type: object
-          required: [id, title, regionCode, category, schedule, salaryMin, salaryMax, description, contactInfo, status, employer]
+          required: [id, title, regionCode, subject, category, schedule, salaryMin, salaryMax, description, headcount, studentFriendly, contactInfo, status, employer]
           properties:
             id: { type: integer }
             title: { type: string }
             regionCode: { type: string }
+            subject:
+              anyOf:
+                - $ref: '#/components/schemas/Region'
+                - { type: object, nullable: true, enum: [null] }
+            headcount: { type: integer, nullable: true }
+            studentFriendly: { type: boolean }
             category: { type: string }
             schedule: { type: string, enum: [seasonal, temporary, permanent] }
             salaryMin: { type: integer, nullable: true }
@@ -1502,6 +1999,46 @@ components:
             id: { type: integer }
             displayName: { type: string, nullable: true }
 
+    Region:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, example: '23', description: Двузначный код субъекта РФ }
+        name: { type: string, example: Краснодарский край }
+
+    Subscription:
+      type: object
+      required: [id, region, category, schedule, salaryFrom, studentOnly, createdAt]
+      properties:
+        id: { type: integer }
+        region:
+          anyOf:
+            - $ref: '#/components/schemas/Region'
+            - { type: object, nullable: true, enum: [null] }
+          description: null — вся Россия
+        category: { type: string, nullable: true }
+        schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null] }
+        salaryFrom: { type: integer, nullable: true }
+        studentOnly: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    PartnerChannel:
+      type: object
+      required: [id, title, isChannel, active, region, studentOnly, removed, createdAt]
+      properties:
+        id: { type: integer }
+        title: { type: string, nullable: true }
+        isChannel: { type: boolean, description: 'true — канал, false — групповой чат' }
+        active: { type: boolean, description: Публикуются ли сюда вакансии }
+        region:
+          anyOf:
+            - $ref: '#/components/schemas/Region'
+            - { type: object, nullable: true, enum: [null] }
+          description: null — вакансии из всех регионов
+        studentOnly: { type: boolean, description: Только вакансии с отметкой «подходит студентам» }
+        removed: { type: boolean, description: 'Бота удалили из чата — публикация невозможна, пока его не добавят снова' }
+        createdAt: { type: string, format: date-time }
+
     FilterOption:
       type: object
       required: [value, label]
@@ -1520,5 +2057,13 @@ components:
           nullable: true
         vacancyCount:
           type: integer
+          description: Сколько найденных вакансий указали зарплату
         isFresh:
           type: boolean
+        scope:
+          type: string
+          enum: [region, country]
+          description: region — по распознанному региону; country — по России (регион не распознан или в нём меньше 5 вакансий с зарплатой)
+        regionName:
+          type: string
+          nullable: true

@@ -17,6 +17,8 @@ const vacancyBaseShape = {
   // Ограничение самого поля; длина всей карточки проверяется отдельно (checkCardLength).
   description: z.string().trim().max(4000).nullable().optional(),
   contact_info: z.string().trim().max(300).nullable().optional(),
+  headcount: z.number().int().min(1).max(1000).nullable().optional(),
+  student_friendly: z.boolean().optional(),
 };
 
 function checkSalaryRange<T extends { salary_min?: number | null; salary_max?: number | null }>(
@@ -48,6 +50,8 @@ function checkCardLength(data: {
   salary_max?: number | null;
   description?: string | null;
   contact_info?: string | null;
+  headcount?: number | null;
+  student_friendly?: boolean;
 }, ctx: z.RefinementCtx) {
   const length = vacancyCardTextLength({
     title: data.title,
@@ -57,6 +61,8 @@ function checkCardLength(data: {
     salaryMax: data.salary_max ?? null,
     description: data.description ?? null,
     contactInfo: data.contact_info ?? null,
+    headcount: data.headcount ?? null,
+    studentFriendly: data.student_friendly ?? false,
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     ctx.addIssue({
@@ -126,6 +132,7 @@ export const listJobsQuerySchema = z
     schedule: SCHEDULE_ENUM.optional(),
     salary_from: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)),
     salary_to: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)),
+    student_friendly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
     sort: JOB_SORT_ENUM.optional().default('newest'),
     limit: optionalQueryInt(z.coerce.number().int().min(1).max(100)).default(20),
     offset: optionalQueryInt(z.coerce.number().int().nonnegative().max(POSTGRES_INT4_MAX)).default(0),
@@ -160,6 +167,34 @@ export const benchmarkQuerySchema = z.object({
 
 export const idParamSchema = z.object({ id: POSITIVE_INT.max(POSTGRES_INT4_MAX) });
 
+// region_code — код субъекта или свободный текст (распознаётся справочником).
+export const createSubscriptionSchema = z
+  .object({
+    region_code: z.string().trim().min(1).max(100).nullable().optional(),
+    category: z.string().trim().min(1).max(100).nullable().optional(),
+    schedule: SCHEDULE_ENUM.nullable().optional(),
+    salary_from: z.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
+    student_only: z.boolean().optional(),
+  })
+  .strict();
+
+export const updateChannelSchema = z
+  .object({
+    active: z.boolean().optional(),
+    region_code: z.string().trim().min(1).max(100).nullable().optional(),
+    student_only: z.boolean().optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: 'at least one field is required' });
+
+// start_at — ISO 8601 со смещением (например 2026-06-21T07:00:00+03:00); null снимает назначение.
+export const setShiftSchema = z
+  .object({
+    start_at: z.string().datetime({ offset: true }).nullable(),
+    note: z.string().trim().min(1).max(200).nullable().optional(),
+  })
+  .strict();
+
 export const updateTeamMemberSchema = z.object({ reliable: z.boolean() }).strict();
 
 // candidate_ids не передан — приглашаем всю бригаду.
@@ -177,6 +212,8 @@ export function checkMergedVacancyConstraints(merged: {
   salary_max?: number | null;
   description?: string | null;
   contact_info?: string | null;
+  headcount?: number | null;
+  student_friendly?: boolean;
 }): { ok: true } | { ok: false; field: string; message: string } {
   if (
     merged.salary_min !== null &&
@@ -196,6 +233,8 @@ export function checkMergedVacancyConstraints(merged: {
     salaryMax: merged.salary_max ?? null,
     description: merged.description ?? null,
     contactInfo: merged.contact_info ?? null,
+    headcount: merged.headcount ?? null,
+    studentFriendly: merged.student_friendly ?? false,
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     return {

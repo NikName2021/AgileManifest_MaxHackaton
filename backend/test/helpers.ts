@@ -15,12 +15,13 @@ export const maxApiMock = {
   answerCallback: vi.fn(async () => ({})),
   createSubscription: vi.fn(async () => ({})),
   listSubscriptions: vi.fn(async () => ({ subscriptions: [] })),
+  getChat: vi.fn(async (_chatId: string) => ({ title: 'Студотряды КубГУ', type: 'channel' })),
   deleteSubscription: vi.fn(async () => ({})),
 };
 
 export async function resetDb() {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE team_invites, team_marks, applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE channel_deliveries, partner_channels, subscription_deliveries, job_subscriptions, team_invites, team_marks, applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
   );
 }
 

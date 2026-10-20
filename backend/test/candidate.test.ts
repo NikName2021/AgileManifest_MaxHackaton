@@ -110,11 +110,15 @@ describe('1. каталог: видимость опубликованных ч�
       id: v.id,
       title: 'Сборщик урожая',
       regionCode: '23',
+      subject: { code: '23', name: 'Краснодарский край' },
       category: 'agriculture',
       schedule: 'seasonal',
       salaryMin: null,
       salaryMax: null,
       description: null,
+      headcount: null,
+      spotsLeft: null,
+      studentFriendly: false,
       status: 'published',
       createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
       employer: { displayName: 'A' },
@@ -236,7 +240,7 @@ describe('3. фильтры, пагинация, сортировка', () => {
     const own = await publishedVacancy(B, { region_code: '77', category: 'own-only' }); // своя не учитывается
     expect(own.id).toBeGreaterThan(0);
     expect((await get(B, '/api/jobs/filters')).json()).toEqual({
-      regions: [{ value: '16', label: '16' }, { value: '23', label: '23' }],
+      regions: [{ value: '23', label: 'Краснодарский край' }, { value: '16', label: 'Республика Татарстан' }],
       categories: [{ value: 'agriculture', label: 'agriculture' }, { value: 'cafe', label: 'cafe' }],
     });
   });
@@ -455,17 +459,23 @@ describe('8–9. история откликов кандидата', () => {
       id: created.id,
       status: 'new',
       contact: '+7 900 000-00-01',
+      startAt: null,
+      shiftNote: null,
+      attendance: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       vacancy: {
         id: v.id,
         title: 'Сборщик урожая',
         regionCode: '23',
+        subject: { code: '23', name: 'Краснодарский край' },
         category: 'agriculture',
         schedule: 'seasonal',
         salaryMin: 50000,
         salaryMax: 70000,
         description: null,
+        headcount: null,
+        studentFriendly: false,
         contactInfo: '+7 999 111-22-33',
         status: 'published',
         employer: { displayName: 'A' },

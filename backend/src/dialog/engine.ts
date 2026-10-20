@@ -73,8 +73,10 @@ export async function handleAnswer(chatId: string, senderMaxUserId: string | und
     // Все ответы собраны — сессию удаляем до onComplete. При сбое сообщаем пользователю, а не молчим.
     await db.dialogSession.deleteMany({ where: { chatId } });
     try {
-        const resultText = await flow.onComplete(chatId, data);
-        await maxApi.sendMessage(chatId, resultText);
+        const result = await flow.onComplete(chatId, data);
+        for (const reply of typeof result === 'string' ? [{ text: result }] : result) {
+            await maxApi.sendMessage(chatId, reply.text, reply.buttons);
+        }
     } catch (err) {
         console.error('dialog onComplete failed', chatId, flow.name, err);
         await maxApi.sendMessage(

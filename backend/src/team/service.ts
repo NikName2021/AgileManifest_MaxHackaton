@@ -252,7 +252,7 @@ export async function handleTeamInviteResponse(chatId: string, senderMaxUserId: 
   const contact = await latestContact(candidate.id, vacancy.employerUserId) ?? candidate.applicationContact ?? candidate.phone;
   if (!contact) {
     // Контакта нет ни в прошлых откликах, ни в профиле — обычный путь отклика спросит его.
-    await handleApplyClick(chatId, senderMaxUserId, vacancy.id);
+    await handleApplyClick(chatId, senderMaxUserId, vacancy.id, 'team');
     return;
   }
 
@@ -262,6 +262,7 @@ export async function handleTeamInviteResponse(chatId: string, senderMaxUserId: 
     contact,
     candidateChatId: chatId,
     status: 'invited',
+    source: 'team',
   });
   if (!result.ok) {
     if (result.error === 'already_applied') {

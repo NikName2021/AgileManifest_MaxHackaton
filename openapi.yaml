@@ -29,7 +29,7 @@ info:
     Суммы зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц
     (как и бенчмарк «Работы России»). Если появится оплата за смену/час, нужно отдельное поле
     salary_period — до этого фильтр сравнивает суммы как есть.
-  version: 0.4.0
+  version: 0.5.0
 servers:
   - url: http://localhost:3000
     description: Локальная разработка / Docker Compose
@@ -819,6 +819,198 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/team:
+    get:
+      summary: >
+        «Моя бригада» — все, кого работодатель нанимал (статус hired) на своих вакансиях, по одному
+        элементу на человека. Отмеченные «надёжными» — первыми, дальше по последнему найму.
+      operationId: listTeam
+      responses:
+        '200':
+          description: Бригада
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TeamMember' }
+                  total: { type: integer }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/team/{id}:
+    patch:
+      summary: Отметить прошлого работника «надёжным» (id — id пользователя-кандидата)
+      operationId: updateTeamMember
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reliable]
+              additionalProperties: false
+              properties:
+                reliable: { type: boolean }
+      responses:
+        '200':
+          description: Отметка сохранена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  candidateId: { type: integer }
+                  reliable: { type: boolean }
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Этот человек не нанимался на вакансии работодателя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/vacancies/{id}/team-invites:
+    post:
+      summary: >
+        Позвать бригаду на опубликованную вакансию. Каждому приходит сообщение в личный чат с ботом
+        с кнопками «Приду» / «Не в этот раз». «Приду» сразу создаёт отклик со статусом invited и
+        прошлым контактом человека, работодатель получает уведомление с кнопками воронки.
+        Повторный вызов безопасен: уже приглашённым второе сообщение не уходит, недоставленным —
+        отправляется снова. За один вызов — не больше 100 человек.
+      operationId: inviteTeam
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                candidate_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: { type: integer, minimum: 1 }
+                  description: Кого позвать. Не передано — вся бригада.
+            example:
+              candidate_ids: [7, 9]
+      responses:
+        '200':
+          description: Результат по каждому человеку
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent, results]
+                properties:
+                  sent: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [candidateId, outcome]
+                      properties:
+                        candidateId: { type: integer }
+                        outcome:
+                          type: string
+                          enum: [sent, already_invited, already_applied, no_bot_chat, not_in_team, delivery_failed, limit_exceeded]
+              example:
+                sent: 1
+                results:
+                  - { candidateId: 7, outcome: sent }
+                  - { candidateId: 9, outcome: no_bot_chat }
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Вакансия принадлежит другому работодателю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Вакансия не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: code=vacancy_unavailable — вакансия не опубликована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Приглашения бригады по вакансии и ответы на них (только владелец)
+      operationId: listTeamInvites
+      parameters:
+        - $ref: '#/components/parameters/VacancyId'
+      responses:
+        '200':
+          description: Приглашения
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TeamInvite' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Вакансия принадлежит другому работодателю
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Вакансия не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/benchmark:
     get:
       summary: Рыночный бенчмарк по зарплате (кэш, потом trudvsem.ru «Работа России»)
@@ -1096,6 +1288,11 @@ components:
             Только в ответе PATCH /api/applications/{id} — true, если переданный статус совпадал
             с уже сохранённым (запрос идемпотентен: ни новой записи в БД, ни повторного
             уведомления кандидату не было).
+        hiredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Последний перевод в статус hired (для «Моей бригады»).
         createdAt:
           type: string
           format: date-time
@@ -1248,6 +1445,62 @@ components:
             присылать ему уведомления о статусе отклика. false — отклик сохраняется, но уведомить
             кандидата некуда: frontend должен предложить открыть чат с ботом. Это не гарантия
             доставки конкретного сообщения.
+
+    TeamMember:
+      type: object
+      required: [candidate, contact, hiredCount, lastHiredAt, lastVacancy, reliable, hasBotChat]
+      properties:
+        candidate:
+          type: object
+          required: [id, displayName]
+          properties:
+            id: { type: integer }
+            displayName: { type: string, nullable: true }
+        contact:
+          type: string
+          nullable: true
+          description: Контакт из последнего отклика этого человека на вакансии работодателя
+        hiredCount: { type: integer, description: Сколько раз был нанят на вакансии этого работодателя }
+        lastHiredAt: { type: string, format: date-time, nullable: true }
+        lastVacancy:
+          type: object
+          required: [id, title]
+          properties:
+            id: { type: integer }
+            title: { type: string }
+        reliable: { type: boolean, description: Отметка работодателя «надёжный» }
+        hasBotChat:
+          type: boolean
+          description: false — бот не может написать человеку, приглашение вернёт outcome=no_bot_chat
+      example:
+        candidate: { id: 7, displayName: Саша }
+        contact: '+7 900 000-00-00'
+        hiredCount: 2
+        lastHiredAt: '2025-07-01T09:00:00.000Z'
+        lastVacancy: { id: 12, title: Сборщик черешни }
+        reliable: true
+        hasBotChat: true
+
+    TeamInvite:
+      type: object
+      required: [id, status, createdAt, respondedAt, candidate]
+      properties:
+        id: { type: integer }
+        status:
+          type: string
+          enum: [sent, accepted, declined, expired, undelivered]
+          description: >
+            sent — ждём ответа; accepted — согласился (создан отклик со статусом invited);
+            declined — отказался; expired — вакансию закрыли до ответа; undelivered — MAX не принял
+            сообщение, повторный POST team-invites отправит снова
+        createdAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time, nullable: true }
+        candidate:
+          type: object
+          required: [id, displayName]
+          properties:
+            id: { type: integer }
+            displayName: { type: string, nullable: true }
 
     FilterOption:
       type: object

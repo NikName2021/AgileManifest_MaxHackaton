@@ -8,49 +8,53 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  maxUserId    String        @unique @map("max_user_id")
-  chatId       String        @map("chat_id")
-  displayName  String?       @map("display_name")
-  phone        String?
+  id                 Int      @id @default(autoincrement())
+  maxUserId          String   @unique @map("max_user_id")
+  chatId             String   @map("chat_id")
+  displayName        String?  @map("display_name")
+  phone              String?
   // Контакт для предзаполнения формы отклика; не путать с phone (номер из MAX).
   applicationContact String?  @map("application_contact")
   // Личный чат с ботом, только из bot_started. chatId — последний увиденный чат, может быть группой.
-  dialogChatId String?       @map("dialog_chat_id")
-  createdAt    DateTime      @default(now()) @map("created_at")
+  dialogChatId       String?  @map("dialog_chat_id")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  vacancies    Vacancy[]     @relation("EmployerVacancies")
-  applications Application[] @relation("CandidateApplications")
+  vacancies            Vacancy[]     @relation("EmployerVacancies")
+  applications         Application[] @relation("CandidateApplications")
+  teamInvites          TeamInvite[]
+  teamMarksAsEmployer  TeamMark[]    @relation("TeamMarkEmployer")
+  teamMarksAsCandidate TeamMark[]    @relation("TeamMarkCandidate")
 
   @@map("users")
 }
 
 model Vacancy {
-  id             Int           @id @default(autoincrement())
-  employerUserId Int           @map("employer_user_id")
-  employer       User          @relation("EmployerVacancies", fields: [employerUserId], references: [id])
+  id             Int       @id @default(autoincrement())
+  employerUserId Int       @map("employer_user_id")
+  employer       User      @relation("EmployerVacancies", fields: [employerUserId], references: [id])
   title          String
-  regionCode     String        @map("region_code")
+  regionCode     String    @map("region_code")
   category       String
   schedule       String
-  salaryMin      Int?          @map("salary_min")
-  salaryMax      Int?          @map("salary_max")
+  salaryMin      Int?      @map("salary_min")
+  salaryMax      Int?      @map("salary_max")
   description    String?
   // Контакт работодателя для откликнувшихся.
-  contactInfo    String?       @map("contact_info")
-  status         String        @default("draft") // draft | published | closed
-  cardMessageId  String?       @map("card_message_id")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  reminderSentAt DateTime?     @map("reminder_sent_at")
+  contactInfo    String?   @map("contact_info")
+  status         String    @default("draft") // draft | published | closed
+  cardMessageId  String?   @map("card_message_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  reminderSentAt DateTime? @map("reminder_sent_at")
   // От него считается напоминание «нет откликов 48 часов».
-  publishedAt    DateTime?     @map("published_at")
+  publishedAt    DateTime? @map("published_at")
   // Застывший чат для карточки и уведомлений: users.chatId может смениться на групповой.
-  employerChatId String?       @map("employer_chat_id")
+  employerChatId String?   @map("employer_chat_id")
 
   // Блокировка повторной доставки карточки (claimCardRedelivery в publish.ts), защищает от дубля.
   publishDeliveryAttemptAt DateTime? @map("publish_delivery_attempt_at")
 
-  applications   Application[]
+  applications Application[]
+  teamInvites  TeamInvite[]
 
   // GET /api/jobs
   @@index([status, createdAt(sort: Desc), id(sort: Desc)])
@@ -58,17 +62,19 @@ model Vacancy {
 }
 
 model Application {
-  id              Int      @id @default(autoincrement())
-  vacancyId       Int      @map("vacancy_id")
-  vacancy         Vacancy  @relation(fields: [vacancyId], references: [id])
-  candidateUserId Int      @map("candidate_user_id")
-  candidate       User     @relation("CandidateApplications", fields: [candidateUserId], references: [id])
-  status          String   @default("new") // new | contacted | invited | hired | rejected
+  id              Int       @id @default(autoincrement())
+  vacancyId       Int       @map("vacancy_id")
+  vacancy         Vacancy   @relation(fields: [vacancyId], references: [id])
+  candidateUserId Int       @map("candidate_user_id")
+  candidate       User      @relation("CandidateApplications", fields: [candidateUserId], references: [id])
+  status          String    @default("new") // new | contacted | invited | hired | rejected
   contact         String?
   // Чат, где прошёл отклик: сюда уходят уведомления о смене статуса.
-  candidateChatId String?  @map("candidate_chat_id")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  candidateChatId String?   @map("candidate_chat_id")
+  // Последний перевод в hired — для списка «Моя бригада».
+  hiredAt         DateTime? @map("hired_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@unique([vacancyId, candidateUserId])
   // GET /api/me/applications
@@ -103,4 +109,32 @@ model DialogSession {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("dialog_sessions")
+}
+
+// Приглашение прошлого работника на новую вакансию («Моя бригада»). Одно на пару вакансия–кандидат.
+model TeamInvite {
+  id              Int       @id @default(autoincrement())
+  vacancyId       Int       @map("vacancy_id")
+  vacancy         Vacancy   @relation(fields: [vacancyId], references: [id])
+  candidateUserId Int       @map("candidate_user_id")
+  candidate       User      @relation(fields: [candidateUserId], references: [id])
+  status          String    @default("sent") // sent | accepted | declined | expired | undelivered
+  createdAt       DateTime  @default(now()) @map("created_at")
+  respondedAt     DateTime? @map("responded_at")
+
+  @@unique([vacancyId, candidateUserId])
+  @@map("team_invites")
+}
+
+// Отметка работодателя о прошлом работнике.
+model TeamMark {
+  employerUserId  Int      @map("employer_user_id")
+  employer        User     @relation("TeamMarkEmployer", fields: [employerUserId], references: [id])
+  candidateUserId Int      @map("candidate_user_id")
+  candidate       User     @relation("TeamMarkCandidate", fields: [candidateUserId], references: [id])
+  reliable        Boolean  @default(false)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@id([employerUserId, candidateUserId])
+  @@map("team_marks")
 }

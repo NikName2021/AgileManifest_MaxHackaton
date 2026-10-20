@@ -9,6 +9,7 @@ import { publishVacancy, PublishError } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
 import { applyStatusChange, funnelButtons, createApplicationRecord, type CreateApplicationError } from './application/service.js';
 import { registerCandidateRoutes } from './candidate/routes.js';
+import { registerTeamRoutes } from './team/routes.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
 import type { Vacancy } from '@prisma/client';
 import { startStaleVacancyReminders } from './vacancies/reminders.js';
@@ -48,6 +49,7 @@ const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_starte
 
 registerMaxWebhook(app);
 registerCandidateRoutes(app);
+registerTeamRoutes(app);
 
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.

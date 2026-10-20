@@ -148,10 +148,12 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
 |---|---|---|
 | `users` | `id`, `max_user_id`, `chat_id`, `dialog_chat_id` (nullable), `display_name`, `phone` (nullable), `application_contact` (nullable) | Все пользователи бота |
 | `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `contact_info`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `published_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
-| `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
+| `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `hired_at`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
 | `dialog_sessions` | `chat_id`, `step`, `data`, `updated_at` | Текущий шаг диалога создания вакансии (переживает рестарт backend) |
 | `pending_applications` | `chat_id`, `vacancy_id`, `created_at` | Ожидание контакта от кандидата после нажатия «Откликнуться», до сохранения отклика |
+| `team_invites` | `vacancy_id`, `candidate_user_id`, `status` (sent/accepted/declined/expired/undelivered), `created_at`, `responded_at` | Приглашения прошлых работников на новую вакансию («Моя бригада») |
+| `team_marks` | `employer_user_id`, `candidate_user_id`, `reliable` | Отметка работодателя «надёжный» |
 
 `employer_chat_id` и `candidate_chat_id` — чат MAX, застывший один раз в момент публикации/отклика
 и используемый для всех будущих уведомлений по этой вакансии/отклику. Это отдельно от «текущего»
@@ -268,6 +270,27 @@ CORS настроен через `FRONTEND_ORIGIN` (см. таблицу пер�
 вставляется. Уже отправленные карточки не меняются; ссылку для них работодатель получает из поля
 `applyUrl` в `GET /api/vacancies` / `GET /api/vacancies/:id` и пересылает вручную (или закрывает
 вакансию и публикует новую). Массовой рассылки обновлений нет.
+
+### «Моя бригада» (v0.5.0)
+
+Сезонный бизнес каждый год ищет во многом тех же людей. Бригада — все, кого работодатель уже
+нанимал (статус `hired`) на своих вакансиях.
+
+| Маршрут | Назначение |
+|---|---|
+| `GET /api/team` | Бригада: по одному элементу на человека — контакт из прошлого отклика, сколько раз нанимали, последняя вакансия, отметка «надёжный», `hasBotChat` |
+| `PATCH /api/team/:id` | `{ "reliable": true }` — отметить прошлого работника; надёжные выводятся первыми |
+| `POST /api/vacancies/:id/team-invites` | Позвать всю бригаду (или `candidate_ids`) на опубликованную вакансию; результат по каждому человеку: `sent`, `already_invited`, `already_applied`, `no_bot_chat`, `not_in_team`, `delivery_failed`, `limit_exceeded` |
+| `GET /api/vacancies/:id/team-invites` | Кто приглашён и что ответил: `sent`, `accepted`, `declined`, `expired`, `undelivered` |
+
+Человек получает в личный чат с ботом сообщение с кнопками «Приду» / «Не в этот раз». «Приду»
+сразу создаёт отклик со статусом `invited` и тем контактом, который он оставлял этому работодателю
+раньше, а работодателю приходит уведомление с кнопками воронки. Если контакта нет, бот спрашивает
+его обычным путём отклика. Повторные нажатия и повторный вызов приглашения ничего не дублируют.
+Написать можно только тем, у кого есть чат с ботом; остальным работодатель пересылает `applyUrl`.
+
+В карточке вакансии и приглашениях график теперь пишется по-русски («сезонная», «временная»,
+«постоянная») вместо кода `seasonal`/`temporary`/`permanent`. В API значения не изменились.
 
 ### Автотесты backend
 

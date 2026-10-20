@@ -20,7 +20,7 @@ export const maxApiMock = {
 
 export async function resetDb() {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE team_invites, team_marks, applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
   );
 }
 

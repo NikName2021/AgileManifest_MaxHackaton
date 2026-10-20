@@ -160,6 +160,15 @@ export const benchmarkQuerySchema = z.object({
 
 export const idParamSchema = z.object({ id: POSITIVE_INT.max(POSTGRES_INT4_MAX) });
 
+export const updateTeamMemberSchema = z.object({ reliable: z.boolean() }).strict();
+
+// candidate_ids не передан — приглашаем всю бригаду.
+export const inviteTeamSchema = z
+  .object({
+    candidate_ids: z.array(z.number().int().positive().max(POSTGRES_INT4_MAX)).min(1).max(100).optional(),
+  })
+  .strict();
+
 export function checkMergedVacancyConstraints(merged: {
   title: string;
   region_code?: string | null;

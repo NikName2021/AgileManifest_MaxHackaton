@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useBlocker, useBeforeUnload } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { useSession } from '../features/session/context'
 import { Select } from '../shared/ui/Select'
@@ -25,14 +25,17 @@ export function TeamPage() {
   const [error, setError] = useState<unknown>()
   const [result, setResult] = useState<InviteResult>()
   const [confirm, setConfirm] = useState<'all' | 'selected' | null>(null)
-  const refresh = useCallback(() => { people.refresh(); jobs.refresh(); invites.refresh() }, [people.refresh, jobs.refresh, invites.refresh])
+  const { refresh: refreshPeople } = people, { refresh: refreshJobs } = jobs, { refresh: refreshInvites } = invites
+  const refresh = useCallback(() => { refreshPeople(); refreshJobs(); refreshInvites() }, [refreshPeople, refreshJobs, refreshInvites])
+  const blocker = useBlocker(() => lock.current)
+  useBeforeUnload(useCallback((event) => { if (lock.current) { event.preventDefault(); event.returnValue = '' } }, []))
   useRefreshOnReturn(refresh, busy || !!confirm)
   const members = people.result.state === 'ready' ? people.result.data : []
   const options = jobs.result.state === 'ready' ? jobs.result.data : []
   const canInvite = options.some((v) => v.id === vacancyId && v.status === 'published')
-  const link = config.botUrl && vacancyId ? (() => {
-    const url = new URL(config.botUrl!); url.searchParams.set('start', `apply_${vacancyId}_team`); return url.href
-  })() : null
+  const link = options.find((v) => v.id === vacancyId)?.applyUrl ?? (config.botUrl && vacancyId ? (() => {
+    const url = new URL(config.botUrl!); url.searchParams.set('start', `apply_${vacancyId}`); return url.href
+  })() : null)
   async function action(work: () => Promise<void>) {
     if (lock.current) return
     lock.current = true; setBusy(true); setError(undefined)
@@ -49,6 +52,7 @@ export function TeamPage() {
     {people.result.state === 'error' && <CandidateError error={people.result.error} retry={people.reload} />}
     {jobs.result.state === 'error' && <CandidateError error={jobs.result.error} retry={jobs.reload} />}
     {error && <CandidateError error={error} />}
+    {blocker.state === 'blocked' && <p role="status">Дождитесь завершения операции. <button disabled={busy} onClick={() => blocker.reset()}>Остаться на странице</button></p>}
     {(people.refreshError || jobs.refreshError || invites.refreshError) && <p role="alert">Не удалось обновить данные. <button onClick={refresh}>Повторить</button></p>}
     {people.result.state === 'ready' && !members.length && <section className="empty-panel">
       <h2>Команда появится после первого найма</h2><p>Отметьте кандидата как нанятого в откликах.</p><Link to="/applications">Открыть отклики</Link></section>}

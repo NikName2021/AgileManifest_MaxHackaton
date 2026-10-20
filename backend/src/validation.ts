@@ -178,6 +178,15 @@ export const createSubscriptionSchema = z
   })
   .strict();
 
+export const updateChannelSchema = z
+  .object({
+    active: z.boolean().optional(),
+    region_code: z.string().trim().min(1).max(100).nullable().optional(),
+    student_only: z.boolean().optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: 'at least one field is required' });
+
 export const updateTeamMemberSchema = z.object({ reliable: z.boolean() }).strict();
 
 // candidate_ids не передан — приглашаем всю бригаду.

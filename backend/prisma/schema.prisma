@@ -25,6 +25,7 @@ model User {
   teamMarksAsEmployer  TeamMark[]        @relation("TeamMarkEmployer")
   teamMarksAsCandidate TeamMark[]        @relation("TeamMarkCandidate")
   jobSubscriptions     JobSubscription[]
+  partnerChannels      PartnerChannel[]
 
   @@map("users")
 }
@@ -173,4 +174,32 @@ model SubscriptionDelivery {
 
   @@id([vacancyId, userId])
   @@map("subscription_deliveries")
+}
+
+// Чат или канал партнёра (вуз, штаб студотрядов, центр занятости), куда добавлен бот.
+// Публикация включается владельцем явно; вакансии подбираются по региону и отметке «для студентов».
+model PartnerChannel {
+  id            Int       @id @default(autoincrement())
+  chatId        String    @unique @map("chat_id")
+  title         String?
+  isChannel     Boolean   @default(false) @map("is_channel")
+  ownerUserId   Int       @map("owner_user_id")
+  owner         User      @relation(fields: [ownerUserId], references: [id])
+  active        Boolean   @default(false)
+  regionSubject String?   @map("region_subject")
+  studentOnly   Boolean   @default(false) @map("student_only")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  // Бота удалили из чата — публикации прекращаются.
+  removedAt     DateTime? @map("removed_at")
+
+  @@map("partner_channels")
+}
+
+model ChannelDelivery {
+  vacancyId Int      @map("vacancy_id")
+  channelId Int      @map("channel_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([vacancyId, channelId])
+  @@map("channel_deliveries")
 }

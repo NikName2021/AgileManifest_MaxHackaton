@@ -8,6 +8,7 @@ import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat
 import { handleTeamInviteResponse } from '../team/service.js';
 import { handleDraftDecision } from '../dialog/preview.js';
 import { subscribeLike, unsubscribe } from '../subscriptions/service.js';
+import { handleBotAdded, handleBotRemoved, isPartnerChat } from '../channels/service.js';
 
 // Сравнение за постоянное время; хеши уравнивают длину.
 function secretsEqual(received: unknown, expected: string): boolean {
@@ -105,7 +106,8 @@ export function registerMaxWebhook(app: FastifyInstance) {
         const senderId = update.message?.sender?.user_id ?? update.user?.user_id ?? update.sender?.user_id;
         const senderName = update.message?.sender?.name ?? update.user?.name ?? update.sender?.name;
 
-        if (chatId && senderId) {
+        // Сообщения в канале или чате партнёра бота не касаются — не отвечаем туда.
+        if (chatId && senderId && !(await isPartnerChat(chatId))) {
           await upsertUser(String(senderId), String(chatId), senderName);
 
           if (text === '/новая_вакансия') {
@@ -148,6 +150,19 @@ export function registerMaxWebhook(app: FastifyInstance) {
             );
           }
         }
+      }
+
+      if (update.update_type === 'bot_added') {
+        const chatId = toStringId(update.chat_id);
+        const userId = toStringId(update.user?.user_id);
+        if (chatId && userId) {
+          await handleBotAdded(chatId, { id: userId, name: update.user?.name }, update.is_channel === true);
+        }
+      }
+
+      if (update.update_type === 'bot_removed') {
+        const chatId = toStringId(update.chat_id);
+        if (chatId) await handleBotRemoved(chatId);
       }
 
       if (update.update_type === 'message_callback') {

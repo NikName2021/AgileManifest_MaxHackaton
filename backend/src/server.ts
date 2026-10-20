@@ -12,6 +12,7 @@ import { registerCandidateRoutes } from './candidate/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
 import { registerPosterRoutes } from './vacancies/posterRoutes.js';
 import { registerSubscriptionRoutes } from './subscriptions/routes.js';
+import { registerChannelRoutes } from './channels/routes.js';
 import { normalizeRegion } from './regions/dictionary.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
@@ -49,13 +50,14 @@ app.register(cors, {
   allowedHeaders: ['Authorization', 'Content-Type'],
 });
 
-const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_started'];
+const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_started', 'bot_added', 'bot_removed'];
 
 registerMaxWebhook(app);
 registerCandidateRoutes(app);
 registerTeamRoutes(app);
 registerPosterRoutes(app);
 registerSubscriptionRoutes(app);
+registerChannelRoutes(app);
 
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.

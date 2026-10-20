@@ -23,12 +23,14 @@ const employerNavigation = [
   { to: '/', label: 'Обзор', icon: House },
   { to: '/vacancies', label: 'Мои вакансии', icon: BriefcaseBusiness },
   { to: '/applications', label: 'Отклики', icon: UsersRound },
+  { to: '/team', label: 'Команда', icon: UsersRound },
   { to: '/settings', label: 'Настройки', icon: Settings2 },
 ]
 const titles: Record<string, string> = {
   '/': 'Кабинет работодателя',
   '/vacancies': 'Вакансии',
   '/applications': 'Отклики',
+  '/team': 'Моя команда',
   '/guide': 'Как работает сервис',
   '/settings': 'Настройки',
 }

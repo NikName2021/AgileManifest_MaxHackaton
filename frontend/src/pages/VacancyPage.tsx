@@ -346,6 +346,7 @@ function VacancyDetails({ id }: { id: number }) {
         </aside>
       </div>
       <VacancyHiringSummary vacancy={vacancy} paused={busy || confirm !== null} />
+      {vacancy.status === 'published' && <Link className="text-link" to={`/team?vacancy=${vacancy.id}`}>Пригласить мою команду →</Link>}
       {confirm && (
         <ConfirmDialog
           title={

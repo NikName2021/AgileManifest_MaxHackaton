@@ -1,0 +1,9 @@
+.team-toolbar { padding: 20px; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; }
+.team-toolbar label { display: grid; gap: 8px; max-width: 600px; }
+.team-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.team-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.team-member { display: grid; gap: 12px; align-content: start; padding: 20px; border: 1px solid var(--border); border-radius: 10px; overflow-wrap: anywhere; }
+.team-member p { margin: 0; }
+.team-selection { display: flex; gap: 10px; align-items: center; }
+.team-selection input { width: 20px; height: 20px; accent-color: #471aff; }
+@media (max-width: 767px) { .app-shell:not(.worker-shell) .mobile-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

@@ -4,6 +4,7 @@ import type { VacancyInput, VacancyRepository } from '../features/vacancies/api'
 import { ApiError } from '../shared/api/client'
 import { createPreviewApplications } from './applications'
 import { createPreviewCandidate } from './candidate'
+import { createPreviewTeam } from './team'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -60,8 +61,10 @@ export function createPreviewSession(): Session {
       return save({ ...get(id), status: 'closed' })
     },
   }
+  const hiring = createPreviewApplications(vacancies)
   return {
     mode: 'preview',
+    team: createPreviewTeam(hiring.applications),
     user: { id: 1, display_name: 'Демо-кабинет' },
     vacancies,
     candidate: createPreviewCandidate(),
@@ -72,6 +75,6 @@ export function createPreviewSession(): Session {
         return { avgSalaryMin: 45000, avgSalaryMax: 65000, vacancyCount: 24, isFresh: true }
       },
     },
-    ...createPreviewApplications(vacancies),
+    ...hiring,
   }
 }

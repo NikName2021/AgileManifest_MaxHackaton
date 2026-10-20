@@ -11,7 +11,7 @@ export interface Region {
   code: string
   name: string
 }
-export function parseRegions(body: unknown): Region[] {
+function parseRegions(body: unknown): Region[] {
   if (!body || typeof body !== 'object' || !('items' in body) || !Array.isArray(body.items))
     throw new ApiError('contract')
   return body.items.map((item: unknown) => {

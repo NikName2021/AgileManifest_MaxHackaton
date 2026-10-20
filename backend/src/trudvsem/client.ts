@@ -14,9 +14,10 @@ interface TrudvsemResponse {
     results?: { vacancies?: { vacancy: TrudvsemVacancy }[] };
 }
 
-// TODO: формат запроса и ответа взят из документации opendata.trudvsem.ru, живым вызовом не проверен.
-export async function searchTrudvsemVacancies(query: string, limit = 100): Promise<TrudvsemVacancy[]> {
-    const url = new URL(BASE);
+// Проверено живым вызовом 20.10.2026: /vacancies и /vacancies/region/<13 цифр>, параметр text;
+// пустой результат — 200 с results: {}.
+export async function searchTrudvsemVacancies(query: string, regionCode13?: string, limit = 100): Promise<TrudvsemVacancy[]> {
+    const url = new URL(regionCode13 ? `${BASE}/region/${regionCode13}` : BASE);
     url.searchParams.set('text', query);
     url.searchParams.set('limit', String(limit));
 

@@ -5,6 +5,7 @@ import { applicationLabels, type Vacancy } from '../../entities/hiring'
 import { statuses } from '../applications/api'
 import type { HiringSummary } from './loadSummary'
 import './overview.css'
+import { Capacity } from '../capacity/Capacity'
 
 export function HiringFunnel({
   summary,
@@ -13,13 +14,15 @@ export function HiringFunnel({
   reload,
   vacancy,
   refreshing = false,
+  compact = false,
 }: {
   summary?: HiringSummary
   loading: boolean
   failed: boolean
   reload: () => void
-  vacancy?: Pick<Vacancy, 'id' | 'status'>
+  vacancy?: Pick<Vacancy, 'id' | 'status' | 'headcount'>
   refreshing?: boolean
+  compact?: boolean
 }) {
   const titleId = useId()
   const applicationsPath = vacancy ? `/applications?vacancy=${vacancy.id}` : '/applications'
@@ -29,9 +32,13 @@ export function HiringFunnel({
   )
   const empty = summary?.total === 0 && statuses.every((status) => summary.stages[status] === 0)
   return (
-    <section className="hiring-funnel" aria-labelledby={titleId} aria-busy={loading || refreshing}>
+    <section
+      className={`hiring-funnel ${compact ? 'compact-funnel' : ''}`}
+      aria-labelledby={titleId}
+      aria-busy={loading || refreshing}
+    >
       <div className="section-title">
-        <h2 id={titleId}>{vacancy ? 'Отклики по этапам' : 'Воронка найма'}</h2>
+        <h2 id={titleId}>{vacancy ? 'Отклики по этапам' : 'Этапы найма'}</h2>
         <Link to={applicationsPath}>
           Все отклики <ArrowRight size={15} />
         </Link>
@@ -45,6 +52,27 @@ export function HiringFunnel({
         <p className="funnel-total">
           Всего откликов: <strong>{summary?.total?.toLocaleString('ru-RU') ?? '—'}</strong>
         </p>
+      )}
+      {vacancy?.headcount && (
+        <Capacity
+          headcount={vacancy.headcount}
+          spotsLeft={
+            summary?.stages.hired == null
+              ? null
+              : Math.max(0, vacancy.headcount - summary.stages.hired)
+          }
+        />
+      )}
+      {compact && (
+        <div className="distribution-bar" aria-hidden="true">
+          {statuses.map((status) => (
+            <span
+              key={status}
+              className={`distribution-${status}`}
+              style={{ flexGrow: summary?.stages[status] ?? 0 }}
+            />
+          ))}
+        </div>
       )}
       <div className="funnel-stages">
         {statuses.map((status) => {
@@ -86,18 +114,20 @@ export function HiringFunnel({
                       ? 'На эту вакансию не было откликов. Вакансия закрыта, новые отклики не принимаются.'
                       : 'Откликов пока нет. Поделитесь опубликованной карточкой вакансии в MAX.'
                   : vacancy
-                    ? 'Каждый отклик учтён в текущем этапе. После изменений в чате обновите сводку.'
-                    : 'Считаем отклики, а не уникальных кандидатов. После изменений в чате обновите сводку.'}
+                    ? 'Каждый отклик учтён в текущем этапе. Данные обновляются при возвращении в приложение.'
+                    : 'Считаем отклики, а не уникальных кандидатов. Данные обновляются при возвращении в приложение.'}
         </p>
-        <button
-          type="button"
-          className="dashboard-refresh"
-          disabled={loading || refreshing}
-          onClick={reload}
-        >
-          <RefreshCw size={14} aria-hidden="true" />
-          {failed || partial ? 'Повторить' : 'Обновить воронку'}
-        </button>
+        {(failed || partial) && (
+          <button
+            type="button"
+            className="dashboard-refresh"
+            disabled={loading || refreshing}
+            onClick={reload}
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            Повторить
+          </button>
+        )}
       </div>
     </section>
   )

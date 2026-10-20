@@ -10,6 +10,8 @@ import {
   LogOut,
   Moon,
   Sun,
+  Bell,
+  GraduationCap,
 } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { bindBackButton } from '../shared/max/bridge'
@@ -23,70 +25,85 @@ const employerNavigation = [
   { to: '/', label: 'Обзор', icon: House },
   { to: '/vacancies', label: 'Мои вакансии', icon: BriefcaseBusiness },
   { to: '/applications', label: 'Отклики', icon: UsersRound },
+  { to: '/team', label: 'Команда', icon: UsersRound },
   { to: '/settings', label: 'Настройки', icon: Settings2 },
 ]
 const titles: Record<string, string> = {
   '/': 'Кабинет работодателя',
   '/vacancies': 'Вакансии',
   '/applications': 'Отклики',
+  '/team': 'Моя команда',
   '/guide': 'Как работает сервис',
   '/settings': 'Настройки',
 }
 export function Shell() {
-  const { user, mode, bridge } = useSession()
+  const { mode, bridge } = useSession()
   const { cabinet, switchCabinet } = useCabinet()
   const { preference, setPreference } = useTheme()
   const dark =
     preference === 'dark' ||
     (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
   const worker = cabinet === 'worker'
-  const home = worker ? '/jobs' : '/'
-  const navigation = worker
-    ? [
-        { to: '/jobs', label: 'Вакансии', icon: BriefcaseBusiness },
-        { to: '/my-applications', label: 'Мои отклики', icon: UsersRound },
-        { to: '/profile', label: 'Профиль', icon: Settings2 },
-      ]
-    : employerNavigation
-  const { pathname, state } = useLocation()
+  const partner = cabinet === 'partner'
+  const home = partner ? '/channels' : worker ? '/jobs' : '/'
+  const navigation = partner
+    ? [{ to: '/channels', label: 'Каналы', icon: GraduationCap }]
+    : worker
+      ? [
+          { to: '/jobs', label: 'Вакансии', icon: BriefcaseBusiness },
+          { to: '/my-applications', label: 'Мои отклики', icon: UsersRound },
+          { to: '/subscriptions', label: 'Подписки', icon: Bell },
+          { to: '/profile', label: 'Профиль', icon: Settings2 },
+        ]
+      : employerNavigation
+  const { pathname, search, state } = useLocation()
   const inJob = /^\/jobs\/[^/]+$/.test(pathname)
+  const applying = inJob && new URLSearchParams(search).get('step') === 'apply'
   const catalogSearch = typeof state?.catalogSearch === 'string' ? state.catalogSearch : ''
   const navigate = useNavigate()
   const main = useRef<HTMLElement>(null)
   const inVacancy = pathname.startsWith('/vacancies/')
   const isCopy = /^\/vacancies\/\d+\/copy$/.test(pathname)
   const backTo = inJob
-    ? `/jobs${catalogSearch ? '?' + catalogSearch : ''}`
+    ? applying
+      ? pathname
+      : `/jobs${catalogSearch ? '?' + catalogSearch : ''}`
     : pathname.endsWith('/edit') || isCopy
       ? pathname.replace(/\/(edit|copy)$/, '')
       : inVacancy
         ? '/vacancies'
         : home
-  const title = worker
-    ? inJob
-      ? 'Вакансия'
-      : pathname === '/my-applications'
-        ? 'Мои отклики'
-        : pathname === '/profile'
-          ? 'Профиль работника'
-          : 'Поиск работы'
-    : isCopy
-      ? 'Копия вакансии'
-      : pathname === '/vacancies/new'
-        ? 'Новая вакансия'
-        : inVacancy
-          ? 'Вакансия'
-          : (titles[pathname] ?? 'Страница не найдена')
+  const title = partner
+    ? 'Каналы партнёра'
+    : worker
+      ? inJob
+        ? applying
+          ? 'Отклик на вакансию'
+          : 'Вакансия'
+        : pathname === '/my-applications'
+          ? 'Мои отклики'
+          : pathname === '/subscriptions'
+            ? 'Подписки на вакансии'
+            : pathname === '/profile'
+              ? 'Профиль работника'
+              : 'Поиск работы'
+      : isCopy
+        ? 'Копия вакансии'
+        : pathname === '/vacancies/new'
+          ? 'Новая вакансия'
+          : inVacancy
+            ? 'Вакансия'
+            : (titles[pathname] ?? 'Страница не найдена')
   useEffect(() => {
     document.title = `${title} · Сезон`
     main.current?.focus({ preventScroll: true })
     window.scrollTo({ top: 0, behavior: 'instant' })
     return bindBackButton(bridge, pathname !== home, () => {
-      void navigate(backTo)
+      void navigate(backTo, { state: { catalogSearch } })
     })
-  }, [bridge, navigate, pathname, title, backTo, home])
+  }, [bridge, navigate, pathname, title, backTo, home, catalogSearch])
   return (
-    <div className={`app-shell ${worker ? 'worker-shell' : ''}`}>
+    <div className={`app-shell ${partner ? 'partner-shell' : worker ? 'worker-shell' : ''}`}>
       <a href="#main-content" className="skip-link">
         Перейти к содержимому
       </a>
@@ -94,7 +111,6 @@ export function Shell() {
         <Link to={home} className="brand-link" aria-label="Сезон — на главную">
           <Brand />
         </Link>
-        <span className="sidebar-caption">{worker ? 'ПОИСК РАБОТЫ' : 'УПРАВЛЕНИЕ НАЙМОМ'}</span>
         <nav aria-label="Основная навигация" className="sidebar-nav">
           {navigation.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -109,19 +125,13 @@ export function Shell() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <Link className="sidebar-help" to={worker ? '/profile' : '/guide'}>
+          <Link
+            className="sidebar-help"
+            to={partner ? '/channels' : worker ? '/profile' : '/guide'}
+          >
             <CircleHelp size={18} aria-hidden="true" />
-            {worker ? 'Мой профиль' : 'Как работает Сезон'}
+            {partner ? 'Подключение каналов' : worker ? 'Мой профиль' : 'Как работает Сезон'}
           </Link>
-          <div className="sidebar-identity">
-            <span className="user-avatar" aria-hidden="true">
-              {user.display_name.slice(0, 1).toLocaleUpperCase('ru')}
-            </span>
-            <span className="user-name">
-              {user.display_name}
-              <small>{worker ? 'Работник' : 'Работодатель'}</small>
-            </span>
-          </div>
           <Button
             variant="secondary"
             iconBefore={<LogOut size={18} aria-hidden="true" />}
@@ -141,7 +151,11 @@ export function Shell() {
               <Brand />
             </Link>
             <span className="header-product">
-              {worker ? 'Найдите работу на свой сезон' : 'Ваше пространство найма'}
+              {partner
+                ? 'Работа для ваших студентов'
+                : worker
+                  ? 'Найдите работу на свой сезон'
+                  : 'Ваше пространство найма'}
             </span>
             <div className="header-account">
               <Button
@@ -156,14 +170,17 @@ export function Shell() {
                   <Moon size={20} aria-hidden="true" />
                 )}
               </Button>
-              <span className="header-role">{worker ? 'Работник' : 'Работодатель'}</span>
+              <span className="header-role">
+                {partner ? 'Партнёр' : worker ? 'Работник' : 'Работодатель'}
+              </span>
               <Button
                 variant="secondary"
                 className="mobile-exit"
-                iconBefore={<LogOut size={17} aria-hidden="true" />}
+                aria-label="Выйти"
+                title="Выйти"
                 onClick={switchCabinet}
               >
-                Выйти
+                <LogOut size={20} aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -175,7 +192,7 @@ export function Shell() {
           </div>
         )}
         <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
-          {(inVacancy || inJob) && (
+          {(inVacancy || (inJob && !applying)) && (
             <Link className="back-link" to={backTo}>
               <ArrowLeft size={16} />
               {inJob
@@ -190,7 +207,9 @@ export function Shell() {
           <Outlet />
         </main>
         <footer className="content-footer">
-          <span>Сезон · Кабинет {worker ? 'работника' : 'работодателя'}</span>
+          <span>
+            Сезон · Кабинет {partner ? 'партнёра' : worker ? 'работника' : 'работодателя'}
+          </span>
           <span>Мини-приложение для MAX</span>
         </footer>
       </div>

@@ -2,6 +2,8 @@ import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { buildVacancyCardText, buildApplyDeepLink, MAX_CARD_TEXT_LIMIT } from './cardText.js';
 import type { Vacancy } from '@prisma/client';
+import { onVacancyPublished } from './broadcast.js';
+import { employerTrust } from '../employers/trust.js';
 
 export type PublishErrorKind = 'not_found' | 'conflict' | 'no_chat';
 
@@ -36,6 +38,9 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         salaryMax: vacancy.salaryMax,
         description: vacancy.description,
         contactInfo: vacancy.contactInfo,
+        headcount: vacancy.headcount,
+        studentFriendly: vacancy.studentFriendly,
+        trustedEmployer: (await employerTrust(vacancy.employerUserId)).trusted,
     }, applyUrl);
     // Старые записи могли сохраниться до резерва под ссылку — проверяем итоговый текст ещё раз.
     if (text.length > MAX_CARD_TEXT_LIMIT) {
@@ -122,6 +127,12 @@ async function redeliverOrReportConflict(vacancyId: number): Promise<Vacancy> {
 
 // Единая точка публикации для REST и диалога бота.
 export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
+    const vacancy = await publishVacancyOnce(vacancyId);
+    void onVacancyPublished(vacancy.id);
+    return vacancy;
+}
+
+async function publishVacancyOnce(vacancyId: number): Promise<Vacancy> {
     const existing = await db.vacancy.findUnique({ where: { id: vacancyId } });
     if (!existing) {
         throw new PublishError('not_found', 'vacancy not found');

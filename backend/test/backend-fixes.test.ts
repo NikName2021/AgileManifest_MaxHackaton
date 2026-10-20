@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../src/trudvsem/client.js', () => ({ searchTrudvsemVacancies: vi.fn(async () => []) }));
 vi.mock('../src/max/client.js', async () => {
   const helpers = await import('./helpers.js');
   return { maxApi: helpers.maxApiMock };
 });
 
 import { app } from '../src/server.js';
+import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { setBotUsername } from '../src/max/botInfo.js';
 import { findOrCreateUserByMaxId } from '../src/users/service.js';
@@ -18,6 +20,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await settleBroadcasts();
   await app.close();
   await db.$disconnect();
 });
@@ -148,7 +151,7 @@ describe('диалог создания вакансии в групповом �
     }
     const vacancy = await db.vacancy.findFirstOrThrow({ where: { title: 'Сборщик' } });
     expect(vacancy.employerUserId).toBe(A.user.id);
-    expect(vacancy).toMatchObject({ regionCode: 'Краснодар', schedule: 'seasonal', salaryMin: 40000, salaryMax: 60000, status: 'published' });
+    expect(vacancy).toMatchObject({ regionCode: 'Краснодар', schedule: 'seasonal', salaryMin: 40000, salaryMax: 60000, status: 'draft', regionSubject: '23' });
   });
 });
 

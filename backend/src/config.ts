@@ -24,4 +24,6 @@ export const config = {
   testApiToken: process.env.TEST_API_TOKEN,
   // Список origin через запятую; не задан — CORS разрешает любой origin.
   frontendOrigin: process.env.FRONTEND_ORIGIN,
+  // Сколько разных людей должны подтвердить выход на работу, чтобы работодатель стал «надёжным».
+  trustedEmployerMinHires: Number(process.env.TRUSTED_EMPLOYER_MIN_HIRES ?? 5),
 };

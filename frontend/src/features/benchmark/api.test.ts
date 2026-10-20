@@ -3,6 +3,16 @@ import { createBenchmarkRepository, parseBenchmark } from './api'
 
 const data = { avgSalaryMin: 70000, avgSalaryMax: 50000, vacancyCount: 28, isFresh: true }
 describe('salary benchmark contract', () => {
+  it('keeps the actual regional scope and country fallback distinct', () => {
+    expect(
+      parseBenchmark({ ...data, scope: 'region', regionName: 'Тульская область' }),
+    ).toMatchObject({ scope: 'region', regionName: 'Тульская область' })
+    expect(parseBenchmark({ ...data, scope: 'country', regionName: null })).toMatchObject({
+      scope: 'country',
+      regionName: null,
+    })
+    expect(() => parseBenchmark({ ...data, scope: 'region', regionName: null })).toThrow('contract')
+  })
   it('preserves independent averages, missing amounts, zero and stale cache', () => {
     expect(parseBenchmark(data)).toEqual(data)
     expect(

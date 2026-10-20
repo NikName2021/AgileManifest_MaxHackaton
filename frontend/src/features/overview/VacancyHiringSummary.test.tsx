@@ -68,7 +68,7 @@ describe('vacancy hiring summary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
     await screen.findByRole('link', { name: 'Новый: 5. Открыть отклики' })
     await session.applications.updateStatus(1, 'hired')
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить воронку' }))
+    fireEvent.focus(window)
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Новый: 4. Открыть отклики' })).toBeInTheDocument(),
     )

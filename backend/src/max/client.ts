@@ -146,6 +146,9 @@ export const maxApi = {
 
   listSubscriptions: () => maxRequest('/subscriptions'),
 
+  // GET /chats/{chatId}: title (null для диалогов), type — chat | channel | dialog.
+  getChat: (chatId: string) => maxRequest(`/chats/${encodeURIComponent(chatId)}`),
+
   deleteSubscription: (url: string) =>
     maxRequest('/subscriptions', { method: 'DELETE' }, { url }),
 };

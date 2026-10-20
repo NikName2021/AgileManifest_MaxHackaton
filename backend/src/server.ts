@@ -9,6 +9,13 @@ import { publishVacancy, PublishError } from './vacancies/publish.js';
 import { getBenchmark } from './trudvsem/benchmarkService.js';
 import { applyStatusChange, funnelButtons, createApplicationRecord, type CreateApplicationError } from './application/service.js';
 import { registerCandidateRoutes } from './candidate/routes.js';
+import { registerTeamRoutes } from './team/routes.js';
+import { registerPosterRoutes } from './vacancies/posterRoutes.js';
+import { registerSubscriptionRoutes } from './subscriptions/routes.js';
+import { registerChannelRoutes } from './channels/routes.js';
+import { setShift, startShiftReminders } from './shifts/service.js';
+import { normalizeRegion } from './regions/dictionary.js';
+import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
 import type { Vacancy } from '@prisma/client';
 import { startStaleVacancyReminders } from './vacancies/reminders.js';
@@ -28,6 +35,7 @@ import {
   authMaxSchema,
   benchmarkQuerySchema,
   idParamSchema,
+  setShiftSchema,
 } from './validation.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -40,19 +48,27 @@ const allowedOrigins = config.frontendOrigin
   : true;
 app.register(cors, {
   origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Authorization', 'Content-Type'],
 });
 
-const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_started'];
+const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_started', 'bot_added', 'bot_removed'];
 
 registerMaxWebhook(app);
 registerCandidateRoutes(app);
+registerTeamRoutes(app);
+registerPosterRoutes(app);
+registerSubscriptionRoutes(app);
+registerChannelRoutes(app);
 
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.
 function withApplyUrl(vacancy: Vacancy) {
-  return { ...vacancy, applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null };
+  return {
+    ...vacancy,
+    subject: regionDto(vacancy.regionSubject),
+    applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null,
+  };
 }
 
 function parseIdParam(request: FastifyRequest, reply: FastifyReply): number | undefined {
@@ -117,19 +133,22 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       employerUserId: request.sessionUserId!,
       title: body.title,
       regionCode: body.region_code ?? '',
+      regionSubject: normalizeRegion(body.region_code),
       category: body.category ?? 'general',
       schedule: body.schedule ?? 'temporary',
       salaryMin: body.salary_min ?? null,
       salaryMax: body.salary_max ?? null,
       description: body.description ?? null,
       contactInfo: body.contact_info ?? null,
+      headcount: body.headcount ?? null,
+      studentFriendly: body.student_friendly ?? false,
       status: 'draft',
       // Пусто, если пользователь ещё не писал боту — тогда publish вернёт employer_chat_missing.
       employerChatId: employer?.dialogChatId || employer?.chatId || null,
     },
   });
 
-  return reply.code(201).send(vacancy);
+  return reply.code(201).send(withApplyUrl(vacancy));
 });
 
 app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply) => {
@@ -172,6 +191,8 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     salary_max: body.salary_max !== undefined ? body.salary_max : existing.salaryMax,
     description: body.description !== undefined ? body.description : existing.description,
     contact_info: body.contact_info !== undefined ? body.contact_info : existing.contactInfo,
+    headcount: body.headcount !== undefined ? body.headcount : existing.headcount,
+    student_friendly: body.student_friendly ?? existing.studentFriendly,
   };
   const constraintCheck = checkMergedVacancyConstraints(merged);
   if (!constraintCheck.ok) {
@@ -186,12 +207,15 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     data: {
       title: merged.title,
       regionCode: merged.region_code,
+      regionSubject: normalizeRegion(merged.region_code),
       ...(body.category !== undefined ? { category: body.category } : {}),
       schedule: merged.schedule,
       salaryMin: merged.salary_min,
       salaryMax: merged.salary_max,
       description: merged.description,
       contactInfo: merged.contact_info,
+      headcount: merged.headcount,
+      studentFriendly: merged.student_friendly,
     },
   });
   if (updateResult.count === 0) {
@@ -199,7 +223,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
   }
 
   const vacancy = await db.vacancy.findUniqueOrThrow({ where: { id } });
-  return vacancy;
+  return withApplyUrl(vacancy);
 });
 
 app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (request, reply) => {
@@ -213,7 +237,7 @@ app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (reque
 
   try {
     const vacancy = await publishVacancy(id);
-    return vacancy;
+    return withApplyUrl(vacancy);
   } catch (err) {
     if (err instanceof PublishError) {
       if (err.kind === 'not_found') {
@@ -248,7 +272,7 @@ app.post('/api/vacancies/:id/close', { preHandler: requireAuth }, async (request
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
 
-  return db.vacancy.update({ where: { id }, data: { status: 'closed' } });
+  return withApplyUrl(await db.vacancy.update({ where: { id }, data: { status: 'closed' } }));
 });
 
 app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (request, reply) => {
@@ -321,6 +345,7 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
     contact: body.contact,
     // Только личный чат: последний chatId мог быть групповым. null — кандидат не запускал бота.
     candidateChatId: candidate.dialogChatId,
+    source: 'miniapp',
   });
   if (!result.ok) {
     const e = CREATE_APPLICATION_ERRORS[result.error];
@@ -384,8 +409,32 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
     vacancy: { id: vacancy.id, title: vacancy.title, status: vacancy.status },
     notified: result.notified,
     unchanged: result.unchanged ?? false,
+    vacancyClosed: result.vacancyClosed ?? false,
   });
 });
+
+// Время выхода на смену для приглашённого или нанятого кандидата; кандидат подтверждает в боте.
+app.patch('/api/applications/:id/shift', { preHandler: requireAuth }, async (request, reply) => {
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
+  const parsed = setShiftSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return sendError(reply, 400, 'validation_error', 'invalid request body', zodFieldErrors(parsed.error.flatten()));
+  }
+  const startAt = parsed.data.start_at ? new Date(parsed.data.start_at) : null;
+  const result = await setShift(request.sessionUserId!, id, startAt, parsed.data.note ?? null);
+  if (!result.ok) {
+    if (result.error === 'not_found') return sendError(reply, 404, 'not_found', 'application not found');
+    if (result.error === 'forbidden') return sendError(reply, 403, 'forbidden', 'not your vacancy');
+    if (result.error === 'in_past') return sendError(reply, 400, 'validation_error', 'start_at is in the past', { start_at: ['must be in the future'] });
+    return sendError(reply, 409, 'conflict', 'a shift can be set only for invited or hired candidates');
+  }
+  const a = result.application;
+  return { id: a.id, startAt: a.startAt, shiftNote: a.shiftNote, attendance: a.attendance, notified: result.notified };
+});
+
+// Справочник субъектов РФ для выбора региона в мини-приложении.
+app.get('/api/regions', async () => ({ items: listRegions() }));
 
 app.get('/api/benchmark', async (request, reply) => {
   const parsed = benchmarkQuerySchema.safeParse(request.query);
@@ -428,6 +477,7 @@ async function start() {
     await maxApi.registerCommands([
       { name: 'новая_вакансия', description: 'Создать вакансию' },
       { name: 'отмена', description: 'Отменить текущий диалог' },
+      { name: 'отписаться', description: 'Не присылать новые вакансии' },
     ]);
     app.log.info({ me }, 'connected to MAX as bot');
 
@@ -470,7 +520,11 @@ async function start() {
     app.log.error(err, 'failed to reach MAX API — проверьте MAX_BOT_TOKEN');
   }
 
+  backfillRegionSubjects()
+    .then((n) => n > 0 && app.log.info({ updated: n }, 'region_subject backfilled'))
+    .catch((err) => app.log.error(err, 'region_subject backfill failed'));
   startStaleVacancyReminders();
+  startShiftReminders();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }

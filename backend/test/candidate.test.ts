@@ -6,6 +6,7 @@ vi.mock('../src/max/client.js', async () => {
 });
 
 import { app } from '../src/server.js';
+import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { setBotUsername } from '../src/max/botInfo.js';
 import { buildApplyDeepLink, buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from '../src/vacancies/cardText.js';
@@ -19,6 +20,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await settleBroadcasts();
   await app.close();
   await db.$disconnect();
 });
@@ -110,14 +112,18 @@ describe('1. каталог: видимость опубликованных ч�
       id: v.id,
       title: 'Сборщик урожая',
       regionCode: '23',
+      subject: { code: '23', name: 'Краснодарский край' },
       category: 'agriculture',
       schedule: 'seasonal',
       salaryMin: null,
       salaryMax: null,
       description: null,
+      headcount: null,
+      spotsLeft: null,
+      studentFriendly: false,
       status: 'published',
       createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
-      employer: { displayName: 'A' },
+      employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
       myApplication: null,
       canApply: true,
       applyUnavailableReason: null,
@@ -236,7 +242,7 @@ describe('3. фильтры, пагинация, сортировка', () => {
     const own = await publishedVacancy(B, { region_code: '77', category: 'own-only' }); // своя не учитывается
     expect(own.id).toBeGreaterThan(0);
     expect((await get(B, '/api/jobs/filters')).json()).toEqual({
-      regions: [{ value: '16', label: '16' }, { value: '23', label: '23' }],
+      regions: [{ value: '23', label: 'Краснодарский край' }, { value: '16', label: 'Республика Татарстан' }],
       categories: [{ value: 'agriculture', label: 'agriculture' }, { value: 'cafe', label: 'cafe' }],
     });
   });
@@ -455,20 +461,26 @@ describe('8–9. история откликов кандидата', () => {
       id: created.id,
       status: 'new',
       contact: '+7 900 000-00-01',
+      startAt: null,
+      shiftNote: null,
+      attendance: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       vacancy: {
         id: v.id,
         title: 'Сборщик урожая',
         regionCode: '23',
+        subject: { code: '23', name: 'Краснодарский край' },
         category: 'agriculture',
         schedule: 'seasonal',
         salaryMin: 50000,
         salaryMax: 70000,
         description: null,
+        headcount: null,
+        studentFriendly: false,
         contactInfo: '+7 999 111-22-33',
         status: 'published',
-        employer: { displayName: 'A' },
+        employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
       },
     });
     expect(JSON.stringify(forB)).not.toContain('+7 900 000-00-02');
@@ -614,11 +626,11 @@ describe('13. профиль', () => {
     const v = await publishedVacancy(A);
     await apply(B, v.id, 'старый контакт');
 
-    expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: null, hasBotChat: true });
+    expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: null, hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
 
     const patched = await app.inject({ method: 'PATCH', url: '/api/me', headers: B.auth, payload: { application_contact: '  @new_contact  ' } });
     expect(patched.statusCode).toBe(200);
-    expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: '@new_contact', hasBotChat: true });
+    expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: '@new_contact', hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
     expect((await get(B, '/api/me/applications')).json().items[0].contact).toBe('старый контакт');
     expect((await get(C, '/api/me')).json()).toMatchObject({ id: C.user.id, applicationContact: null });
     // Номер из MAX (phone) не трогается.

@@ -1,5 +1,7 @@
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
+import { RegionPicker } from '../features/regions/RegionPicker'
+import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { Button, Textarea } from '@maxhub/max-ui'
@@ -192,6 +194,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
           <p>Сначала детали. Публикацию подтвердите на следующем экране.</p>
         </div>
       </div>
+      <VacancySteps current={1} />
       {source && (
         <div className="vacancy-notice vacancy-copy-note">
           <p>
@@ -234,6 +237,10 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                   hint: 'Необязательно.',
                 })}
               </div>
+              <RegionPicker
+                value={values.region_code}
+                onChange={(value) => change('region_code', value)}
+              />
               <div className="vacancy-field">
                 <label htmlFor="vacancy-schedule">Тип занятости</label>
                 <Select
@@ -256,6 +263,11 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
               <h2>
                 <span>02</span>Условия работы
               </h2>
+              {field('headcount', {
+                numeric: true,
+                placeholder: 'Например, 15',
+                hint: 'От 1 до 1000. Когда нужное число людей нанято, сервис закроет вакансию. Пустое поле — без лимита.',
+              })}
               <div className="form-grid">
                 {field('salary_min', {
                   numeric: true,
@@ -279,6 +291,17 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                 placeholder: 'Задачи, график, период оплаты, требования и что вы предлагаете…',
                 hint: 'Будущему сотруднику важно представить свой рабочий день.',
               })}
+              <label className="student-check">
+                <input
+                  type="checkbox"
+                  checked={values.student_friendly === 'yes'}
+                  onChange={(e) => change('student_friendly', e.target.checked ? 'yes' : '')}
+                />
+                Подходит студентам
+              </label>
+              <p className="field-hint">
+                Например, без опыта, с гибким графиком или на каникулы. Уточните условия в описании.
+              </p>
             </section>
             <section className="form-section">
               <h2>

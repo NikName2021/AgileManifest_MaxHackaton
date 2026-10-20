@@ -2,7 +2,7 @@ import { Select } from '../shared/ui/Select'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { ArrowLeft, ArrowRight, BriefcaseBusiness, RefreshCw, UsersRound } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BriefcaseBusiness, UsersRound } from 'lucide-react'
 import { applicationLabels, type Application } from '../entities/hiring'
 import { useSession } from '../features/session/context'
 import {
@@ -22,6 +22,7 @@ import { ApplicationDialog } from '../features/applications/ApplicationDialog'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
+import { ShiftSummary } from '../features/shifts/ShiftSummary'
 
 const pageSize = 20
 type Loaded =
@@ -152,13 +153,9 @@ export function ApplicationsPage() {
       <div className="page-heading applications-heading">
         <div>
           <div className="eyebrow">Кабинет работодателя</div>
-          <h1>Отклики кандидатов</h1>
-          <p>Контакты кандидатов и текущие этапы найма.</p>
+          <h1>Люди для вашей команды</h1>
+          <p>Рассматривайте отклики и отмечайте этап общения.</p>
         </div>
-        <span className="heading-badge">
-          <UsersRound size={16} />
-          Воронка найма
-        </span>
       </div>
       {mode === 'preview' && loadApplicationExamples && (
         <div className="applications-demo">
@@ -197,18 +194,6 @@ export function ApplicationsPage() {
             ))}
           </Select>
         </div>
-        <Button
-          variant="secondary"
-          iconBefore={<RefreshCw size={16} />}
-          disabled={result.state === 'loading'}
-          onClick={() => {
-            setNotice(undefined)
-            reload()
-            vacancyOptions.reload()
-          }}
-        >
-          Обновить
-        </Button>
       </div>
       <RefreshStatus
         refreshing={refreshing}
@@ -277,49 +262,65 @@ export function ApplicationsPage() {
               : 'Найдено: 0'}
           </p>
           {rows.length ? (
-            <ul className="applications-list">
-              {rows.map((item) => (
-                <li key={item.id}>
-                  <article className="application-row">
-                    <div className="candidate-avatar" aria-hidden="true">
-                      {candidateName(item).slice(0, 1).toLocaleUpperCase('ru')}
-                    </div>
-                    <div className="application-row-main">
-                      <h2>{candidateName(item)}</h2>
+            <div className="candidate-table">
+              <div className="candidate-table-head" aria-hidden="true">
+                <span>Кандидат</span>
+                <span>Вакансия</span>
+                <span>Получен</span>
+                <span>Этап</span>
+                <span>Открыть</span>
+              </div>
+              <ul className="applications-list">
+                {rows.map((item) => (
+                  <li key={item.id}>
+                    <article className="application-row">
+                      <div className="application-row-person">
+                        <span className="candidate-avatar" aria-hidden="true">
+                          {candidateName(item).slice(0, 1).toLocaleUpperCase('ru')}
+                        </span>
+                        <div>
+                          <h2>{candidateName(item)}</h2>
+                          <small className="candidate-mobile-contact">
+                            {candidateContact(item) || 'Контакт не указан'}
+                          </small>
+                        </div>
+                      </div>
                       <Link
                         className="application-vacancy-link"
                         to={`/vacancies/${item.vacancyId}`}
                       >
                         {item.vacancy.title}
                       </Link>
-                      <p>{candidateContact(item) || 'Контакт не указан'}</p>
-                    </div>
-                    <div className="application-row-meta">
-                      <span className={`application-status ${item.status}`}>
-                        {applicationLabels[item.status]}
-                      </span>
                       <time dateTime={item.createdAt}>
                         {new Date(item.createdAt).toLocaleDateString('ru-RU', {
                           day: 'numeric',
                           month: 'short',
                         })}
                       </time>
+                      <div>
+                        <span className={`application-status ${item.status}`}>
+                          {applicationLabels[item.status]}
+                        </span>
+                        <ShiftSummary shift={item} />
+                      </div>
                       <Button
-                        variant="secondary"
+                        variant="ghost"
                         size="small"
+                        className="candidate-open"
                         aria-label={`Открыть отклик: ${candidateName(item)}`}
                         onClick={() => {
                           setNotice(undefined)
                           setSelected(item)
                         }}
                       >
-                        Подробнее
+                        <ArrowRight size={20} />
+                        <span className="candidate-open-label">Открыть отклик</span>
                       </Button>
-                    </div>
-                  </article>
-                </li>
-              ))}
-            </ul>
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
             <section className="vacancy-empty">
               <span className="step-icon">

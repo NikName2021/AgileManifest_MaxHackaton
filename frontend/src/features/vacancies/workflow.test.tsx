@@ -115,7 +115,7 @@ describe('employer vacancy workflow', () => {
     await act(() => router.navigate(-1))
     await screen.findByRole('heading', { name: 'Бариста' })
     expect(screen.getByRole('combobox')).toHaveTextContent('По названию')
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
+    fireEvent.focus(window)
     await screen.findByRole('heading', { name: 'Бариста' })
     expect(titles()).toEqual(['Бариста', 'Повар'])
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Нет такой вакансии' } })
@@ -305,6 +305,8 @@ describe('employer vacancy workflow', () => {
       await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
       expect(create).toHaveBeenCalledOnce()
       expect(create.mock.calls[0][0]).toEqual({
+        headcount: null,
+        student_friendly: false,
         title: 'Повар на новый сезон',
         region_code: 'Тула',
         category: 'Общепит',

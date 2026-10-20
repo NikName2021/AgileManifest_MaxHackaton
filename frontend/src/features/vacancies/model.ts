@@ -13,6 +13,8 @@ export const scheduleLabels: Record<Vacancy['schedule'], string> = {
   permanent: 'Постоянная работа',
 }
 export const fieldLabels = {
+  headcount: 'Сколько человек нужно',
+  student_friendly: 'Подходит студентам',
   title: 'Название вакансии',
   region_code: 'Город или регион',
   category: 'Сфера деятельности',
@@ -24,8 +26,10 @@ export const fieldLabels = {
 }
 export type VacancyForm = Omit<
   VacancyInput,
-  'salary_min' | 'salary_max' | 'description' | 'contact_info'
+  'salary_min' | 'salary_max' | 'description' | 'contact_info' | 'headcount' | 'student_friendly'
 > & {
+  headcount: string
+  student_friendly: string
   salary_min: string
   salary_max: string
   description: string
@@ -34,6 +38,8 @@ export type VacancyForm = Omit<
 export type FieldErrors = Partial<Record<keyof VacancyForm, string>>
 export function formValues(v?: Vacancy): VacancyForm {
   return {
+    headcount: v?.headcount?.toString() ?? '',
+    student_friendly: v?.studentFriendly ? 'yes' : '',
     title: v?.title ?? '',
     region_code: v?.regionCode ?? '',
     category: v?.category ?? '',
@@ -46,6 +52,15 @@ export function formValues(v?: Vacancy): VacancyForm {
 }
 export function validateForm(form: VacancyForm): { input: VacancyInput; errors: FieldErrors } {
   const errors: FieldErrors = {}
+  const headcount = form.headcount.trim() ? Number(form.headcount) : null
+  if (
+    headcount !== null &&
+    (!/^\d+$/.test(form.headcount.trim()) ||
+      !Number.isInteger(headcount) ||
+      headcount < 1 ||
+      headcount > 1000)
+  )
+    errors.headcount = 'Введите целое число от 1 до 1000 или оставьте поле пустым.'
   for (const [key, limit] of Object.entries({
     title: 200,
     region_code: 100,
@@ -75,6 +90,8 @@ export function validateForm(form: VacancyForm): { input: VacancyInput; errors: 
   return {
     errors,
     input: {
+      headcount,
+      student_friendly: form.student_friendly === 'yes',
       title: form.title.trim(),
       region_code: form.region_code.trim(),
       category: form.category.trim() || 'general',
@@ -94,25 +111,33 @@ export function formatSalary(min: number | null, max: number | null): string {
   if (max !== null) return `до ${money.format(max)} ₽`
   return 'По договорённости'
 }
-// Mirrors the current server card composition to check MAX's 4000-character text limit.
-// Keep this in sync with backend/src/vacancies/publish.ts; rendering below stays plain text.
+// Reserve room for the trust badge and the longest application link, as the server does.
+// Keep in sync with backend/src/vacancies/cardText.ts.
 export function cardTextLength(v: Vacancy): number {
   const escape = (text: string) => text.replace(/([\\`*_[\]()~>#+\-=|{}.!])/g, '\\$1')
   const salary =
-    v.salaryMin && v.salaryMax
+    v.salaryMin !== null && v.salaryMax !== null
       ? `${v.salaryMin}–${v.salaryMax} ₽`
-      : v.salaryMin
+      : v.salaryMin !== null
         ? `от ${v.salaryMin} ₽`
-        : v.salaryMax
+        : v.salaryMax !== null
           ? `до ${v.salaryMax} ₽`
           : 'по договорённости'
+  const schedule = { seasonal: 'сезонная', temporary: 'временная', permanent: 'постоянная' }[
+    v.schedule
+  ]
+  const link = `https://max.ru/${'x'.repeat(64)}?start=apply_2147483647`
   return [
     `**${escape(v.title)}**`,
+    '✓ Надёжный работодатель',
     `Регион: ${escape(v.regionCode)}`,
-    `График: ${escape(v.schedule)}`,
+    `График: ${escape(schedule)}`,
     `Зарплата: ${salary}`,
+    v.headcount ? `Нужно человек: ${v.headcount}` : undefined,
+    v.studentFriendly ? 'Подходит студентам' : undefined,
     v.description ? escape(v.description) : undefined,
     v.contactInfo ? `Контакт: ${escape(v.contactInfo)}` : undefined,
+    `Откликнуться:\n[${escape(link)}](${link})`,
   ]
     .filter(Boolean)
     .join('\n').length

@@ -1,7 +1,7 @@
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
 import { Button } from '@maxhub/max-ui'
-import { ArrowUpRight, BriefcaseBusiness, MapPin, Plus, RefreshCw, Search } from 'lucide-react'
+import { ArrowUpRight, BriefcaseBusiness, MapPin, Plus, Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
@@ -82,10 +82,6 @@ export function VacanciesPage() {
             onChange={(e) => filter('q', e.target.value)}
           />
         </div>
-        <Button variant="secondary" onClick={reload} disabled={result.state === 'loading'}>
-          <RefreshCw size={16} />
-          Обновить
-        </Button>
       </div>
       <div className="vacancy-list-controls">
         <div className="vacancy-filters" role="group" aria-label="Фильтр по статусу">

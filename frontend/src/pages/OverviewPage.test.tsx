@@ -34,15 +34,24 @@ describe('hiring overview', () => {
   it('shows actual totals, not the one-item page length, and links to matching filters', async () => {
     const session = createPreviewSession()
     await session.loadApplicationExamples!()
+    const list = vi.spyOn(session.applications, 'list')
     const metrics = start(session)
-    await screen.findByRole('heading', { name: 'Бариста в летнее кафе · демо' })
+    await screen.findByRole('link', { name: 'Новый: 10. Открыть отклики' })
     expect(metrics.getByRole('link', { name: /Активные вакансии/ })).toHaveTextContent('2')
     const fresh = metrics.getByRole('link', { name: /Новые отклики/ })
     expect(fresh).toHaveTextContent('10')
     expect(fresh).toHaveAttribute('href', '/applications?status=new')
     expect(metrics.getByRole('link', { name: /Всего откликов/ })).toHaveTextContent('46')
     expect(metrics.getByRole('link', { name: /Черновики/ })).toHaveTextContent('0')
-    const funnel = within(screen.getByRole('region', { name: 'Воронка найма' }))
+    expect(list).toHaveBeenCalledWith(
+      { status: 'new', limit: 3, offset: 0 },
+      expect.any(AbortSignal),
+    )
+    expect(screen.getByRole('link', { name: /Анна · демо 1\s*Бариста/ })).toHaveAttribute(
+      'href',
+      '/applications?vacancy=1&status=new',
+    )
+    const funnel = within(screen.getByRole('region', { name: 'Этапы найма' }))
     const expected = [10, 10, 10, 8, 8]
     statuses.forEach((status, index) => {
       const link = funnel.getByRole('link', {
@@ -53,11 +62,11 @@ describe('hiring overview', () => {
   })
   it('shows an honest empty state without fabricated vacancies or candidates', async () => {
     const metrics = start(createPreviewSession())
-    await screen.findByRole('heading', { name: 'Добавьте первую вакансию' })
+    await screen.findByRole('heading', { name: 'Все новые отклики разобраны' })
     expect(metrics.getByRole('link', { name: /Всего откликов/ })).toHaveTextContent('0')
     expect(screen.queryByText(/демо 1/)).not.toBeInTheDocument()
     expect(await screen.findByText(/Откликов пока нет. Поделитесь/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Создать черновик/ })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: /Создать вакансию/ })[0]).toHaveAttribute(
       'href',
       '/vacancies/new',
     )
@@ -66,14 +75,11 @@ describe('hiring overview', () => {
     const session = createPreviewSession()
     vi.spyOn(session.applications, 'list').mockImplementation(() => new Promise(() => {}))
     start(session)
-    expect(screen.getByRole('region', { name: 'Воронка найма' })).toHaveAttribute(
-      'aria-busy',
-      'true',
-    )
+    expect(screen.getByRole('region', { name: 'Этапы найма' })).toHaveAttribute('aria-busy', 'true')
     expect(
       screen.getByRole('link', { name: 'Нанят: загружается. Открыть отклики' }),
     ).toHaveTextContent('—')
-    expect(screen.getByRole('button', { name: 'Обновить воронку' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /Обновить/ })).not.toBeInTheDocument()
     expect(screen.queryByText(/Откликов пока нет/)).not.toBeInTheDocument()
   })
   it('retains independent totals on partial failure and recovers a missing stage', async () => {
@@ -98,7 +104,7 @@ describe('hiring overview', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText(/Часть показателей недоступна/)).not.toBeInTheDocument()
   })
-  it('refreshes the funnel and shared metrics after a status change without reloading vacancies', async () => {
+  it('refreshes the overview after returning from a status change', async () => {
     const session = createPreviewSession()
     await session.loadApplicationExamples!()
     const vacancyList = vi.spyOn(session.vacancies, 'list')
@@ -106,13 +112,13 @@ describe('hiring overview', () => {
     const metrics = start(session)
     await screen.findByRole('link', { name: 'Новый: 10. Открыть отклики' })
     await session.applications.updateStatus(1, 'hired')
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить воронку' }))
+    fireEvent.focus(window)
     await screen.findByRole('link', { name: 'Новый: 9. Открыть отклики' })
     expect(screen.getByRole('link', { name: 'Нанят: 9. Открыть отклики' })).toBeInTheDocument()
     expect(metrics.getByRole('link', { name: /Новые отклики/ })).toHaveTextContent('9')
     expect(metrics.getByRole('link', { name: /Всего откликов/ })).toHaveTextContent('46')
-    expect(vacancyList).toHaveBeenCalledOnce()
-    expect(applicationList).toHaveBeenCalledTimes(12)
+    expect(vacancyList).toHaveBeenCalledTimes(2)
+    expect(applicationList).toHaveBeenCalledTimes(14)
   })
   it('does not turn unavailable metrics into zero and recovers independently of vacancies', async () => {
     const session = createPreviewSession()
@@ -121,9 +127,7 @@ describe('hiring overview', () => {
     const metrics = start(session)
     await screen.findByText('Не удалось загрузить количество откликов.')
     expect(metrics.getByRole('link', { name: /Всего откликов/ })).toHaveTextContent('—')
-    expect(
-      await screen.findByRole('heading', { name: 'Добавьте первую вакансию' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Не удалось загрузить новые отклики.')).toBeInTheDocument()
     list.mockImplementation(original)
     fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
     await waitFor(() =>

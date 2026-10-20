@@ -18,7 +18,9 @@ export type ErrorCode =
   // Вакансия — черновик или закрыта.
   | 'vacancy_unavailable'
   // Повторный отклик, в том числе через бота.
-  | 'already_applied';
+  | 'already_applied'
+  // Достигнут лимит подписок на вакансии у пользователя.
+  | 'subscription_limit_reached';
 
 export interface ErrorFields {
   [field: string]: string[];

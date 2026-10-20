@@ -70,6 +70,8 @@ function start(session = createPreviewSession(), path = '/') {
           { path: '/jobs/:id', element: <JobPage /> },
           { path: '/my-applications', element: <MyApplicationsPage /> },
           { path: '/profile', element: <WorkerProfilePage /> },
+          { path: '/channels', element: <h1>Каналы партнёра</h1> },
+          { path: '/subscriptions', element: <h1>Подписки работника</h1> },
         ],
       },
     ],
@@ -89,6 +91,20 @@ function worker() {
 }
 
 describe('cabinet selection and candidate flows', () => {
+  it('keeps partner channels separate and permits worker subscriptions after leaving', async () => {
+    const { router } = start(createPreviewSession(), '/channels')
+    fireEvent.click(screen.getByRole('button', { name: /Зайти как партнёр/ }))
+    expect(await screen.findByRole('heading', { name: 'Каналы партнёра' })).toBeInTheDocument()
+    await act(() => router.navigate('/jobs'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/channels'))
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
+    worker()
+    await screen.findByText('Помощник на сбор урожая')
+    await act(() => router.navigate('/subscriptions'))
+    expect(await screen.findByRole('heading', { name: 'Подписки работника' })).toBeInTheDocument()
+    await act(() => router.navigate('/channels'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
+  })
   it('keeps the cabinet mounted when leaving is blocked by an active operation', async () => {
     function BusyPage() {
       const blocker = useBlocker(true)
@@ -122,10 +138,10 @@ describe('cabinet selection and candidate flows', () => {
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
     await screen.findByRole('heading', { name: 'Сохранение вакансии' })
     fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
-    expect(screen.queryByRole('heading', { name: 'Как вы хотите зайти?' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'С чего начнём?' })).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/')
     fireEvent.click(screen.getByRole('button', { name: 'Сохранение завершено' }))
-    expect(await screen.findByRole('heading', { name: 'Как вы хотите зайти?' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'С чего начнём?' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/choose')
   })
   it('asks at every mount, defers candidate requests and keeps employer overview', async () => {
@@ -140,7 +156,7 @@ describe('cabinet selection and candidate flows', () => {
     expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
     first.unmount()
     start(session)
-    expect(screen.getByRole('heading', { name: 'Как вы хотите зайти?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'С чего начнём?' })).toBeInTheDocument()
   })
   it('guards employer routes in worker mode and preserves a worker deep link after choosing', async () => {
     const { router } = start(undefined, '/jobs/1002')
@@ -163,6 +179,7 @@ describe('cabinet selection and candidate flows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить контакт' }))
     expect(await screen.findByText('Контакт сохранён.')).toBeInTheDocument()
     await act(() => router.navigate('/jobs/1001'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     expect(await screen.findByLabelText('Контакт для работодателя')).toHaveValue('@candidate')
     expect(apply).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
@@ -192,6 +209,7 @@ describe('cabinet selection and candidate flows', () => {
     })
     start(session, '/jobs/1001')
     worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
       target: { value: '@candidate' },
     })
@@ -208,6 +226,7 @@ describe('cabinet selection and candidate flows', () => {
     session.mode = 'max'
     start(session, '/jobs/1001')
     worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
       target: { value: '@candidate' },
     })
@@ -220,6 +239,7 @@ describe('cabinet selection and candidate flows', () => {
       apply = vi.spyOn(session.candidate, 'apply')
     const first = start(session, '/jobs/1001')
     worker()
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Отправить отклик' }))
     expect(screen.getByText(/Укажите контакт для связи/)).toBeInTheDocument()
     expect(apply).not.toHaveBeenCalled()

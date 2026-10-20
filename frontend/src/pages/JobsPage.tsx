@@ -3,15 +3,17 @@ import { Select } from '../shared/ui/Select'
 import { useCallback, useMemo, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { Search } from 'lucide-react'
+import { Search, ArrowRight, BriefcaseBusiness } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
-import { CandidateError, JobFacts, Loading, Pagination } from '../features/candidate/ui'
+import { CandidateError, Loading, Pagination } from '../features/candidate/ui'
 import { jobQuery } from '../features/candidate/query'
-import { scheduleLabels } from '../features/vacancies/model'
+import { formatSalary, scheduleLabels } from '../features/vacancies/model'
 import type { JobFilters } from '../features/candidate/api'
+import { EmployerBadge } from '../features/trust/EmployerTrust'
+import { Capacity } from '../features/capacity/Capacity'
 
 function SearchForm({
   params,
@@ -52,7 +54,9 @@ function SearchForm({
   return (
     <form className="job-search-form" onSubmit={submit}>
       <div className="job-search-main candidate-input">
-        <label htmlFor="job-search">Должность или слова из описания</label>
+        <label className="sr-only" htmlFor="job-search">
+          Должность или слова из описания
+        </label>
         <div>
           <Search size={18} aria-hidden="true" />
           <Input
@@ -61,102 +65,97 @@ function SearchForm({
             type="search"
             maxLength={200}
             defaultValue={params.get('q') ?? ''}
-            placeholder="Например, повар или сборщик урожая"
+            placeholder="Должность или ключевые слова"
           />
+          <Button type="submit" className="primary-button" aria-label="Найти вакансии">
+            Найти
+          </Button>
         </div>
       </div>
-      <details className="job-filter-details">
-        <summary>
-          Фильтры и сортировка
-          {['region_code', 'category', 'schedule', 'salary_from', 'salary_to'].some((key) =>
-            params.get(key),
-          )
-            ? ' · применены'
-            : ''}
-        </summary>
-        <div className="job-filter-fields">
-          <label>
-            Регион
-            <Select
-              label="Регион"
-              name="region_code"
-              defaultValue={params.get('region_code') ?? ''}
+      <div className="catalog-filters">
+        <label className="student-check">
+          <input
+            type="checkbox"
+            name="student_friendly"
+            value="true"
+            defaultChecked={params.get('student_friendly') === 'true'}
+          />
+          Для студентов
+        </label>
+        <Select label="Регион" name="region_code" defaultValue={params.get('region_code') ?? ''}>
+          <option value="">Все регионы</option>
+          {options('regions', 'region_code')}
+        </Select>
+        <Select label="Занятость" name="schedule" defaultValue={params.get('schedule') ?? ''}>
+          <option value="">Занятость</option>
+          {Object.entries(scheduleLabels).map(([value, label]) => (
+            <option value={value} key={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+        <details className="job-filter-details">
+          <summary>Фильтры и сортировка</summary>
+          <div className="job-filter-fields">
+            <label>
+              Сфера деятельности
+              <Select
+                label="Сфера деятельности"
+                name="category"
+                defaultValue={params.get('category') ?? ''}
+              >
+                <option value="">Все сферы</option>
+                {options('categories', 'category')}
+              </Select>
+            </label>
+            <div className="candidate-input">
+              <label htmlFor="salary_from">Зарплата от, ₽</label>
+              <Input
+                id="salary_from"
+                name="salary_from"
+                inputMode="numeric"
+                defaultValue={params.get('salary_from') ?? ''}
+                placeholder="Не важно"
+              />
+            </div>
+            <div className="candidate-input">
+              <label htmlFor="salary_to">Зарплата до, ₽</label>
+              <Input
+                id="salary_to"
+                name="salary_to"
+                inputMode="numeric"
+                defaultValue={params.get('salary_to') ?? ''}
+                placeholder="Не важно"
+              />
+            </div>
+            <label>
+              Порядок
+              <Select label="Порядок" name="sort" defaultValue={params.get('sort') ?? 'newest'}>
+                <option value="newest">Сначала новые</option>
+                <option value="salary_desc">По убыванию зарплаты</option>
+              </Select>
+            </label>
+            <Button type="submit" className="primary-button">
+              Применить фильтры
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setError('')
+                onSearch(new URLSearchParams())
+              }}
             >
-              <option value="">Все регионы</option>
-              {options('regions', 'region_code')}
-            </Select>
-          </label>
-          <label>
-            Сфера деятельности
-            <Select
-              label="Сфера деятельности"
-              name="category"
-              defaultValue={params.get('category') ?? ''}
-            >
-              <option value="">Все сферы</option>
-              {options('categories', 'category')}
-            </Select>
-          </label>
-          <label>
-            Занятость
-            <Select label="Занятость" name="schedule" defaultValue={params.get('schedule') ?? ''}>
-              <option value="">Любая</option>
-              {Object.entries(scheduleLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <div className="candidate-input">
-            <label htmlFor="salary_from">Зарплата от, ₽</label>
-            <Input
-              id="salary_from"
-              name="salary_from"
-              inputMode="numeric"
-              defaultValue={params.get('salary_from') ?? ''}
-              placeholder="Не важно"
-            />
+              Сбросить фильтры
+            </Button>
           </div>
-          <div className="candidate-input">
-            <label htmlFor="salary_to">Зарплата до, ₽</label>
-            <Input
-              id="salary_to"
-              name="salary_to"
-              inputMode="numeric"
-              defaultValue={params.get('salary_to') ?? ''}
-              placeholder="Не важно"
-            />
-          </div>
-          <label>
-            Порядок
-            <Select label="Порядок" name="sort" defaultValue={params.get('sort') ?? 'newest'}>
-              <option value="newest">Сначала новые</option>
-              <option value="salary_desc">По убыванию зарплаты</option>
-            </Select>
-          </label>
-        </div>
-      </details>
+        </details>
+      </div>
       {error && (
         <p role="alert" className="candidate-field-error">
           {error}
         </p>
       )}
-      <div className="vacancy-actions">
-        <Button type="submit" className="primary-button">
-          Найти вакансии
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            setError('')
-            onSearch(new URLSearchParams())
-          }}
-        >
-          Сбросить фильтры
-        </Button>
-      </div>
     </form>
   )
 }
@@ -188,12 +187,12 @@ export function JobsPage() {
         <div>
           <span className="eyebrow">КАБИНЕТ РАБОТНИКА</span>
           <h1>Найдите свою работу</h1>
-          <p>Сезонные, временные и постоянные вакансии от работодателей.</p>
+          <p>Вакансии от работодателей. Без лишних шагов.</p>
         </div>
-        <Button variant="secondary" disabled={resource.isRefreshing} onClick={resource.refresh}>
-          Обновить
-        </Button>
       </div>
+      <Link className="text-link" to={`/subscriptions?${params}`}>
+        Подписаться на новые вакансии →
+      </Link>
       <SearchForm
         key={`${key}:${formRevision}`}
         params={params}
@@ -208,71 +207,119 @@ export function JobsPage() {
           </Button>
         </div>
       )}
-      {error ? (
-        <p role="alert" className="vacancy-notice is-error">
-          {error}
-        </p>
-      ) : (
-        <>
-          <RefreshStatus
-            refreshing={resource.isRefreshing}
-            failed={!!resource.refreshError}
-            retry={resource.refresh}
-          />
-          {result.state === 'loading' && <Loading />}
-          {result.state === 'error' && (
-            <CandidateError error={result.error} retry={resource.reload} />
-          )}
-          {result.state === 'ready' && (
+      <div className="catalog-layout">
+        <div>
+          {error ? (
+            <p role="alert" className="vacancy-notice is-error">
+              {error}
+            </p>
+          ) : (
             <>
-              <p className="candidate-result-count" role="status">
-                Найдено вакансий: {result.data.total}
-              </p>
-              <div className="job-list">
-                {result.data.items.map((job) => (
-                  <article className="job-list-item" key={job.id}>
-                    <Link to={`/jobs/${job.id}`} state={{ catalogSearch: key }}>
-                      <h2>{job.title}</h2>
-                    </Link>
-                    <JobFacts job={job} />
-                    {job.myApplication && (
-                      <span className="candidate-applied">Вы уже откликнулись</span>
-                    )}
-                    <Link
-                      className="text-link"
-                      to={`/jobs/${job.id}`}
-                      state={{ catalogSearch: key }}
-                    >
-                      Подробнее о вакансии →
-                    </Link>
-                  </article>
-                ))}
-              </div>
-              {!result.data.items.length && (
-                <section className="empty-panel">
-                  <h2>
-                    {query.offset
-                      ? 'На этой странице нет вакансий'
-                      : 'Пока нет подходящих вакансий'}
-                  </h2>
-                  <p>Измените условия поиска или вернитесь позже.</p>
-                  <Button variant="secondary" onClick={() => search(new URLSearchParams())}>
-                    Показать все вакансии
-                  </Button>
-                </section>
-              )}
-              <Pagination
-                {...result.data}
-                onPage={(offset) => {
-                  const next = new URLSearchParams(params)
-                  next.set('offset', String(offset))
-                  setParams(next)
-                }}
+              <RefreshStatus
+                refreshing={resource.isRefreshing}
+                failed={!!resource.refreshError}
+                retry={resource.refresh}
               />
+              {result.state === 'loading' && <Loading />}
+              {result.state === 'error' && (
+                <CandidateError error={result.error} retry={resource.reload} />
+              )}
+              {result.state === 'ready' && (
+                <>
+                  <p className="candidate-result-count" role="status">
+                    Найдено вакансий: {result.data.total}
+                  </p>
+                  <div className="job-list">
+                    {result.data.items.map((job) => (
+                      <article className="job-list-item catalog-job" key={job.id}>
+                        <div className="job-employer">
+                          <span className="category-icon">
+                            <BriefcaseBusiness size={21} />
+                          </span>
+                          <div>
+                            <strong>{job.employer.displayName?.trim() || 'Работодатель'}</strong>
+                            <EmployerBadge confirmedHires={job.employer.confirmedHires} />
+                            <small>{job.regionCode || 'Регион не указан'}</small>
+                          </div>
+                        </div>
+                        <Link to={`/jobs/${job.id}`} state={{ catalogSearch: key }}>
+                          <h2>{job.title}</h2>
+                        </Link>
+                        <strong className="vacancy-salary">
+                          {formatSalary(job.salaryMin, job.salaryMax)}
+                        </strong>
+                        <div className="job-tags">
+                          <span>{scheduleLabels[job.schedule]}</span>
+                          {job.category && job.category !== 'general' && (
+                            <span>{job.category}</span>
+                          )}
+                        </div>
+                        {job.myApplication && (
+                          <span className="candidate-applied">Вы уже откликнулись</span>
+                        )}
+                        <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
+                        {job.studentFriendly && (
+                          <span className="student-badge">Подходит студентам</span>
+                        )}
+                        <div className="job-card-footer">
+                          <small>
+                            Опубликована {new Date(job.createdAt).toLocaleDateString('ru-RU')}
+                          </small>
+                          <Button asChild variant="secondary" iconAfter={<ArrowRight size={17} />}>
+                            <Link to={`/jobs/${job.id}`} state={{ catalogSearch: key }}>
+                              Подробнее
+                            </Link>
+                          </Button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {!result.data.items.length && (
+                    <section className="empty-panel">
+                      <h2>
+                        {query.offset
+                          ? 'На этой странице нет вакансий'
+                          : 'Пока нет подходящих вакансий'}
+                      </h2>
+                      <p>Измените условия поиска или вернитесь позже.</p>
+                      <Button variant="secondary" onClick={() => search(new URLSearchParams())}>
+                        Показать все вакансии
+                      </Button>
+                    </section>
+                  )}
+                  <Pagination
+                    {...result.data}
+                    onPage={(offset) => {
+                      const next = new URLSearchParams(params)
+                      next.set('offset', String(offset))
+                      setParams(next)
+                    }}
+                  />
+                </>
+              )}
             </>
           )}
-        </>
-      )}
+        </div>
+        <aside className="catalog-aside">
+          <section className="feature-panel">
+            <span className="eyebrow">ВСЁ НАЧИНАЕТСЯ С ОТКЛИКА</span>
+            <h2>Ваша следующая работа — ближе.</h2>
+            <p>Откройте вакансию, проверьте условия и оставьте контакт работодателю.</p>
+            <Button asChild className="primary-button" iconBefore={<ArrowRight size={18} />}>
+              <Link to="/my-applications">Мои отклики</Link>
+            </Button>
+          </section>
+          <section className="contact-tip">
+            <h3>Ваш контакт под рукой</h3>
+            <p>
+              Сохраните контакт один раз. Перед отправкой каждого отклика вы сможете его изменить.
+            </p>
+            <Link to="/profile">
+              <ArrowRight size={18} /> Перейти в профиль
+            </Link>
+          </section>
+        </aside>
+      </div>
     </>
   )
 }

@@ -2,6 +2,7 @@ import type { ApplicationStatus, Vacancy } from '../../entities/hiring'
 import { isApplicationStatus } from '../applications/api'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
+import { parseShift, type Shift } from '../shifts/model'
 
 export interface ApplicationRef {
   id: number
@@ -21,7 +22,10 @@ export interface PublicVacancy extends Pick<
   | 'description'
   | 'status'
 > {
-  employer: { displayName: string | null }
+  employer: { displayName: string | null; confirmedHires?: number }
+  headcount?: number | null
+  spotsLeft?: number | null
+  studentFriendly?: boolean
 }
 export interface Job extends PublicVacancy {
   status: 'published'
@@ -30,11 +34,12 @@ export interface Job extends PublicVacancy {
   canApply: boolean
   applyUnavailableReason: 'already_applied' | 'own_vacancy' | null
 }
-export interface MyApplication extends ApplicationRef {
+export interface MyApplication extends ApplicationRef, Shift {
   contact: string | null
   vacancy: PublicVacancy & { contactInfo: string | null }
 }
 export interface Profile {
+  employerTrust?: { confirmedHires: number }
   id: number
   displayName: string | null
   applicationContact: string | null
@@ -47,6 +52,7 @@ export interface Page<T> {
   offset: number
 }
 export interface JobQuery {
+  student_friendly?: boolean
   q?: string
   region_code?: string
   category?: string
@@ -114,6 +120,7 @@ function ref(body: unknown): ApplicationRef {
 }
 function vacancy(body: unknown): PublicVacancy {
   const v = record(body)
+  if (v.studentFriendly !== undefined && typeof v.studentFriendly !== 'boolean') return fail()
   if (
     !['seasonal', 'temporary', 'permanent'].includes(str(v.schedule)) ||
     !['draft', 'published', 'closed'].includes(str(v.status)) ||
@@ -124,6 +131,12 @@ function vacancy(body: unknown): PublicVacancy {
   const salaryMax = v.salaryMax === null ? null : integer(v.salaryMax)
   if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) return fail()
   return {
+    ...(v.headcount !== undefined
+      ? { headcount: v.headcount === null ? null : integer(v.headcount, 1) }
+      : {}),
+    ...(v.spotsLeft !== undefined
+      ? { spotsLeft: v.spotsLeft === null ? null : integer(v.spotsLeft) }
+      : {}),
     id: integer(v.id, 1),
     title: str(v.title),
     regionCode: str(v.regionCode),
@@ -133,7 +146,13 @@ function vacancy(body: unknown): PublicVacancy {
     salaryMax,
     description: nullable(v.description),
     status: v.status as Vacancy['status'],
-    employer: { displayName: nullable(record(v.employer).displayName) },
+    employer: {
+      displayName: nullable(record(v.employer).displayName),
+      ...(record(v.employer).confirmedHires !== undefined
+        ? { confirmedHires: integer(record(v.employer).confirmedHires) }
+        : {}),
+    },
+    studentFriendly: v.studentFriendly as boolean | undefined,
   }
 }
 export function parseJob(body: unknown): Job {
@@ -162,6 +181,9 @@ export function parseJob(body: unknown): Job {
 export function parseProfile(body: unknown): Profile {
   const v = record(body)
   return {
+    ...(v.employerTrust !== undefined
+      ? { employerTrust: { confirmedHires: integer(record(v.employerTrust).confirmedHires) } }
+      : {}),
     id: integer(v.id, 1),
     displayName: nullable(v.displayName),
     applicationContact: nullable(v.applicationContact),
@@ -174,6 +196,7 @@ export function parseMyApplication(body: unknown): MyApplication {
   return {
     ...ref(v),
     contact: nullable(v.contact),
+    ...parseShift(v),
     vacancy: { ...vacancy(job), contactInfo: nullable(job.contactInfo) },
   }
 }

@@ -11,7 +11,7 @@ export function VacancyHiringSummary({
   vacancy,
   paused,
 }: {
-  vacancy: Pick<Vacancy, 'id' | 'status'>
+  vacancy: Pick<Vacancy, 'id' | 'status' | 'headcount'>
   paused: boolean
 }) {
   const { applications } = useSession()

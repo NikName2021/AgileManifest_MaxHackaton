@@ -508,3 +508,24 @@
     font-size: 11px;
   }
 }
+.shift-editor {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+  padding-top: 20px;
+}
+.shift-editor label {
+  display: grid;
+  gap: 8px;
+}
+.shift-summary {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.shift-summary p {
+  margin: 0;
+}

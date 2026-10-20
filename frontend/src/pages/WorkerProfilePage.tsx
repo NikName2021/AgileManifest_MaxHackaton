@@ -101,9 +101,6 @@ export function WorkerProfilePage() {
             <h2>{result.data.displayName || user.display_name}</h2>
             <p>Аккаунт MAX · № {result.data.id}</p>
             {!result.data.hasBotChat && <BotChatNote />}
-            <Button variant="secondary" onClick={resource.reload}>
-              Обновить профиль
-            </Button>
           </section>
           <ProfileForm
             key={`${result.data.id}:${result.data.applicationContact}`}

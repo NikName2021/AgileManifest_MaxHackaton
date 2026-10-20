@@ -75,6 +75,8 @@ model Application {
   contact         String?
   // Чат, где прошёл отклик: сюда уходят уведомления о смене статуса.
   candidateChatId String?   @map("candidate_chat_id")
+  // card | link | qr | subscription | channel | miniapp | team; null — отклики до появления поля.
+  source          String?
   // Последний перевод в hired — для списка «Моя бригада».
   hiredAt         DateTime? @map("hired_at")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -101,6 +103,7 @@ model BenchmarkCache {
 model PendingApplication {
   chatId    String   @id @map("chat_id")
   vacancyId Int      @map("vacancy_id")
+  source    String?
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("pending_applications")

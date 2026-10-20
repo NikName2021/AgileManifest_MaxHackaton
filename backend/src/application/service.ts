@@ -45,6 +45,11 @@ export function funnelButtons(applicationId: number): InlineButton[][] {
     ];
 }
 
+// Откуда пришёл отклик: card — кнопка на карточке в чате, link — ссылка без метки, qr — QR-объявление,
+// subscription — рассылка по подписке, channel — канал партнёра, miniapp — мини-приложение,
+// team — ответ на приглашение «Моей бригады».
+export type ApplicationSource = 'card' | 'link' | 'qr' | 'subscription' | 'channel' | 'miniapp' | 'team';
+
 export type CreateApplicationError = 'not_found' | 'vacancy_unavailable' | 'self_application_forbidden' | 'already_applied';
 
 export type CreateApplicationResult =
@@ -61,6 +66,7 @@ export async function createApplicationRecord(input: {
     candidateChatId: string | null;
     // invited — отклик по приглашению работодателя («Моя бригада»), минуя «Новый».
     status?: 'new' | 'invited';
+    source?: ApplicationSource;
 }): Promise<CreateApplicationResult> {
     try {
         return await db.$transaction(async (tx) => {
@@ -79,6 +85,7 @@ export async function createApplicationRecord(input: {
                     vacancyId: input.vacancyId,
                     candidateUserId: input.candidateUserId,
                     status: input.status ?? 'new',
+                    source: input.source ?? null,
                     contact: input.contact,
                     candidateChatId: input.candidateChatId,
                 },
@@ -93,7 +100,7 @@ export async function createApplicationRecord(input: {
 
 // Шаг 1 отклика через бота: кандидат нажал «Откликнуться», просим контакт.
 
-export async function handleApplyClick(candidateChatId: string, candidateMaxUserId: string, vacancyId: number) {
+export async function handleApplyClick(candidateChatId: string, candidateMaxUserId: string, vacancyId: number, source: ApplicationSource = 'card') {
     const candidate = await db.user.findUnique({ where: { maxUserId: candidateMaxUserId } });
     if (!candidate) {
         await maxApi.sendMessage(candidateChatId, 'Не получилось оформить отклик, попробуйте ещё раз чуть позже.');
@@ -126,8 +133,8 @@ export async function handleApplyClick(candidateChatId: string, candidateMaxUser
 
     await db.pendingApplication.upsert({
         where: { chatId: candidateChatId },
-        update: { vacancyId },
-        create: { chatId: candidateChatId, vacancyId },
+        update: { vacancyId, source },
+        create: { chatId: candidateChatId, vacancyId, source },
     });
 
     // TODO: реальный вид payload при нажатии request_contact подтверждён частично (vcf_info) —
@@ -188,6 +195,7 @@ export async function resolvePendingApplication(
             candidateUserId: candidate.id,
             contact,
             candidateChatId: chatId,
+            source: (pending.source as ApplicationSource | null) ?? undefined,
         });
         if (!result.ok) {
             await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});

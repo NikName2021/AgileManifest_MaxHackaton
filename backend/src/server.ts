@@ -10,6 +10,7 @@ import { getBenchmark } from './trudvsem/benchmarkService.js';
 import { applyStatusChange, funnelButtons, createApplicationRecord, type CreateApplicationError } from './application/service.js';
 import { registerCandidateRoutes } from './candidate/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
+import { registerPosterRoutes } from './vacancies/posterRoutes.js';
 import { normalizeRegion } from './regions/dictionary.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
@@ -52,6 +53,7 @@ const WEBHOOK_UPDATE_TYPES = ['message_created', 'message_callback', 'bot_starte
 registerMaxWebhook(app);
 registerCandidateRoutes(app);
 registerTeamRoutes(app);
+registerPosterRoutes(app);
 
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.
@@ -334,6 +336,7 @@ app.post('/api/applications', { preHandler: requireAuth }, async (request, reply
     contact: body.contact,
     // Только личный чат: последний chatId мог быть групповым. null — кандидат не запускал бота.
     candidateChatId: candidate.dialogChatId,
+    source: 'miniapp',
   });
   if (!result.ok) {
     const e = CREATE_APPLICATION_ERRORS[result.error];

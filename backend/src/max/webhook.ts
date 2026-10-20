@@ -4,7 +4,7 @@ import { maxApi } from './client.js';
 import { config } from '../config.js';
 import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
-import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
+import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat, type ApplicationSource } from '../application/service.js';
 import { handleTeamInviteResponse } from '../team/service.js';
 import { handleDraftDecision } from '../dialog/preview.js';
 
@@ -55,12 +55,15 @@ function extractContactFromMessage(update: any): string | undefined {
 
 // Payload deep link — "apply_123" без двоеточия: отличается от callback-кнопки "apply:123"
 // и не зависит от кодирования спецсимволов в start=.
-function parseDeepLinkApplyPayload(payload: unknown): number | undefined {
+const LINK_SOURCES: Record<string, ApplicationSource> = { qr: 'qr', sub: 'subscription', ch: 'channel' };
+
+function parseDeepLinkApplyPayload(payload: unknown): { vacancyId: number; source: ApplicationSource } | undefined {
     if (typeof payload !== 'string') return undefined;
-    const match = /^apply_(\d+)$/.exec(payload);
+    const match = /^apply_(\d+)(?:_([a-z]+))?$/.exec(payload);
     if (!match) return undefined;
-    const id = Number(match[1]);
-    return Number.isFinite(id) ? id : undefined;
+    const vacancyId = Number(match[1]);
+    if (!Number.isFinite(vacancyId)) return undefined;
+    return { vacancyId, source: (match[2] && LINK_SOURCES[match[2]]) || 'link' };
 }
 
 export function registerMaxWebhook(app: FastifyInstance) {
@@ -131,9 +134,9 @@ export function registerMaxWebhook(app: FastifyInstance) {
         if (chatId && senderId) {
           await upsertUser(String(senderId), chatId, senderName, { isDialog: true });
 
-          const vacancyId = parseDeepLinkApplyPayload(update.payload);
-          if (vacancyId !== undefined) {
-            await handleApplyClick(chatId, String(senderId), vacancyId);
+          const deepLink = parseDeepLinkApplyPayload(update.payload);
+          if (deepLink) {
+            await handleApplyClick(chatId, String(senderId), deepLink.vacancyId, deepLink.source);
           } else {
             await maxApi.sendMessage(
               chatId,
@@ -167,7 +170,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
         if (chatId && payload?.startsWith('apply:')) {
           const vacancyId = Number(payload.slice('apply:'.length));
           if (Number.isFinite(vacancyId) && senderId) {
-            await handleApplyClick(chatId, String(senderId), vacancyId);
+            await handleApplyClick(chatId, String(senderId), vacancyId, 'card');
           }
         } else if (chatId && payload?.startsWith('app_status:')) {
           const [, applicationIdStr, status] = payload.split(':');

@@ -6,6 +6,8 @@ export interface SalaryBenchmarkData {
   avgSalaryMax: number | null
   vacancyCount: number
   isFresh: boolean
+  scope?: 'region' | 'country'
+  regionName?: string | null
 }
 export interface BenchmarkQuery {
   position: string
@@ -31,11 +33,24 @@ export function parseBenchmark(body: unknown): SalaryBenchmarkData {
   )
     throw new ApiError('contract')
   // The bounds are independent averages of different subsets, not one salary range.
+  if (value.scope !== undefined && !['region', 'country'].includes(String(value.scope)))
+    throw new ApiError('contract')
+  if (
+    value.scope === 'region' &&
+    (typeof value.regionName !== 'string' || !value.regionName.trim())
+  )
+    throw new ApiError('contract')
   return {
     avgSalaryMin: value.avgSalaryMin,
     avgSalaryMax: value.avgSalaryMax,
     vacancyCount: value.vacancyCount,
     isFresh: value.isFresh,
+    ...(value.scope
+      ? {
+          scope: value.scope as 'region' | 'country',
+          regionName: value.scope === 'region' ? (value.regionName as string) : null,
+        }
+      : {}),
   }
 }
 

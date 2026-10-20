@@ -1,5 +1,6 @@
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
+import { RegionPicker } from '../features/regions/RegionPicker'
 import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
@@ -236,6 +237,10 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                   hint: 'Необязательно.',
                 })}
               </div>
+              <RegionPicker
+                value={values.region_code}
+                onChange={(value) => change('region_code', value)}
+              />
               <div className="vacancy-field">
                 <label htmlFor="vacancy-schedule">Тип занятости</label>
                 <Select

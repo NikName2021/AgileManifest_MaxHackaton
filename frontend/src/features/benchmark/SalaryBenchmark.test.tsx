@@ -52,7 +52,7 @@ describe('salary benchmark panel', () => {
     await screen.findByText(/45\s000\s₽/)
     expect(get).toHaveBeenCalledWith({ position: 'Повар', region: 'Тула' }, expect.any(AbortSignal))
     expect(fetcher).not.toHaveBeenCalled()
-    expect(screen.getByText(/без фильтра по региону/)).toBeInTheDocument()
+    expect(screen.getByText(/по названию должности и региону/)).toBeInTheDocument()
     expect(screen.getByText(/Вакансий в выборке: 24/)).toBeInTheDocument()
   })
   it('requires both search fields but does not fetch on editing them', () => {

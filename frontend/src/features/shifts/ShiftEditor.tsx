@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
-import { Button, Input } from '@maxhub/max-ui'
+import { Button } from '@maxhub/max-ui'
+import { Input } from '../../shared/ui/Input'
+import { Link } from 'react-router-dom'
 import type { Application } from '../../entities/hiring'
 import { useSession } from '../session/context'
 import { applicationError, type StatusNotice } from '../applications/model'
@@ -54,6 +56,7 @@ export function ShiftEditor({ application, disabled, onBusy, onSaved }: {
   return <section className="shift-editor">
     <h3>Выход на смену</h3>
     <ShiftSummary shift={application} />
+    {application.attendance === 'declined' && <p>Кандидат отказался от выхода. <Link to={`/applications?vacancy=${application.vacancyId}&status=new`}>Посмотреть новых кандидатов</Link></p>}
     <label>Дата и время выхода (МСК)
       <Input type="datetime-local" aria-label="Дата и время выхода (МСК)" value={time}
         disabled={disabled || uncertain} onChange={(e) => setTime(e.target.value)} />

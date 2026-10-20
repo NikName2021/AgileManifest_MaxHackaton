@@ -75,7 +75,7 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
   return [
     `**${escapeMarkdown(vacancy.title)}**`,
     vacancy.trustedEmployer ? TRUSTED_LINE : undefined,
-    `Регион: ${escapeMarkdown(vacancy.regionCode)}`,
+    vacancy.regionCode ? `Регион: ${escapeMarkdown(vacancy.regionCode)}` : undefined,
     `График: ${escapeMarkdown(scheduleLabel(vacancy.schedule))}`,
     `Зарплата: ${salaryText}`,
     vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : undefined,

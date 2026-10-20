@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
 import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
+import { hasForbiddenChars, isMeaningful, normalizeSingleLine } from '../text.js';
 import type { Application, User, Vacancy } from '@prisma/client';
 
 const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
@@ -157,8 +158,8 @@ export async function resolvePendingApplication(
     const pending = await db.pendingApplication.findUnique({ where: { chatId } });
     if (!pending) return false;
 
-    const contact = (contactRaw ?? '').trim();
-    if (!contact) {
+    const contact = normalizeSingleLine(contactRaw ?? '');
+    if (!contact || !isMeaningful(contact) || hasForbiddenChars(contact)) {
         await maxApi.sendMessage(
             chatId,
             'Не понял контакт — напишите телефон/юзернейм текстом или нажмите кнопку «Поделиться контактом».'

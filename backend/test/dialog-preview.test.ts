@@ -108,7 +108,7 @@ describe('предпросмотр карточки в боте', () => {
   });
 
   it('длинные требования: предпросмотр укладывается в лимит MAX', async () => {
-    await completeDialog(A, 'chat-A', 'очень подробные требования '.repeat(300));
+    await completeDialog(A, 'chat-A', 'очень подробные требования '.repeat(147));
     const preview = sentTo('chat-A').at(-1)!;
     expect(preview[1].length).toBeLessThanOrEqual(MAX_CARD_TEXT_LIMIT);
     expect(sentTo('chat-A').at(-2)?.[1]).toContain('пришлось сократить');

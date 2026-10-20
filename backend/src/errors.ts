@@ -43,10 +43,22 @@ export function sendError(
 }
 
 // zod кладёт в fieldErrors ключ для каждого поля схемы, даже без ошибок — отбрасываем пустые.
-export function zodFieldErrors(flat: { fieldErrors: Record<string, string[] | undefined> }): ErrorFields {
+// Лишние поля (strict) zod относит к ошибкам всего объекта — разносим их по именам полей, остальные
+// ошибки уровня объекта кладём под ключ "_".
+export function zodFieldErrors(flat: { fieldErrors: Record<string, string[] | undefined>; formErrors?: string[] }): ErrorFields {
   const fields: ErrorFields = {};
   for (const [key, messages] of Object.entries(flat.fieldErrors)) {
     if (messages && messages.length > 0) fields[key] = messages;
+  }
+  for (const message of flat.formErrors ?? []) {
+    const unknown = /^Unrecognized key\(s\) in object: (.+)$/.exec(message);
+    if (unknown) {
+      for (const key of unknown[1].split(', ').map((k) => k.replace(/^'|'$/g, ''))) {
+        fields[key] = ['unknown field'];
+      }
+    } else {
+      (fields._ ??= []).push(message);
+    }
   }
   return fields;
 }

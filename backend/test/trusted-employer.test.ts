@@ -49,7 +49,7 @@ async function confirmedHire(vacancyId: number, user: TestUser, attendance: stri
 }
 
 describe('надёжный работодатель', () => {
-  it('5 разных людей подтвердили выход на 2 вакансиях — отметка в каталоге, профиле и карточке', async () => {
+  it('5 разных людей подтвердили выход — отметка в каталоге, профиле и карточке', async () => {
     const v1 = await publish(A, 'Сбор черешни');
     const v2 = await publish(A, 'Сбор абрикосов');
     for (const w of workers.slice(0, 3)) await confirmedHire(v1, w);
@@ -77,7 +77,7 @@ describe('надёжный работодатель', () => {
     expect(history.items[0].vacancy.employer).toEqual({ displayName: 'A', trusted: true, confirmedHires: 5 });
   });
 
-  it('накрутка не работает: неподтверждённые, повторы, сам себе, без чата с ботом, одна вакансия', async () => {
+  it('накрутка не работает: неподтверждённые, повторы, сам себе, без чата с ботом; одной вакансии достаточно', async () => {
     const v1 = await publish(A, 'Сбор 1');
     const v2 = await publish(A, 'Сбор 2');
     await confirmedHire(v1, workers[0]);
@@ -89,13 +89,15 @@ describe('надёжный работодатель', () => {
     await confirmedHire(v1, A); // сам себя
     expect(await employerTrust(A.user.id)).toEqual({ trusted: false, confirmedHires: 1 });
 
-    // Пять человек, но на одной вакансии — мало.
+    // Одной вакансии достаточно: кафе нанимает только бариста.
     const B = await createUser('B');
-    const single = await publish(B, 'Одна');
-    for (const w of workers.slice(0, 5)) await confirmedHire(single, w);
-    expect(await employerTrust(B.user.id)).toEqual({ trusted: false, confirmedHires: 5 });
+    const single = await publish(B, 'Бариста');
+    for (const w of workers.slice(0, 4)) await confirmedHire(single, w);
+    expect(await employerTrust(B.user.id)).toEqual({ trusted: false, confirmedHires: 4 });
+    await confirmedHire(single, workers[4]);
+    expect(await employerTrust(B.user.id)).toEqual({ trusted: true, confirmedHires: 5 });
     const job = (await app.inject({ method: 'GET', url: `/api/jobs/${single}`, headers: workers[5].auth })).json();
-    expect(job.employer).toMatchObject({ trusted: false, confirmedHires: 5 });
+    expect(job.employer).toMatchObject({ trusted: true, confirmedHires: 5 });
   });
 
   it('полный путь: найм -> назначение смены -> «Приду» засчитывается; снятие найма убирает его', async () => {

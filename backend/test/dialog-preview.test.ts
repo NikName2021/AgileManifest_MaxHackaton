@@ -7,6 +7,7 @@ vi.mock('../src/max/client.js', async () => {
 vi.mock('../src/trudvsem/client.js', () => ({ searchTrudvsemVacancies: vi.fn(async () => []) }));
 
 import { app } from '../src/server.js';
+import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { setBotUsername } from '../src/max/botInfo.js';
 import { MAX_CARD_TEXT_LIMIT } from '../src/vacancies/cardText.js';
@@ -18,6 +19,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await settleBroadcasts();
   await app.close();
   await db.$disconnect();
 });

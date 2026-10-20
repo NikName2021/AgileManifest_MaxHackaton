@@ -6,6 +6,7 @@ vi.mock('../src/max/client.js', async () => {
 });
 
 import { app } from '../src/server.js';
+import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { setBotUsername } from '../src/max/botInfo.js';
 import { buildApplyDeepLink, buildVacancyCardText, MAX_CARD_TEXT_LIMIT } from '../src/vacancies/cardText.js';
@@ -19,6 +20,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await settleBroadcasts();
   await app.close();
   await db.$disconnect();
 });
@@ -121,7 +123,7 @@ describe('1. каталог: видимость опубликованных ч�
       studentFriendly: false,
       status: 'published',
       createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
-      employer: { displayName: 'A' },
+      employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
       myApplication: null,
       canApply: true,
       applyUnavailableReason: null,
@@ -478,7 +480,7 @@ describe('8–9. история откликов кандидата', () => {
         studentFriendly: false,
         contactInfo: '+7 999 111-22-33',
         status: 'published',
-        employer: { displayName: 'A' },
+        employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
       },
     });
     expect(JSON.stringify(forB)).not.toContain('+7 900 000-00-02');
@@ -624,11 +626,11 @@ describe('13. профиль', () => {
     const v = await publishedVacancy(A);
     await apply(B, v.id, 'старый контакт');
 
-    expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: null, hasBotChat: true });
+    expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: null, hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
 
     const patched = await app.inject({ method: 'PATCH', url: '/api/me', headers: B.auth, payload: { application_contact: '  @new_contact  ' } });
     expect(patched.statusCode).toBe(200);
-    expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: '@new_contact', hasBotChat: true });
+    expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: '@new_contact', hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
     expect((await get(B, '/api/me/applications')).json().items[0].contact).toBe('старый контакт');
     expect((await get(C, '/api/me')).json()).toMatchObject({ id: C.user.id, applicationContact: null });
     // Номер из MAX (phone) не трогается.

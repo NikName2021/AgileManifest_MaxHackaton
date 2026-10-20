@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { db } from '../db.js';
 import { regionDto, type RegionDto } from '../regions/service.js';
+import { config } from '../config.js';
+import { employerTrustMap, type EmployerTrust } from '../employers/trust.js';
 
 // Кабинет работника. Только явные DTO: chatId, maxUserId и служебные поля доставки наружу не уходят.
 // Доступ — по userId из сессии; режим «работник/работодатель» выбирает интерфейс, а не права.
@@ -30,7 +32,8 @@ export interface JobDto {
   studentFriendly: boolean;
   status: string;
   createdAt: Date;
-  employer: { displayName: string | null };
+  // trusted — «Надёжный работодатель», confirmedHires — сколько людей подтвердили выход к нему.
+  employer: { displayName: string | null } & EmployerTrust;
   myApplication: MyApplicationRef | null;
   canApply: boolean;
   applyUnavailableReason: ApplyUnavailableReason | null;
@@ -55,7 +58,7 @@ interface JobRow {
   employerDisplayName: string | null;
 }
 
-function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicationRef | null): JobDto {
+function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicationRef | null, trust: EmployerTrust): JobDto {
   const reason: ApplyUnavailableReason | null =
     row.employerUserId === viewerUserId ? 'own_vacancy' : myApplication ? 'already_applied' : null;
   return {
@@ -74,7 +77,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     status: row.status,
     createdAt: row.createdAt,
     // Поля «компания» нет — это имя пользователя в MAX.
-    employer: { displayName: row.employerDisplayName },
+    employer: { displayName: row.employerDisplayName, ...trust },
     myApplication,
     canApply: reason === null,
     applyUnavailableReason: reason,
@@ -165,9 +168,12 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
       SELECT COUNT(*)::int AS total FROM vacancies v WHERE ${where}`,
   ]);
 
-  const mine = await findMyApplications(viewerUserId, rows.map((r) => r.id));
+  const [mine, trust] = await Promise.all([
+    findMyApplications(viewerUserId, rows.map((r) => r.id)),
+    employerTrustMap(rows.map((r) => r.employerUserId)),
+  ]);
   return {
-    items: rows.map((row) => toJobDto(row, viewerUserId, mine.get(row.id) ?? null)),
+    items: rows.map((row) => toJobDto(row, viewerUserId, mine.get(row.id) ?? null, trust.get(row.employerUserId)!)),
     total: countRows[0]?.total ?? 0,
     limit: params.limit,
     offset: params.offset,
@@ -214,8 +220,11 @@ export async function getJob(viewerUserId: number, vacancyId: number): Promise<J
     WHERE v.id = ${vacancyId} AND v.status = 'published'`;
   const row = rows[0];
   if (!row) return null;
-  const mine = await findMyApplications(viewerUserId, [row.id]);
-  return toJobDto(row, viewerUserId, mine.get(row.id) ?? null);
+  const [mine, trust] = await Promise.all([
+    findMyApplications(viewerUserId, [row.id]),
+    employerTrustMap([row.employerUserId]),
+  ]);
+  return toJobDto(row, viewerUserId, mine.get(row.id) ?? null, trust.get(row.employerUserId)!);
 }
 
 export async function listMyApplications(
@@ -253,6 +262,7 @@ export async function listMyApplications(
             studentFriendly: true,
             contactInfo: true,
             status: true,
+            employerUserId: true,
             employer: { select: { displayName: true } },
           },
         },
@@ -260,9 +270,10 @@ export async function listMyApplications(
     }),
     db.application.count({ where }),
   ]);
-  const items = rows.map(({ vacancy: { regionSubject, ...vacancy }, ...application }) => ({
+  const trust = await employerTrustMap(rows.map((r) => r.vacancy.employerUserId));
+  const items = rows.map(({ vacancy: { regionSubject, employerUserId, employer, ...vacancy }, ...application }) => ({
     ...application,
-    vacancy: { ...vacancy, subject: regionDto(regionSubject) },
+    vacancy: { ...vacancy, subject: regionDto(regionSubject), employer: { ...employer, ...trust.get(employerUserId)! } },
   }));
   return { items, total, limit: params.limit, offset: params.offset };
 }
@@ -272,11 +283,13 @@ export interface ProfileDto {
   displayName: string | null;
   applicationContact: string | null;
   hasBotChat: boolean;
+  // Своя отметка «Надёжный работодатель»: сколько подтверждённых наймов и сколько нужно.
+  employerTrust: EmployerTrust & { threshold: number };
 }
 
 const PROFILE_SELECT = { id: true, displayName: true, applicationContact: true, dialogChatId: true } as const;
 
-function toProfileDto(user: { id: number; displayName: string | null; applicationContact: string | null; dialogChatId: string | null }): ProfileDto {
+function toProfileDto(user: { id: number; displayName: string | null; applicationContact: string | null; dialogChatId: string | null }): Omit<ProfileDto, 'employerTrust'> {
   return {
     id: user.id,
     displayName: user.displayName,
@@ -288,7 +301,9 @@ function toProfileDto(user: { id: number; displayName: string | null; applicatio
 
 export async function getProfile(userId: number): Promise<ProfileDto | null> {
   const user = await db.user.findUnique({ where: { id: userId }, select: PROFILE_SELECT });
-  return user ? toProfileDto(user) : null;
+  if (!user) return null;
+  const trust = (await employerTrustMap([user.id])).get(user.id)!;
+  return { ...toProfileDto(user), employerTrust: { ...trust, threshold: config.trustedEmployerMinHires } };
 }
 
 // Контакты уже отправленных откликов не меняются.

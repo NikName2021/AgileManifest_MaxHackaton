@@ -9,6 +9,7 @@ const trudvsem = vi.hoisted(() => ({ search: vi.fn() }));
 vi.mock('../src/trudvsem/client.js', () => ({ searchTrudvsemVacancies: trudvsem.search }));
 
 import { app } from '../src/server.js';
+import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { getBenchmark, formatBenchmarkText } from '../src/trudvsem/benchmarkService.js';
 import { backfillRegionSubjects } from '../src/regions/service.js';
@@ -21,6 +22,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await settleBroadcasts();
   await app.close();
   await db.$disconnect();
 });

@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { buildApplyDeepLink, buildVacancyCardText, MAX_CARD_TEXT_LIMIT, scheduleLabel } from '../vacancies/cardText.js';
 import { regionDto, type RegionDto } from '../regions/service.js';
+import { employerTrust } from '../employers/trust.js';
 
 export const SUBSCRIPTIONS_PER_USER = 5;
 // Верхняя граница рассылки одной вакансии — защита от неожиданного объёма без очереди сообщений.
@@ -152,7 +153,8 @@ function notificationButtons(vacancyId: number, subscriptionId: number): InlineB
 export async function notifySubscribers(vacancyId: number): Promise<number> {
   const vacancy = await db.vacancy.findUnique({ where: { id: vacancyId } });
   if (!vacancy || vacancy.status !== 'published') return 0;
-  const card = buildVacancyCardText(vacancy, buildApplyDeepLink(vacancy.id, undefined, 'sub'));
+  const { trusted } = await employerTrust(vacancy.employerUserId);
+  const card = buildVacancyCardText({ ...vacancy, trustedEmployer: trusted }, buildApplyDeepLink(vacancy.id, undefined, 'sub'));
   const heading = 'Новая вакансия по вашей подписке:\n\n';
   const text = heading.length + card.length <= MAX_CARD_TEXT_LIMIT ? heading + card : card;
 

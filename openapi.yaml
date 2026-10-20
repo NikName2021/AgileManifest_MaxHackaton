@@ -29,7 +29,7 @@ info:
     Суммы зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц
     (как и бенчмарк «Работы России»). Если появится оплата за смену/час, нужно отдельное поле
     salary_period — до этого фильтр сравнивает суммы как есть.
-  version: 0.6.0
+  version: 0.7.0
 servers:
   - url: http://localhost:3000
     description: Локальная разработка / Docker Compose
@@ -626,7 +626,7 @@ paths:
                     studentFriendly: false
                     status: published
                     createdAt: '2026-10-17T09:00:00.000Z'
-                    employer: { displayName: Иван }
+                    employer: { displayName: Иван, trusted: true, confirmedHires: 7 }
                     myApplication: null
                     canApply: true
                     applyUnavailableReason: null
@@ -778,6 +778,7 @@ paths:
                 displayName: Иван
                 applicationContact: '@ivan_max'
                 hasBotChat: true
+                employerTrust: { trusted: false, confirmedHires: 3, threshold: 5 }
         '401':
           description: Не авторизован
           content:
@@ -1815,10 +1816,20 @@ components:
 
     EmployerPublic:
       type: object
-      required: [displayName]
+      required: [displayName, trusted, confirmedHires]
       description: Публичные сведения о работодателе. Отдельного поля «компания» нет — это имя пользователя в MAX.
       properties:
         displayName: { type: string, nullable: true }
+        trusted:
+          type: boolean
+          description: >
+            «Надёжный работодатель». Ставится автоматически, вручную её получить нельзя: нужно не
+            меньше TRUSTED_EMPLOYER_MIN_HIRES (по умолчанию 5) разных людей, которые были наняты и
+            сами подтвердили выход на смену кнопкой «Приду», хотя бы на двух разных вакансиях.
+            Не засчитываются сам работодатель и пользователи без личного чата с ботом.
+        confirmedHires:
+          type: integer
+          description: Сколько разных людей подтвердили выход на работу к этому работодателю
 
     MyApplicationRef:
       type: object
@@ -1923,11 +1934,11 @@ components:
           description: Условия работы
           contactInfo: '+7 999 000-00-00'
           status: closed
-          employer: { displayName: Иван }
+          employer: { displayName: Иван, trusted: true, confirmedHires: 7 }
 
     Profile:
       type: object
-      required: [id, displayName, applicationContact, hasBotChat]
+      required: [id, displayName, applicationContact, hasBotChat, employerTrust]
       properties:
         id: { type: integer }
         displayName: { type: string, nullable: true }
@@ -1942,6 +1953,14 @@ components:
             присылать ему уведомления о статусе отклика. false — отклик сохраняется, но уведомить
             кандидата некуда: frontend должен предложить открыть чат с ботом. Это не гарантия
             доставки конкретного сообщения.
+        employerTrust:
+          type: object
+          required: [trusted, confirmedHires, threshold]
+          description: Своя отметка «Надёжный работодатель» — для прогресса в кабинете работодателя
+          properties:
+            trusted: { type: boolean }
+            confirmedHires: { type: integer }
+            threshold: { type: integer, description: Сколько подтверждённых наймов нужно }
 
     TeamMember:
       type: object

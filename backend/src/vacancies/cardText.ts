@@ -15,9 +15,13 @@ export interface VacancyCardFields {
   // Сколько человек нужно; null — не указано.
   headcount?: number | null;
   studentFriendly?: boolean;
+  // Отметка «Надёжный работодатель» (employers/trust.ts) на момент сборки карточки.
+  trustedEmployer?: boolean;
 }
 
 // 0 — реальная сумма, поэтому сравнение с null, а не truthy-проверка.
+export const TRUSTED_LINE = '✓ Надёжный работодатель';
+
 export function formatSalary(min: number | null, max: number | null): string {
   const hasMin = min !== null;
   const hasMax = max !== null;
@@ -70,6 +74,7 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
 
   return [
     `**${escapeMarkdown(vacancy.title)}**`,
+    vacancy.trustedEmployer ? TRUSTED_LINE : undefined,
     `Регион: ${escapeMarkdown(vacancy.regionCode)}`,
     `График: ${escapeMarkdown(scheduleLabel(vacancy.schedule))}`,
     `Зарплата: ${salaryText}`,
@@ -85,5 +90,6 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
 export function vacancyCardTextLength(vacancy: VacancyCardFields): number {
   const reservedUrl = buildApplyDeepLink(RESERVED_VACANCY_ID, getBotUsername() ?? RESERVED_USERNAME)
     ?? buildApplyDeepLink(RESERVED_VACANCY_ID, RESERVED_USERNAME)!;
-  return buildVacancyCardText(vacancy, reservedUrl).length;
+  // Отметка может появиться к моменту публикации — место под неё резервируется всегда.
+  return buildVacancyCardText({ ...vacancy, trustedEmployer: true }, reservedUrl).length;
 }

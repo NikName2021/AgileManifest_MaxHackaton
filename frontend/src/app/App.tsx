@@ -11,6 +11,7 @@ import '../features/candidate/candidate.css'
 import { Shell } from './Shell'
 import { OverviewPage } from '../pages/OverviewPage'
 import { ApplicationsPage } from '../pages/ApplicationsPage'
+import { SubscriptionsPage } from '../pages/SubscriptionsPage'
 import { GuidePage } from '../pages/GuidePage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
       { path: 'jobs/:id', element: <JobPage /> },
       { path: 'my-applications', element: <MyApplicationsPage /> },
       { path: 'profile', element: <WorkerProfilePage /> },
+      { path: 'subscriptions', element: <SubscriptionsPage /> },
       { index: true, element: <OverviewPage /> },
       { path: 'vacancies', element: <VacanciesPage /> },
       { path: 'vacancies/new', element: <VacancyFormPage /> },

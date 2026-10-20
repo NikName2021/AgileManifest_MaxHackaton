@@ -179,6 +179,7 @@ export function JobsPage() {
           <p>Вакансии от работодателей. Без лишних шагов.</p>
         </div>
       </div>
+      <Link className="text-link" to={`/subscriptions?${params}`}>Подписаться на новые вакансии →</Link>
       <SearchForm
         key={`${key}:${formRevision}`}
         params={params}

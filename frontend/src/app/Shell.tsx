@@ -10,6 +10,7 @@ import {
   LogOut,
   Moon,
   Sun,
+  Bell,
 } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { bindBackButton } from '../shared/max/bridge'
@@ -45,6 +46,7 @@ export function Shell() {
     ? [
         { to: '/jobs', label: 'Вакансии', icon: BriefcaseBusiness },
         { to: '/my-applications', label: 'Мои отклики', icon: UsersRound },
+        { to: '/subscriptions', label: 'Подписки', icon: Bell },
         { to: '/profile', label: 'Профиль', icon: Settings2 },
       ]
     : employerNavigation
@@ -72,6 +74,8 @@ export function Shell() {
         : 'Вакансия'
       : pathname === '/my-applications'
         ? 'Мои отклики'
+        : pathname === '/subscriptions'
+          ? 'Подписки на вакансии'
         : pathname === '/profile'
           ? 'Профиль работника'
           : 'Поиск работы'

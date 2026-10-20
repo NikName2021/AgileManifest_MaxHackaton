@@ -15,6 +15,7 @@ import {
   type StatusNotice,
 } from './model'
 import { ApiError } from '../../shared/api/client'
+import { ShiftEditor } from '../shifts/ShiftEditor'
 
 export function ApplicationDialog({
   application,
@@ -271,6 +272,12 @@ export function ApplicationDialog({
           <p role="status">Дождитесь завершения запроса перед выходом.</p>
         )}
       </section>
+      <ShiftEditor
+        application={current}
+        disabled={busy || needsRefresh || confirming}
+        onBusy={(value) => { lock.current = value; setBusy(value) }}
+        onSaved={(actual, message) => { setCurrent(actual); setNotice(message); onChanged(message) }}
+      />
     </dialog>
   )
 }

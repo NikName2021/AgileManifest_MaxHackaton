@@ -8,7 +8,8 @@ import { SessionContext, type Session } from '../session/context'
 import { ApiError } from '../../shared/api/client'
 import type { StatusResult } from './api'
 
-vi.mock('@maxhub/max-ui', () => ({
+vi.mock('@maxhub/max-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@maxhub/max-ui')>()),
   Button: ({
     children,
     asChild,
@@ -73,7 +74,15 @@ async function openFirst() {
   return within(screen.getByRole('dialog'))
 }
 function chooseStatus(value: string) {
-  fireEvent.change(screen.getByLabelText('Новый этап'), { target: { value } })
+  fireEvent.click(screen.getByRole('combobox', { name: 'Новый этап' }))
+  const labels: Record<string, string> = {
+    new: 'Новый',
+    contacted: 'На связи',
+    invited: 'Приглашён',
+    hired: 'Нанят',
+    rejected: 'Отказ',
+  }
+  fireEvent.click(screen.getByRole('radio', { name: labels[value] }))
   fireEvent.click(screen.getByRole('button', { name: 'Изменить статус' }))
 }
 
@@ -293,7 +302,7 @@ describe('employer applications workflow', () => {
     chooseStatus('hired')
     fireEvent.click(dialog.getByRole('button', { name: 'Подтвердить изменение' }))
     await dialog.findByText(/Актуальный статус: «Нанят»/)
-    expect(dialog.getByLabelText('Новый этап')).toHaveValue('hired')
+    expect(dialog.getByLabelText('Новый этап')).toHaveTextContent('Нанят')
     expect(dialog.getByRole('button', { name: 'Изменить статус' })).toBeDisabled()
     expect(update).toHaveBeenCalledOnce()
     expect(read).toHaveBeenCalledOnce()

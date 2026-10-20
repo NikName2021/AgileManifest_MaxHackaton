@@ -1,3 +1,4 @@
+import { Select } from '../shared/ui/Select'
 import { useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
@@ -38,7 +39,8 @@ export function MyApplicationsPage() {
       </div>
       <label className="candidate-input candidate-status-filter">
         Этап рассмотрения
-        <select
+        <Select
+          label="Этап рассмотрения"
           value={status ?? ''}
           onChange={(event) => setParams(event.target.value ? { status: event.target.value } : {})}
         >
@@ -48,7 +50,7 @@ export function MyApplicationsPage() {
               {applicationLabels[s]}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <RefreshStatus
         refreshing={resource.isRefreshing}

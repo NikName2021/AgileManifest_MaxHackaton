@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { createMemoryRouter, RouterProvider, Outlet } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider, Outlet, useBlocker } from 'react-router-dom'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { SessionContext } from '../session/context'
 import { ThemeContext } from '../appearance/context'
@@ -13,7 +13,8 @@ import { MyApplicationsPage } from '../../pages/MyApplicationsPage'
 import { WorkerProfilePage } from '../../pages/WorkerProfilePage'
 import { ApiError } from '../../shared/api/client'
 
-vi.mock('@maxhub/max-ui', () => ({
+vi.mock('@maxhub/max-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@maxhub/max-ui')>()),
   Button: ({
     children,
     asChild,
@@ -47,7 +48,7 @@ function Frame() {
   const { switchCabinet } = useCabinet()
   return (
     <>
-      <button onClick={switchCabinet}>Сменить режим</button>
+      <button onClick={switchCabinet}>Выйти</button>
       <Outlet />
     </>
   )
@@ -88,6 +89,45 @@ function worker() {
 }
 
 describe('cabinet selection and candidate flows', () => {
+  it('keeps the cabinet mounted when leaving is blocked by an active operation', async () => {
+    function BusyPage() {
+      const blocker = useBlocker(true)
+      return (
+        <>
+          <h1>Сохранение вакансии</h1>
+          {blocker.state === 'blocked' && (
+            <button onClick={() => blocker.proceed()}>Сохранение завершено</button>
+          )}
+        </>
+      )
+    }
+    const router = createMemoryRouter([
+      {
+        element: (
+          <CabinetGate>
+            <Frame />
+          </CabinetGate>
+        ),
+        children: [
+          { path: '/', element: <BusyPage /> },
+          { path: '/choose', element: null },
+        ],
+      },
+    ])
+    render(
+      <SessionContext value={createPreviewSession()}>
+        <RouterProvider router={router} />
+      </SessionContext>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
+    await screen.findByRole('heading', { name: 'Сохранение вакансии' })
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
+    expect(screen.queryByRole('heading', { name: 'Как вы хотите зайти?' })).not.toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/')
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранение завершено' }))
+    expect(await screen.findByRole('heading', { name: 'Как вы хотите зайти?' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/choose')
+  })
   it('asks at every mount, defers candidate requests and keeps employer overview', async () => {
     const session = createPreviewSession(),
       jobs = vi.spyOn(session.candidate, 'jobs')
@@ -95,7 +135,7 @@ describe('cabinet selection and candidate flows', () => {
     expect(jobs).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
     expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Сменить режим' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
     worker()
     expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
     first.unmount()
@@ -127,10 +167,10 @@ describe('cabinet selection and candidate flows', () => {
     expect(apply).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
     expect(await screen.findByRole('heading', { name: 'Вы откликнулись' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Сменить режим' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
     expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: 'Сменить режим' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     worker()
     expect(await screen.findByRole('heading', { name: 'Найдите свою работу' })).toBeInTheDocument()
     await act(() => router.navigate('/my-applications'))

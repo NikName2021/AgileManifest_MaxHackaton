@@ -8,7 +8,8 @@ import { OverviewPage } from './OverviewPage'
 import { statuses } from '../features/applications/api'
 import { applicationLabels } from '../entities/hiring'
 
-vi.mock('@maxhub/max-ui', () => ({
+vi.mock('@maxhub/max-ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@maxhub/max-ui')>()),
   Button: ({
     children,
     asChild,

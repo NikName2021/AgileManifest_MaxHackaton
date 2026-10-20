@@ -13,6 +13,7 @@ import { registerTeamRoutes } from './team/routes.js';
 import { registerPosterRoutes } from './vacancies/posterRoutes.js';
 import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerChannelRoutes } from './channels/routes.js';
+import { setShift, startShiftReminders } from './shifts/service.js';
 import { normalizeRegion } from './regions/dictionary.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
@@ -34,6 +35,7 @@ import {
   authMaxSchema,
   benchmarkQuerySchema,
   idParamSchema,
+  setShiftSchema,
 } from './validation.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
@@ -411,6 +413,26 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
   });
 });
 
+// Время выхода на смену для приглашённого или нанятого кандидата; кандидат подтверждает в боте.
+app.patch('/api/applications/:id/shift', { preHandler: requireAuth }, async (request, reply) => {
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
+  const parsed = setShiftSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return sendError(reply, 400, 'validation_error', 'invalid request body', zodFieldErrors(parsed.error.flatten()));
+  }
+  const startAt = parsed.data.start_at ? new Date(parsed.data.start_at) : null;
+  const result = await setShift(request.sessionUserId!, id, startAt, parsed.data.note ?? null);
+  if (!result.ok) {
+    if (result.error === 'not_found') return sendError(reply, 404, 'not_found', 'application not found');
+    if (result.error === 'forbidden') return sendError(reply, 403, 'forbidden', 'not your vacancy');
+    if (result.error === 'in_past') return sendError(reply, 400, 'validation_error', 'start_at is in the past', { start_at: ['must be in the future'] });
+    return sendError(reply, 409, 'conflict', 'a shift can be set only for invited or hired candidates');
+  }
+  const a = result.application;
+  return { id: a.id, startAt: a.startAt, shiftNote: a.shiftNote, attendance: a.attendance, notified: result.notified };
+});
+
 // Справочник субъектов РФ для выбора региона в мини-приложении.
 app.get('/api/regions', async () => ({ items: listRegions() }));
 
@@ -502,6 +524,7 @@ async function start() {
     .then((n) => n > 0 && app.log.info({ updated: n }, 'region_subject backfilled'))
     .catch((err) => app.log.error(err, 'region_subject backfill failed'));
   startStaleVacancyReminders();
+  startShiftReminders();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }

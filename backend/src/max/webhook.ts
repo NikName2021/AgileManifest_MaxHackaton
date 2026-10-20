@@ -9,6 +9,7 @@ import { handleTeamInviteResponse } from '../team/service.js';
 import { handleDraftDecision } from '../dialog/preview.js';
 import { subscribeLike, unsubscribe } from '../subscriptions/service.js';
 import { handleBotAdded, handleBotRemoved, isPartnerChat } from '../channels/service.js';
+import { handleAttendanceAnswer } from '../shifts/service.js';
 
 // Сравнение за постоянное время; хеши уравнивают длину.
 function secretsEqual(received: unknown, expected: string): boolean {
@@ -194,6 +195,9 @@ export function registerMaxWebhook(app: FastifyInstance) {
           }
         } else if (chatId && senderId && /^subscribe_like:\d+$/.test(payload ?? '')) {
           await subscribeLike(chatId, String(senderId), Number(payload.split(':')[1]));
+        } else if (chatId && senderId && /^attend:\d+:(yes|no)$/.test(payload ?? '')) {
+          const [, idStr, answer] = payload.split(':');
+          await handleAttendanceAnswer(chatId, String(senderId), Number(idStr), answer);
         } else if (chatId && senderId && /^unsub:\d+$/.test(payload ?? '')) {
           await unsubscribe(chatId, String(senderId), Number(payload.split(':')[1]));
         } else if (chatId && payload?.startsWith('app_status:')) {

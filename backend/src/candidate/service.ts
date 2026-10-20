@@ -233,6 +233,9 @@ export async function listMyApplications(
         id: true,
         status: true,
         contact: true,
+        startAt: true,
+        shiftNote: true,
+        attendance: true,
         createdAt: true,
         updatedAt: true,
         vacancy: {

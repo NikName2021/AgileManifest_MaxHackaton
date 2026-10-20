@@ -187,6 +187,14 @@ export const updateChannelSchema = z
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: 'at least one field is required' });
 
+// start_at — ISO 8601 со смещением (например 2026-06-21T07:00:00+03:00); null снимает назначение.
+export const setShiftSchema = z
+  .object({
+    start_at: z.string().datetime({ offset: true }).nullable(),
+    note: z.string().trim().min(1).max(200).nullable().optional(),
+  })
+  .strict();
+
 export const updateTeamMemberSchema = z.object({ reliable: z.boolean() }).strict();
 
 // candidate_ids не передан — приглашаем всю бригаду.

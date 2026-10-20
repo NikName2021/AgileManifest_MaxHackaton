@@ -459,6 +459,9 @@ describe('8–9. история откликов кандидата', () => {
       id: created.id,
       status: 'new',
       contact: '+7 900 000-00-01',
+      startAt: null,
+      shiftNote: null,
+      attendance: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       vacancy: {

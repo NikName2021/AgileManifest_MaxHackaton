@@ -24,6 +24,9 @@ export interface JobDto {
   salaryMin: number | null;
   salaryMax: number | null;
   description: string | null;
+  headcount: number | null;
+  // null — headcount не указан.
+  spotsLeft: number | null;
   status: string;
   createdAt: Date;
   employer: { displayName: string | null };
@@ -42,6 +45,8 @@ interface JobRow {
   salaryMin: number | null;
   salaryMax: number | null;
   description: string | null;
+  headcount: number | null;
+  hiredCount: number;
   status: string;
   createdAt: Date;
   employerUserId: number;
@@ -61,6 +66,8 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     salaryMin: row.salaryMin,
     salaryMax: row.salaryMax,
     description: row.description,
+    headcount: row.headcount,
+    spotsLeft: row.headcount === null ? null : Math.max(0, row.headcount - row.hiredCount),
     status: row.status,
     createdAt: row.createdAt,
     // Поля «компания» нет — это имя пользователя в MAX.
@@ -83,7 +90,8 @@ async function findMyApplications(viewerUserId: number, vacancyIds: number[]): P
 
 const JOB_COLUMNS = Prisma.sql`
   v.id, v.title, v.region_code AS "regionCode", v.region_subject AS "regionSubject", v.category, v.schedule,
-  v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.status,
+  v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.status,
+  (SELECT COUNT(*)::int FROM applications a WHERE a.vacancy_id = v.id AND a.status = 'hired') AS "hiredCount",
   v.created_at AS "createdAt", v.employer_user_id AS "employerUserId",
   u.display_name AS "employerDisplayName"`;
 
@@ -233,6 +241,7 @@ export async function listMyApplications(
             salaryMin: true,
             salaryMax: true,
             description: true,
+            headcount: true,
             contactInfo: true,
             status: true,
             employer: { select: { displayName: true } },

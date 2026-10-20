@@ -36,6 +36,7 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         salaryMax: vacancy.salaryMax,
         description: vacancy.description,
         contactInfo: vacancy.contactInfo,
+        headcount: vacancy.headcount,
     }, applyUrl);
     // Старые записи могли сохраниться до резерва под ссылку — проверяем итоговый текст ещё раз.
     if (text.length > MAX_CARD_TEXT_LIMIT) {

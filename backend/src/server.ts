@@ -132,6 +132,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       salaryMax: body.salary_max ?? null,
       description: body.description ?? null,
       contactInfo: body.contact_info ?? null,
+      headcount: body.headcount ?? null,
       status: 'draft',
       // Пусто, если пользователь ещё не писал боту — тогда publish вернёт employer_chat_missing.
       employerChatId: employer?.dialogChatId || employer?.chatId || null,
@@ -181,6 +182,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     salary_max: body.salary_max !== undefined ? body.salary_max : existing.salaryMax,
     description: body.description !== undefined ? body.description : existing.description,
     contact_info: body.contact_info !== undefined ? body.contact_info : existing.contactInfo,
+    headcount: body.headcount !== undefined ? body.headcount : existing.headcount,
   };
   const constraintCheck = checkMergedVacancyConstraints(merged);
   if (!constraintCheck.ok) {
@@ -202,6 +204,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
       salaryMax: merged.salary_max,
       description: merged.description,
       contactInfo: merged.contact_info,
+      headcount: merged.headcount,
     },
   });
   if (updateResult.count === 0) {
@@ -394,6 +397,7 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
     vacancy: { id: vacancy.id, title: vacancy.title, status: vacancy.status },
     notified: result.notified,
     unchanged: result.unchanged ?? false,
+    vacancyClosed: result.vacancyClosed ?? false,
   });
 });
 

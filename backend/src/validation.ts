@@ -17,6 +17,7 @@ const vacancyBaseShape = {
   // Ограничение самого поля; длина всей карточки проверяется отдельно (checkCardLength).
   description: z.string().trim().max(4000).nullable().optional(),
   contact_info: z.string().trim().max(300).nullable().optional(),
+  headcount: z.number().int().min(1).max(1000).nullable().optional(),
 };
 
 function checkSalaryRange<T extends { salary_min?: number | null; salary_max?: number | null }>(
@@ -48,6 +49,7 @@ function checkCardLength(data: {
   salary_max?: number | null;
   description?: string | null;
   contact_info?: string | null;
+  headcount?: number | null;
 }, ctx: z.RefinementCtx) {
   const length = vacancyCardTextLength({
     title: data.title,
@@ -57,6 +59,7 @@ function checkCardLength(data: {
     salaryMax: data.salary_max ?? null,
     description: data.description ?? null,
     contactInfo: data.contact_info ?? null,
+    headcount: data.headcount ?? null,
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     ctx.addIssue({
@@ -177,6 +180,7 @@ export function checkMergedVacancyConstraints(merged: {
   salary_max?: number | null;
   description?: string | null;
   contact_info?: string | null;
+  headcount?: number | null;
 }): { ok: true } | { ok: false; field: string; message: string } {
   if (
     merged.salary_min !== null &&
@@ -196,6 +200,7 @@ export function checkMergedVacancyConstraints(merged: {
     salaryMax: merged.salary_max ?? null,
     description: merged.description ?? null,
     contactInfo: merged.contact_info ?? null,
+    headcount: merged.headcount ?? null,
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     return {

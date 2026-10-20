@@ -43,6 +43,8 @@ model Vacancy {
   description    String?
   // Контакт работодателя для откликнувшихся.
   contactInfo    String?   @map("contact_info")
+  // Сколько человек нужно; при найме этого числа вакансия закрывается сама.
+  headcount      Int?
   status         String    @default("draft") // draft | published | closed
   cardMessageId  String?   @map("card_message_id")
   createdAt      DateTime  @default(now()) @map("created_at")

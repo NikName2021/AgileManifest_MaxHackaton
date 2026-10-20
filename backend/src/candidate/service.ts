@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { db } from '../db.js';
+import { regionDto, type RegionDto } from '../regions/service.js';
 
 // Кабинет работника. Только явные DTO: chatId, maxUserId и служебные поля доставки наружу не уходят.
 // Доступ — по userId из сессии; режим «работник/работодатель» выбирает интерфейс, а не права.
@@ -17,6 +18,7 @@ export interface JobDto {
   id: number;
   title: string;
   regionCode: string;
+  subject: RegionDto | null;
   category: string;
   schedule: string;
   salaryMin: number | null;
@@ -34,6 +36,7 @@ interface JobRow {
   id: number;
   title: string;
   regionCode: string;
+  regionSubject: string | null;
   category: string;
   schedule: string;
   salaryMin: number | null;
@@ -52,6 +55,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     id: row.id,
     title: row.title,
     regionCode: row.regionCode,
+    subject: regionDto(row.regionSubject),
     category: row.category,
     schedule: row.schedule,
     salaryMin: row.salaryMin,
@@ -78,7 +82,7 @@ async function findMyApplications(viewerUserId: number, vacancyIds: number[]): P
 }
 
 const JOB_COLUMNS = Prisma.sql`
-  v.id, v.title, v.region_code AS "regionCode", v.category, v.schedule,
+  v.id, v.title, v.region_code AS "regionCode", v.region_subject AS "regionSubject", v.category, v.schedule,
   v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.status,
   v.created_at AS "createdAt", v.employer_user_id AS "employerUserId",
   u.display_name AS "employerDisplayName"`;
@@ -116,7 +120,8 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
     conditions.push(Prisma.sql`(v.title ILIKE ${pattern} ESCAPE '\\' OR v.description ILIKE ${pattern} ESCAPE '\\')`);
   }
   const regionCode = nonEmpty(params.region_code);
-  if (regionCode) conditions.push(Prisma.sql`v.region_code = ${regionCode}`);
+  // Значение из /api/jobs/filters: код субъекта или исходный текст нераспознанного региона.
+  if (regionCode) conditions.push(Prisma.sql`(v.region_subject = ${regionCode} OR v.region_code = ${regionCode})`);
   const category = nonEmpty(params.category);
   if (category) conditions.push(Prisma.sql`v.category = ${category}`);
   if (params.schedule) conditions.push(Prisma.sql`v.schedule = ${params.schedule}`);
@@ -156,15 +161,15 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   };
 }
 
-// Справочника названий нет — label равен value.
+// Регион: распознанный субъект — код и название из справочника, иначе исходный текст.
+// Для категорий справочника нет — label равен value.
 export async function listJobFilters(viewerUserId: number) {
   const where = { status: 'published', employerUserId: { not: viewerUserId } };
-  const [regions, categories] = await Promise.all([
+  const [regionRows, categories] = await Promise.all([
     db.vacancy.findMany({
       where: { ...where, regionCode: { not: '' } },
-      distinct: ['regionCode'],
-      select: { regionCode: true },
-      orderBy: { regionCode: 'asc' },
+      distinct: ['regionCode', 'regionSubject'],
+      select: { regionCode: true, regionSubject: true },
     }),
     db.vacancy.findMany({
       where: { ...where, category: { not: '' } },
@@ -173,8 +178,16 @@ export async function listJobFilters(viewerUserId: number) {
       orderBy: { category: 'asc' },
     }),
   ]);
+  const regions = new Map<string, string>();
+  for (const r of regionRows) {
+    const subject = regionDto(r.regionSubject);
+    if (subject) regions.set(subject.code, subject.name);
+    else regions.set(r.regionCode, r.regionCode);
+  }
   return {
-    regions: regions.map((r) => ({ value: r.regionCode, label: r.regionCode })),
+    regions: [...regions]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'ru')),
     categories: categories.map((c) => ({ value: c.category, label: c.category })),
   };
 }
@@ -214,6 +227,7 @@ export async function listMyApplications(
             id: true,
             title: true,
             regionCode: true,
+            regionSubject: true,
             category: true,
             schedule: true,
             salaryMin: true,
@@ -228,7 +242,11 @@ export async function listMyApplications(
     }),
     db.application.count({ where }),
   ]);
-  return { items: rows, total, limit: params.limit, offset: params.offset };
+  const items = rows.map(({ vacancy: { regionSubject, ...vacancy }, ...application }) => ({
+    ...application,
+    vacancy: { ...vacancy, subject: regionDto(regionSubject) },
+  }));
+  return { items, total, limit: params.limit, offset: params.offset };
 }
 
 export interface ProfileDto {

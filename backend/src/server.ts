@@ -10,6 +10,8 @@ import { getBenchmark } from './trudvsem/benchmarkService.js';
 import { applyStatusChange, funnelButtons, createApplicationRecord, type CreateApplicationError } from './application/service.js';
 import { registerCandidateRoutes } from './candidate/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
+import { normalizeRegion } from './regions/dictionary.js';
+import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
 import type { Vacancy } from '@prisma/client';
 import { startStaleVacancyReminders } from './vacancies/reminders.js';
@@ -54,7 +56,11 @@ registerTeamRoutes(app);
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.
 function withApplyUrl(vacancy: Vacancy) {
-  return { ...vacancy, applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null };
+  return {
+    ...vacancy,
+    subject: regionDto(vacancy.regionSubject),
+    applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null,
+  };
 }
 
 function parseIdParam(request: FastifyRequest, reply: FastifyReply): number | undefined {
@@ -119,6 +125,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       employerUserId: request.sessionUserId!,
       title: body.title,
       regionCode: body.region_code ?? '',
+      regionSubject: normalizeRegion(body.region_code),
       category: body.category ?? 'general',
       schedule: body.schedule ?? 'temporary',
       salaryMin: body.salary_min ?? null,
@@ -131,7 +138,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
     },
   });
 
-  return reply.code(201).send(vacancy);
+  return reply.code(201).send(withApplyUrl(vacancy));
 });
 
 app.get('/api/vacancies/:id', { preHandler: requireAuth }, async (request, reply) => {
@@ -188,6 +195,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     data: {
       title: merged.title,
       regionCode: merged.region_code,
+      regionSubject: normalizeRegion(merged.region_code),
       ...(body.category !== undefined ? { category: body.category } : {}),
       schedule: merged.schedule,
       salaryMin: merged.salary_min,
@@ -201,7 +209,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
   }
 
   const vacancy = await db.vacancy.findUniqueOrThrow({ where: { id } });
-  return vacancy;
+  return withApplyUrl(vacancy);
 });
 
 app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (request, reply) => {
@@ -215,7 +223,7 @@ app.post('/api/vacancies/:id/publish', { preHandler: requireAuth }, async (reque
 
   try {
     const vacancy = await publishVacancy(id);
-    return vacancy;
+    return withApplyUrl(vacancy);
   } catch (err) {
     if (err instanceof PublishError) {
       if (err.kind === 'not_found') {
@@ -250,7 +258,7 @@ app.post('/api/vacancies/:id/close', { preHandler: requireAuth }, async (request
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
 
-  return db.vacancy.update({ where: { id }, data: { status: 'closed' } });
+  return withApplyUrl(await db.vacancy.update({ where: { id }, data: { status: 'closed' } }));
 });
 
 app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (request, reply) => {
@@ -389,6 +397,9 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
   });
 });
 
+// Справочник субъектов РФ для выбора региона в мини-приложении.
+app.get('/api/regions', async () => ({ items: listRegions() }));
+
 app.get('/api/benchmark', async (request, reply) => {
   const parsed = benchmarkQuerySchema.safeParse(request.query);
   if (!parsed.success) {
@@ -472,6 +483,9 @@ async function start() {
     app.log.error(err, 'failed to reach MAX API — проверьте MAX_BOT_TOKEN');
   }
 
+  backfillRegionSubjects()
+    .then((n) => n > 0 && app.log.info({ updated: n }, 'region_subject backfilled'))
+    .catch((err) => app.log.error(err, 'region_subject backfill failed'));
   startStaleVacancyReminders();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });

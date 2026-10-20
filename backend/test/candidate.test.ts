@@ -110,6 +110,7 @@ describe('1. каталог: видимость опубликованных ч�
       id: v.id,
       title: 'Сборщик урожая',
       regionCode: '23',
+      subject: { code: '23', name: 'Краснодарский край' },
       category: 'agriculture',
       schedule: 'seasonal',
       salaryMin: null,
@@ -236,7 +237,7 @@ describe('3. фильтры, пагинация, сортировка', () => {
     const own = await publishedVacancy(B, { region_code: '77', category: 'own-only' }); // своя не учитывается
     expect(own.id).toBeGreaterThan(0);
     expect((await get(B, '/api/jobs/filters')).json()).toEqual({
-      regions: [{ value: '16', label: '16' }, { value: '23', label: '23' }],
+      regions: [{ value: '23', label: 'Краснодарский край' }, { value: '16', label: 'Республика Татарстан' }],
       categories: [{ value: 'agriculture', label: 'agriculture' }, { value: 'cafe', label: 'cafe' }],
     });
   });
@@ -461,6 +462,7 @@ describe('8–9. история откликов кандидата', () => {
         id: v.id,
         title: 'Сборщик урожая',
         regionCode: '23',
+        subject: { code: '23', name: 'Краснодарский край' },
         category: 'agriculture',
         schedule: 'seasonal',
         salaryMin: 50000,

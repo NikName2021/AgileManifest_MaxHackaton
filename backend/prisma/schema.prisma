@@ -34,6 +34,8 @@ model Vacancy {
   employer       User      @relation("EmployerVacancies", fields: [employerUserId], references: [id])
   title          String
   regionCode     String    @map("region_code")
+  // Код субъекта РФ из справочника (regions/dictionary.ts), распознанный по regionCode; null — не распознан.
+  regionSubject  String?   @map("region_subject")
   category       String
   schedule       String
   salaryMin      Int?      @map("salary_min")

@@ -1,4 +1,5 @@
 import { OWNER_KEY, type DialogFlow } from './types.js';
+import { normalizeRegion } from '../regions/dictionary.js';
 import { publishVacancy } from '../vacancies/publish.js';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
@@ -129,7 +130,8 @@ export const vacancyFlow: DialogFlow = {
             data: {
                 employerUserId: employer.id,
                 title: data.title,
-                regionCode: data.region, // TODO: сопоставить со справочником регионов trudvsem
+                regionCode: data.region,
+                regionSubject: normalizeRegion(data.region),
                 category: 'general',      // TODO: добавить шаг выбора категории, когда появится справочник
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,

@@ -19,11 +19,12 @@ model User {
   dialogChatId       String?  @map("dialog_chat_id")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  vacancies            Vacancy[]     @relation("EmployerVacancies")
-  applications         Application[] @relation("CandidateApplications")
+  vacancies            Vacancy[]         @relation("EmployerVacancies")
+  applications         Application[]     @relation("CandidateApplications")
   teamInvites          TeamInvite[]
-  teamMarksAsEmployer  TeamMark[]    @relation("TeamMarkEmployer")
-  teamMarksAsCandidate TeamMark[]    @relation("TeamMarkCandidate")
+  teamMarksAsEmployer  TeamMark[]        @relation("TeamMarkEmployer")
+  teamMarksAsCandidate TeamMark[]        @relation("TeamMarkCandidate")
+  jobSubscriptions     JobSubscription[]
 
   @@map("users")
 }
@@ -146,4 +147,30 @@ model TeamMark {
 
   @@id([employerUserId, candidateUserId])
   @@map("team_marks")
+}
+
+// Подписка кандидата на новые вакансии. Пустое поле — без ограничения по нему.
+model JobSubscription {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @map("user_id")
+  user          User     @relation(fields: [userId], references: [id])
+  regionSubject String?  @map("region_subject")
+  category      String?
+  schedule      String?
+  salaryFrom    Int?     @map("salary_from")
+  studentOnly   Boolean  @default(false) @map("student_only")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("job_subscriptions")
+}
+
+// Кому вакансия уже разослана по подписке — защита от повторной отправки.
+model SubscriptionDelivery {
+  vacancyId Int      @map("vacancy_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([vacancyId, userId])
+  @@map("subscription_deliveries")
 }

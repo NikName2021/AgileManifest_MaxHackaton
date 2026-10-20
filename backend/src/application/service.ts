@@ -221,7 +221,8 @@ export async function resolvePendingApplication(
     try {
         await maxApi.sendMessage(
             chatId,
-            `Отклик отправлен! Работодатель получит ваш контакт и свяжется по вакансии «${escapeMarkdown(vacancy.title)}».`
+            `Отклик отправлен! Работодатель получит ваш контакт и свяжется по вакансии «${escapeMarkdown(vacancy.title)}».`,
+            [[{ type: 'callback', text: 'Присылать похожие вакансии', payload: `subscribe_like:${vacancy.id}` }]]
         );
     } catch (err) {
         console.error('failed to send confirmation to candidate', vacancy.id, err);

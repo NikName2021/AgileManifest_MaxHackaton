@@ -167,6 +167,17 @@ export const benchmarkQuerySchema = z.object({
 
 export const idParamSchema = z.object({ id: POSITIVE_INT.max(POSTGRES_INT4_MAX) });
 
+// region_code — код субъекта или свободный текст (распознаётся справочником).
+export const createSubscriptionSchema = z
+  .object({
+    region_code: z.string().trim().min(1).max(100).nullable().optional(),
+    category: z.string().trim().min(1).max(100).nullable().optional(),
+    schedule: SCHEDULE_ENUM.nullable().optional(),
+    salary_from: z.number().int().nonnegative().max(POSTGRES_INT4_MAX).nullable().optional(),
+    student_only: z.boolean().optional(),
+  })
+  .strict();
+
 export const updateTeamMemberSchema = z.object({ reliable: z.boolean() }).strict();
 
 // candidate_ids не передан — приглашаем всю бригаду.

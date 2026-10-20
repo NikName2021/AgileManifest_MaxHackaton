@@ -7,6 +7,7 @@ import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
 import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat, type ApplicationSource } from '../application/service.js';
 import { handleTeamInviteResponse } from '../team/service.js';
 import { handleDraftDecision } from '../dialog/preview.js';
+import { subscribeLike, unsubscribe } from '../subscriptions/service.js';
 
 // Сравнение за постоянное время; хеши уравнивают длину.
 function secretsEqual(received: unknown, expected: string): boolean {
@@ -111,6 +112,8 @@ export function registerMaxWebhook(app: FastifyInstance) {
             await startFlow(chatId, 'new_vacancy', String(senderId));
           } else if (text === '/отмена') {
             await cancelFlow(chatId);
+          } else if (text === '/отписаться') {
+            await unsubscribe(chatId, String(senderId), 'all');
           } else {
             // Сначала диалог создания вакансии, потом ожидание контакта после отклика.
             const dialogHandled = await handleAnswer(chatId, String(senderId), text);
@@ -168,10 +171,16 @@ export function registerMaxWebhook(app: FastifyInstance) {
         }
 
         if (chatId && payload?.startsWith('apply:')) {
-          const vacancyId = Number(payload.slice('apply:'.length));
+          // apply:<id> — кнопка на карточке, apply:<id>:sub — в рассылке по подписке.
+          const [, idStr, tag] = payload.split(':');
+          const vacancyId = Number(idStr);
           if (Number.isFinite(vacancyId) && senderId) {
-            await handleApplyClick(chatId, String(senderId), vacancyId, 'card');
+            await handleApplyClick(chatId, String(senderId), vacancyId, tag === 'sub' ? 'subscription' : 'card');
           }
+        } else if (chatId && senderId && /^subscribe_like:\d+$/.test(payload ?? '')) {
+          await subscribeLike(chatId, String(senderId), Number(payload.split(':')[1]));
+        } else if (chatId && senderId && /^unsub:\d+$/.test(payload ?? '')) {
+          await unsubscribe(chatId, String(senderId), Number(payload.split(':')[1]));
         } else if (chatId && payload?.startsWith('app_status:')) {
           const [, applicationIdStr, status] = payload.split(':');
           const applicationId = Number(applicationIdStr);

@@ -11,6 +11,7 @@ import { applyStatusChange, funnelButtons, createApplicationRecord, type CreateA
 import { registerCandidateRoutes } from './candidate/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
 import { registerPosterRoutes } from './vacancies/posterRoutes.js';
+import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { normalizeRegion } from './regions/dictionary.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
@@ -44,7 +45,7 @@ const allowedOrigins = config.frontendOrigin
   : true;
 app.register(cors, {
   origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Authorization', 'Content-Type'],
 });
 
@@ -54,6 +55,7 @@ registerMaxWebhook(app);
 registerCandidateRoutes(app);
 registerTeamRoutes(app);
 registerPosterRoutes(app);
+registerSubscriptionRoutes(app);
 
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.
@@ -451,6 +453,7 @@ async function start() {
     await maxApi.registerCommands([
       { name: 'новая_вакансия', description: 'Создать вакансию' },
       { name: 'отмена', description: 'Отменить текущий диалог' },
+      { name: 'отписаться', description: 'Не присылать новые вакансии' },
     ]);
     app.log.info({ me }, 'connected to MAX as bot');
 

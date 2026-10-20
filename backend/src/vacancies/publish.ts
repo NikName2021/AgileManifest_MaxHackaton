@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { buildVacancyCardText, buildApplyDeepLink, MAX_CARD_TEXT_LIMIT } from './cardText.js';
 import type { Vacancy } from '@prisma/client';
+import { onVacancyPublished } from './broadcast.js';
 
 export type PublishErrorKind = 'not_found' | 'conflict' | 'no_chat';
 
@@ -124,6 +125,12 @@ async function redeliverOrReportConflict(vacancyId: number): Promise<Vacancy> {
 
 // Единая точка публикации для REST и диалога бота.
 export async function publishVacancy(vacancyId: number): Promise<Vacancy> {
+    const vacancy = await publishVacancyOnce(vacancyId);
+    void onVacancyPublished(vacancy.id);
+    return vacancy;
+}
+
+async function publishVacancyOnce(vacancyId: number): Promise<Vacancy> {
     const existing = await db.vacancy.findUnique({ where: { id: vacancyId } });
     if (!existing) {
         throw new PublishError('not_found', 'vacancy not found');

@@ -2,6 +2,13 @@
 // метки чужие ответы продвигали бы диалог, а вакансия записывалась бы не на того пользователя.
 export const OWNER_KEY = 'ownerMaxUserId';
 
+import type { InlineButton } from '../max/client.js';
+
+export interface BotReply {
+    text: string;
+    buttons?: InlineButton[][];
+}
+
 export interface ButtonOptions {
     text: string;
     value: string;
@@ -17,5 +24,5 @@ export interface StepDef {
 export interface DialogFlow {
     name: string;
     steps: StepDef[];
-    onComplete: (chatId: string, data: Record<string, any>) => Promise<string>;
+    onComplete: (chatId: string, data: Record<string, any>) => Promise<string | BotReply[]>;
 }

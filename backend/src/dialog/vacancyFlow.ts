@@ -1,7 +1,7 @@
 import { OWNER_KEY, type DialogFlow } from './types.js';
 import { normalizeRegion } from '../regions/dictionary.js';
-import { publishVacancy } from '../vacancies/publish.js';
-import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from '../vacancies/cardText.js';
+import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT, buildVacancyCardText, buildApplyDeepLink } from '../vacancies/cardText.js';
+import { draftDecisionButtons } from './preview.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
 import { SCHEDULE_ENUM } from '../validation.js';
@@ -147,26 +147,21 @@ export const vacancyFlow: DialogFlow = {
         const benchmark = await getBenchmark(vacancy.regionCode, vacancy.title.toLowerCase().trim());
         const benchmarkText = formatBenchmarkText(benchmark);
         const truncatedNotice = truncated
-            ? 'Требования пришлось сократить — вместе с остальными полями карточка превышала лимит MAX в 4000 символов. Полный текст можно указать позже через мини-апп (PATCH вакансии).'
+            ? 'Требования пришлось сократить — вместе с остальными полями карточка превышала лимит MAX в 4000 символов. Полный текст можно указать позже в мини-приложении.'
             : undefined;
 
-        try {
-            await publishVacancy(vacancy.id);
-        } catch (err) {
-            console.error('failed to publish vacancy from dialog', vacancy.id, err);
-            return [
-                'Вакансия сохранена, но карточку с кнопкой «Откликнуться» отправить не получилось — попробуйте ещё раз чуть позже.',
-                `ID вакансии: ${vacancy.id}. Опубликовать повторно можно через POST /api/vacancies/${vacancy.id}/publish.`,
-                truncatedNotice,
-            ].filter(Boolean).join('\n\n');
-        }
-
+        // Сначала предпросмотр: карточка — ровно та, что уйдёт при публикации (она укладывается
+        // в лимит MAX, поэтому пояснения идут отдельным сообщением).
         return [
-            'Вакансия сохранена и опубликована карточкой выше — с кнопкой «Откликнуться».',
-            'Как только кто-то откликнется, вы получите уведомление в этом чате.',
-            benchmarkText,
-            truncatedNotice,
-            `ID вакансии: ${vacancy.id}.`,
-        ].filter(Boolean).join('\n\n');
+            {
+                text: ['Почти готово! Проверьте карточку ниже — так её увидят кандидаты.', benchmarkText, truncatedNotice]
+                    .filter(Boolean)
+                    .join('\n\n'),
+            },
+            {
+                text: buildVacancyCardText(vacancy, buildApplyDeepLink(vacancy.id)),
+                buttons: draftDecisionButtons(vacancy.id),
+            },
+        ];
     },
 };

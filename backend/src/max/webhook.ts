@@ -6,6 +6,7 @@ import { upsertUser } from '../users/service.js';
 import { startFlow, cancelFlow, handleAnswer } from '../dialog/engine.js';
 import { handleApplyClick, resolvePendingApplication, handleStatusChangeFromChat } from '../application/service.js';
 import { handleTeamInviteResponse } from '../team/service.js';
+import { handleDraftDecision } from '../dialog/preview.js';
 
 // Сравнение за постоянное время; хеши уравнивают длину.
 function secretsEqual(received: unknown, expected: string): boolean {
@@ -174,6 +175,9 @@ export function registerMaxWebhook(app: FastifyInstance) {
           if (Number.isFinite(applicationId) && status && senderId) {
             await handleStatusChangeFromChat(chatId, String(senderId), applicationId, status);
           }
+        } else if (chatId && senderId && /^draft_(publish|keep):\d+$/.test(payload ?? '')) {
+          const [action, idStr] = payload.slice('draft_'.length).split(':');
+          await handleDraftDecision(chatId, String(senderId), Number(idStr), action);
         } else if (chatId && payload?.startsWith('team_invite:')) {
           const [, inviteIdStr, answer] = payload.split(':');
           const inviteId = Number(inviteIdStr);

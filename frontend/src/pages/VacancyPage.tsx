@@ -4,6 +4,7 @@ import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, CheckCircle2, Clock3, Copy, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
+import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { cardTextLength } from '../features/vacancies/model'
 import {
   VacancyFailure,
@@ -163,6 +164,7 @@ function VacancyDetails({ id }: { id: number }) {
           <VacancyStatusBadge status={vacancy.status} />
         )}
       </div>
+      {vacancy.status === 'draft' && <VacancySteps current={2} />}
       {Boolean(failure) && <VacancyFailure error={failure} />}
       {notice && (
         <div className="vacancy-notice" role="status">

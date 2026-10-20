@@ -17,7 +17,7 @@ export function CabinetGate({ children }: { children: ReactNode }) {
   const [cabinet, setCabinet] = useState<Cabinet | null>(null)
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
-  const { bridge, mode, user } = useSession()
+  const { bridge, mode } = useSession()
   const choosing = !cabinet || pathname === '/choose'
   const choice = useRef<HTMLElement>(null)
   useEffect(() => {
@@ -53,36 +53,30 @@ export function CabinetGate({ children }: { children: ReactNode }) {
             <Brand />
           </div>
           <div className="cabinet-choice-heading">
-            <span className="eyebrow">РАБОТА И ЛЮДИ В MAX</span>
-            <h1>Как вы хотите зайти?</h1>
-            <p>Один аккаунт MAX для работы и найма. К выбору можно вернуться через «Выйти».</p>
+            <span className="eyebrow">ОДИН АККАУНТ. ДВА КАБИНЕТА.</span>
+            <h1>С чего начнём?</h1>
+            <p>Выберите, что хотите сделать. Вернуться к выбору можно через «Выйти».</p>
           </div>
           <div className="cabinet-options">
-            <Button asChild>
-              <button className="cabinet-option" onClick={() => choose('employer')}>
-                <BriefcaseBusiness size={30} aria-hidden="true" />
-                <strong>Зайти как работодатель</strong>
-                <span>Создавайте вакансии, рассматривайте отклики и управляйте наймом.</span>
-                <ArrowRight aria-hidden="true" />
-              </button>
-            </Button>
             <Button asChild>
               <button className="cabinet-option" onClick={() => choose('worker')}>
                 <Search size={30} aria-hidden="true" />
                 <strong>Зайти как работник</strong>
-                <span>Находите вакансии, откликайтесь и следите за ответами работодателей.</span>
+                <span>Найти вакансию и откликнуться</span>
+                <ArrowRight aria-hidden="true" />
+              </button>
+            </Button>
+            <Button asChild>
+              <button className="cabinet-option" onClick={() => choose('employer')}>
+                <BriefcaseBusiness size={30} aria-hidden="true" />
+                <strong>Зайти как работодатель</strong>
+                <span>Разместить вакансию и найти людей</span>
                 <ArrowRight aria-hidden="true" />
               </button>
             </Button>
           </div>
-          <div className="cabinet-identity">
-            <span className="user-avatar" aria-hidden="true">
-              {user.display_name.slice(0, 1)}
-            </span>
-            <div>
-              <strong>{user.display_name}</strong>
-              <p>{mode === 'preview' ? 'Демонстрационный аккаунт' : 'Вход через MAX'}</p>
-            </div>
+          <div className="choice-logo">
+            <MaxLogo />
           </div>
           {mode === 'preview' && (
             <p className="vacancy-notice">

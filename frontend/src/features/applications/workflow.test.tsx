@@ -176,7 +176,9 @@ describe('employer applications workflow', () => {
       items: [{ ...page.items[0], contact: '@candidate' }],
       total: 1,
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
+    const previousCalls = list.mock.calls.length
+    fireEvent.focus(window)
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(previousCalls))
     dialog = await openFirst()
     expect(dialog.queryByRole('link')).not.toBeInTheDocument()
     expect(dialog.getByRole('button', { name: 'Копировать контакт' })).toBeInTheDocument()

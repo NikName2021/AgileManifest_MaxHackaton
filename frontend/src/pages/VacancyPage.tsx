@@ -4,6 +4,7 @@ import { Button } from '@maxhub/max-ui'
 import { ArrowUpRight, CheckCircle2, Clock3, Copy, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
+import { VacancyPoster } from '../features/poster/VacancyPoster'
 import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { cardTextLength } from '../features/vacancies/model'
 import {
@@ -175,6 +176,7 @@ function VacancyDetails({ id }: { id: number }) {
         <div className="vacancy-detail-main">
           <VacancyPreview vacancy={vacancy} />
           <SalaryBenchmark position={vacancy.title} region={vacancy.regionCode ?? ''} />
+          {vacancy.status === 'published' && <VacancyPoster key={vacancy.id} id={vacancy.id} />}
         </div>
         <aside className="vacancy-side-panel" aria-busy={busy}>
           <Button asChild variant="secondary">

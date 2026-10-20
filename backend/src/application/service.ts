@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
 import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
+import { markViewed, recordEvents, type EventType } from './timeline.js';
 import { hasForbiddenChars, isMeaningful, normalizeSingleLine } from '../text.js';
 import type { Application, User, Vacancy } from '@prisma/client';
 
@@ -91,6 +92,10 @@ export async function createApplicationRecord(input: {
                     candidateChatId: input.candidateChatId,
                 },
             });
+            await recordEvents(tx, [application.id], 'applied', application.createdAt);
+            if (application.status === 'invited') {
+                await recordEvents(tx, [application.id], 'status:invited', application.createdAt);
+            }
             return { ok: true as const, application };
         });
     } catch (err: any) {
@@ -298,6 +303,9 @@ export async function applyStatusChange(applicationId: number, status: string): 
     if (changed.count === 0) {
         return { application, notified: false, unchanged: true };
     }
+    // Смена этапа означает, что работодатель отклик видел (в том числе кнопкой в чате).
+    await recordEvents(db, [applicationId], `status:${status}` as EventType);
+    await markViewed([applicationId]);
 
     const notification = await notifyCandidate(application, status);
     const vacancyClosed = status === 'hired' ? await closeIfFilled(application.vacancyId) : false;
@@ -331,7 +339,10 @@ async function closeIfFilled(vacancyId: number): Promise<boolean> {
     const hired = await db.application.count({ where: { vacancyId, status: 'hired' } });
     if (hired < vacancy.headcount) return false;
 
-    const closed = await db.vacancy.updateMany({ where: { id: vacancyId, status: 'published' }, data: { status: 'closed' } });
+    const closed = await db.vacancy.updateMany({
+        where: { id: vacancyId, status: 'published' },
+        data: { status: 'closed', closedAt: new Date() },
+    });
     if (closed.count === 0) return false;
 
     const waiting = await db.application.findMany({
@@ -342,6 +353,7 @@ async function closeIfFilled(vacancyId: number): Promise<boolean> {
         where: { id: { in: waiting.map((a) => a.id) }, status: { in: ['new', 'contacted'] } },
         data: { status: 'rejected' },
     });
+    await recordEvents(db, waiting.map((a) => a.id), 'status:rejected');
     const title = escapeMarkdown(vacancy.title);
     for (const a of waiting) {
         const chatId = a.candidateChatId || a.candidate.dialogChatId;

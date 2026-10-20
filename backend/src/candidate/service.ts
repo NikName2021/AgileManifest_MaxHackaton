@@ -3,6 +3,7 @@ import { db } from '../db.js';
 import { regionDto, type RegionDto } from '../regions/service.js';
 import { config } from '../config.js';
 import { employerTrustMap, type EmployerTrust } from '../employers/trust.js';
+import { loadTimelines } from '../application/timeline.js';
 
 // Кабинет работника. Только явные DTO: chatId, maxUserId и служебные поля доставки наружу не уходят.
 // Доступ — по userId из сессии; режим «работник/работодатель» выбирает интерфейс, а не права.
@@ -270,9 +271,13 @@ export async function listMyApplications(
     }),
     db.application.count({ where }),
   ]);
-  const trust = await employerTrustMap(rows.map((r) => r.vacancy.employerUserId));
+  const [trust, timelines] = await Promise.all([
+    employerTrustMap(rows.map((r) => r.vacancy.employerUserId)),
+    loadTimelines(rows.map((r) => r.id)),
+  ]);
   const items = rows.map(({ vacancy: { regionSubject, employerUserId, employer, ...vacancy }, ...application }) => ({
     ...application,
+    timeline: timelines.get(application.id)!,
     vacancy: { ...vacancy, subject: regionDto(regionSubject), employer: { ...employer, ...trust.get(employerUserId)! } },
   }));
   return { items, total, limit: params.limit, offset: params.offset };

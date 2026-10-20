@@ -55,6 +55,7 @@ model Vacancy {
   reminderSentAt  DateTime? @map("reminder_sent_at")
   // От него считается напоминание «нет откликов 48 часов».
   publishedAt     DateTime? @map("published_at")
+  closedAt        DateTime? @map("closed_at")
   // Застывший чат для карточки и уведомлений: users.chatId может смениться на групповой.
   employerChatId  String?   @map("employer_chat_id")
 
@@ -70,26 +71,29 @@ model Vacancy {
 }
 
 model Application {
-  id                       Int       @id @default(autoincrement())
-  vacancyId                Int       @map("vacancy_id")
-  vacancy                  Vacancy   @relation(fields: [vacancyId], references: [id])
-  candidateUserId          Int       @map("candidate_user_id")
-  candidate                User      @relation("CandidateApplications", fields: [candidateUserId], references: [id])
-  status                   String    @default("new") // new | contacted | invited | hired | rejected
+  id                       Int                @id @default(autoincrement())
+  vacancyId                Int                @map("vacancy_id")
+  vacancy                  Vacancy            @relation(fields: [vacancyId], references: [id])
+  candidateUserId          Int                @map("candidate_user_id")
+  candidate                User               @relation("CandidateApplications", fields: [candidateUserId], references: [id])
+  status                   String             @default("new") // new | contacted | invited | hired | rejected
   contact                  String?
   // Чат, где прошёл отклик: сюда уходят уведомления о смене статуса.
-  candidateChatId          String?   @map("candidate_chat_id")
+  candidateChatId          String?            @map("candidate_chat_id")
   // card | link | qr | subscription | channel | miniapp | team; null — отклики до появления поля.
   source                   String?
   // Последний перевод в hired — для списка «Моя бригада».
-  hiredAt                  DateTime? @map("hired_at")
+  hiredAt                  DateTime?          @map("hired_at")
   // Выход на смену: когда, где и подтвердил ли кандидат (pending | confirmed | declined).
-  startAt                  DateTime? @map("start_at")
-  shiftNote                String?   @map("shift_note")
+  startAt                  DateTime?          @map("start_at")
+  shiftNote                String?            @map("shift_note")
   attendance               String?
-  attendanceReminderSentAt DateTime? @map("attendance_reminder_sent_at")
-  createdAt                DateTime  @default(now()) @map("created_at")
-  updatedAt                DateTime  @updatedAt @map("updated_at")
+  attendanceReminderSentAt DateTime?          @map("attendance_reminder_sent_at")
+  // Первый просмотр работодателем (список откликов в мини-приложении или смена этапа).
+  viewedAt                 DateTime?          @map("viewed_at")
+  events                   ApplicationEvent[]
+  createdAt                DateTime           @default(now()) @map("created_at")
+  updatedAt                DateTime           @updatedAt @map("updated_at")
 
   @@unique([vacancyId, candidateUserId])
   // GET /api/me/applications
@@ -207,4 +211,17 @@ model ChannelDelivery {
 
   @@id([vacancyId, channelId])
   @@map("channel_deliveries")
+}
+
+// Журнал отклика для дорожной карты: applied, status:<этап>, shift_scheduled, shift_confirmed,
+// shift_declined. Время каждого события — то, что видит кандидат по наведению на этап.
+model ApplicationEvent {
+  id            Int         @id @default(autoincrement())
+  applicationId Int         @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          String
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@index([applicationId, createdAt])
+  @@map("application_events")
 }

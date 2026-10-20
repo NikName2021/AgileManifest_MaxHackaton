@@ -2,6 +2,7 @@ import type { Application, User, Vacancy } from '@prisma/client';
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
+import { recordEvents } from '../application/timeline.js';
 
 // Подтверждение выхода на смену: работодатель назначает время выхода приглашённому или нанятому
 // кандидату, кандидат отвечает «Приду» / «Не смогу» сразу или после напоминания накануне.
@@ -68,6 +69,7 @@ export async function setShift(employerUserId: number, applicationId: number, st
     include: { vacancy: { include: { employer: true } }, candidate: true },
   });
   if (!startAt) return { ok: true, application: updated, notified: false };
+  await recordEvents(db, [updated.id], 'shift_scheduled');
 
   const chatId = candidateChat(updated);
   if (!chatId) return { ok: true, application: updated, notified: false };
@@ -98,6 +100,7 @@ export async function handleAttendanceAnswer(chatId: string, senderMaxUserId: st
     await maxApi.sendMessage(chatId, 'Ответ уже сохранён, спасибо!');
     return;
   }
+  await recordEvents(db, [applicationId], attendance === 'confirmed' ? 'shift_confirmed' : 'shift_declined');
 
   const name = escapeMarkdown(application.candidate.displayName ?? 'Кандидат');
   const title = escapeMarkdown(application.vacancy.title);

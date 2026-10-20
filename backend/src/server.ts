@@ -15,6 +15,7 @@ import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { setShift, startShiftReminders } from './shifts/service.js';
 import { normalizeRegion } from './regions/dictionary.js';
+import { loadTimelines, markViewed } from './application/timeline.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
 import type { Vacancy } from '@prisma/client';
@@ -272,7 +273,10 @@ app.post('/api/vacancies/:id/close', { preHandler: requireAuth }, async (request
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
 
-  return withApplyUrl(await db.vacancy.update({ where: { id }, data: { status: 'closed' } }));
+  // closedAt — для этапа «Набор закрыт» в дорожной карте; повторное закрытие время не меняет.
+  return withApplyUrl(
+    await db.vacancy.update({ where: { id }, data: { status: 'closed', closedAt: existing.closedAt ?? new Date() } })
+  );
 });
 
 app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (request, reply) => {
@@ -284,11 +288,14 @@ app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (r
     return sendError(reply, 403, 'forbidden', 'not your vacancy');
   }
 
-  return db.application.findMany({
+  const items = await db.application.findMany({
     where: { vacancyId },
     include: { candidate: { select: CANDIDATE_SUMMARY_SELECT } },
     orderBy: { createdAt: 'desc' },
   });
+  // Работодатель открыл список — для кандидата это этап «Работодатель посмотрел».
+  await markViewed(items.map((a) => a.id));
+  return items;
 });
 
 // Входящие отклики по всем вакансиям работодателя.
@@ -318,7 +325,24 @@ app.get('/api/applications', { preHandler: requireAuth }, async (request, reply)
     }),
   ]);
 
+  await markViewed(items.map((a) => a.id));
   return { items, total, limit, offset };
+});
+
+// Дорожная карта отклика: видят кандидат и работодатель вакансии.
+app.get('/api/applications/:id/timeline', { preHandler: requireAuth }, async (request, reply) => {
+  const id = parseIdParam(request, reply);
+  if (id === undefined) return reply;
+  const application = await db.application.findUnique({
+    where: { id },
+    select: { candidateUserId: true, vacancy: { select: { employerUserId: true } } },
+  });
+  if (!application) return sendError(reply, 404, 'not_found', 'application not found');
+  const viewer = request.sessionUserId;
+  if (application.candidateUserId !== viewer && application.vacancy.employerUserId !== viewer) {
+    return sendError(reply, 403, 'forbidden', 'not your application');
+  }
+  return (await loadTimelines([id])).get(id);
 });
 
 const CREATE_APPLICATION_ERRORS: Record<CreateApplicationError, { status: number; code: ErrorCode; message: string }> = {

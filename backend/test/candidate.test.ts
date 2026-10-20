@@ -464,6 +464,7 @@ describe('8–9. история откликов кандидата', () => {
       startAt: null,
       shiftNote: null,
       attendance: null,
+      timeline: expect.objectContaining({ current: 'applied' }),
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       vacancy: {

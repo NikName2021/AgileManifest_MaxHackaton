@@ -1,6 +1,7 @@
 import type { Application, ApplicationStatus } from '../../entities/hiring'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
+import { parseShift, type Shift } from '../shifts/model'
 
 export interface ApplicationQuery {
   status?: ApplicationStatus
@@ -18,11 +19,17 @@ export interface VacancyApplications {
   items: Application[]
 }
 export interface StatusResult {
+  vacancyClosed?: boolean
   application: Application
   notified: boolean
   unchanged: boolean
 }
 export interface ApplicationRepository {
+  setShift?(
+    id: number,
+    startAt: string | null,
+    note: string | null,
+  ): Promise<Shift & { notified: boolean }>
   list(query: ApplicationQuery, signal?: AbortSignal): Promise<ApplicationPage>
   forVacancy(id: number, signal?: AbortSignal): Promise<VacancyApplications>
   updateStatus(id: number, status: ApplicationStatus): Promise<StatusResult>
@@ -86,6 +93,7 @@ export function parseApplication(body: unknown, vacancy?: Application['vacancy']
       phone: nullableString(candidate.phone),
     },
     vacancy: summary,
+    ...parseShift(value),
   }
 }
 export function parseApplicationPage(body: unknown): ApplicationPage {
@@ -121,6 +129,21 @@ export function createApplicationRepository(
   const root = authUrl(base, '/api', import.meta.env.PROD)
   const request = authenticatedRequest(token, onUnauthorized)
   return {
+    async setShift(applicationId, startAt, note) {
+      const value = record(
+        await request(`${root}/applications/${id(applicationId)}/shift`, {
+          method: 'PATCH',
+          body: JSON.stringify({ start_at: startAt, note }),
+        }),
+      )
+      if (
+        value.id !== applicationId ||
+        typeof value.notified !== 'boolean' ||
+        !('startAt' in value)
+      )
+        throw new ApiError('contract')
+      return { ...parseShift(value), notified: value.notified }
+    },
     async list(query, signal) {
       if (
         !Number.isSafeInteger(query.offset) ||
@@ -161,12 +184,20 @@ export function createApplicationRepository(
       )
       if (
         typeof value.notified !== 'boolean' ||
+        (value.vacancyClosed !== undefined && typeof value.vacancyClosed !== 'boolean') ||
         (value.unchanged !== undefined && typeof value.unchanged !== 'boolean')
       )
         throw new ApiError('contract')
       const application = parseApplication(value)
       if (application.id !== applicationId) throw new ApiError('contract')
-      return { application, notified: value.notified, unchanged: value.unchanged === true }
+      return {
+        application,
+        notified: value.notified,
+        unchanged: value.unchanged === true,
+        ...(value.vacancyClosed !== undefined
+          ? { vacancyClosed: value.vacancyClosed as boolean }
+          : {}),
+      }
     },
   }
 }

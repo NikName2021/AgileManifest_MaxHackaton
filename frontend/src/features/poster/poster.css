@@ -1,0 +1,19 @@
+.poster-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+.poster-panel p {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 12px 0;
+}
+.poster-preview {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  margin: 16px 0;
+  background: white;
+  border: 1px solid var(--border);
+}

@@ -70,6 +70,8 @@ function start(session = createPreviewSession(), path = '/') {
           { path: '/jobs/:id', element: <JobPage /> },
           { path: '/my-applications', element: <MyApplicationsPage /> },
           { path: '/profile', element: <WorkerProfilePage /> },
+          { path: '/channels', element: <h1>Каналы партнёра</h1> },
+          { path: '/subscriptions', element: <h1>Подписки работника</h1> },
         ],
       },
     ],
@@ -89,6 +91,20 @@ function worker() {
 }
 
 describe('cabinet selection and candidate flows', () => {
+  it('keeps partner channels separate and permits worker subscriptions after leaving', async () => {
+    const { router } = start(createPreviewSession(), '/channels')
+    fireEvent.click(screen.getByRole('button', { name: /Зайти как партнёр/ }))
+    expect(await screen.findByRole('heading', { name: 'Каналы партнёра' })).toBeInTheDocument()
+    await act(() => router.navigate('/jobs'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/channels'))
+    fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
+    worker()
+    await screen.findByText('Помощник на сбор урожая')
+    await act(() => router.navigate('/subscriptions'))
+    expect(await screen.findByRole('heading', { name: 'Подписки работника' })).toBeInTheDocument()
+    await act(() => router.navigate('/channels'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
+  })
   it('keeps the cabinet mounted when leaving is blocked by an active operation', async () => {
     function BusyPage() {
       const blocker = useBlocker(true)

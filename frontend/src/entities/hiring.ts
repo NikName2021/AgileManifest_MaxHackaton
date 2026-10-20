@@ -1,3 +1,4 @@
+import type { Shift } from '../features/shifts/model'
 // The backend identifies users by numeric IDs and authorizes resources by ownership.
 export type VacancyStatus = 'draft' | 'published' | 'closed'
 export type ApplicationStatus = 'new' | 'contacted' | 'invited' | 'hired' | 'rejected'
@@ -6,6 +7,9 @@ export interface User {
   display_name: string
 }
 export interface Vacancy {
+  headcount?: number | null
+  studentFriendly?: boolean
+  applyUrl?: string | null
   id: number
   title: string
   regionCode: string
@@ -19,7 +23,7 @@ export interface Vacancy {
   cardMessageId: string | null
   createdAt: string
 }
-export interface Application {
+export interface Application extends Shift {
   id: number
   vacancyId: number
   candidateUserId: number

@@ -1,6 +1,7 @@
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from '../features/appearance/context'
 import { useSession } from '../features/session/context'
+import { EmployerTrustProgress } from '../features/trust/EmployerTrust'
 const options = [
   { value: 'system', title: 'Как на устройстве', icon: Monitor },
   { value: 'light', title: 'Светлая', icon: Sun },
@@ -18,6 +19,7 @@ export function SettingsPage() {
         </div>
       </div>
       <AppearanceSettings />
+      <EmployerTrustProgress />
       <section className="settings-panel account-panel">
         <div>
           <h2>Рабочий профиль</h2>

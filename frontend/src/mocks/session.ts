@@ -4,6 +4,9 @@ import type { VacancyInput, VacancyRepository } from '../features/vacancies/api'
 import { ApiError } from '../shared/api/client'
 import { createPreviewApplications } from './applications'
 import { createPreviewCandidate } from './candidate'
+import { createPreviewTeam } from './team'
+import { createPreviewSubscriptions } from './subscriptions'
+import { createPreviewPartners } from './partners'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -16,6 +19,7 @@ export function createPreviewSession(): Session {
   }
   function fields(input: VacancyInput) {
     return {
+      headcount: input.headcount ?? null,
       title: input.title,
       regionCode: input.region_code,
       category: input.category,
@@ -24,6 +28,7 @@ export function createPreviewSession(): Session {
       salaryMax: input.salary_max,
       description: input.description,
       contactInfo: input.contact_info,
+      studentFriendly: input.student_friendly ?? false,
     }
   }
   function save(row: Vacancy) {
@@ -60,18 +65,29 @@ export function createPreviewSession(): Session {
       return save({ ...get(id), status: 'closed' })
     },
   }
+  const hiring = createPreviewApplications(vacancies)
   return {
     mode: 'preview',
+    team: createPreviewTeam(hiring.applications),
     user: { id: 1, display_name: 'Демо-кабинет' },
     vacancies,
     candidate: createPreviewCandidate(),
+    subscriptions: createPreviewSubscriptions(),
+    partners: createPreviewPartners(),
     benchmark: {
       async get(_query, signal) {
         signal?.throwIfAborted()
         // Fixed illustrative values, never presented as actual market data.
-        return { avgSalaryMin: 45000, avgSalaryMax: 65000, vacancyCount: 24, isFresh: true }
+        return {
+          avgSalaryMin: 45000,
+          avgSalaryMax: 65000,
+          vacancyCount: 24,
+          isFresh: true,
+          scope: 'region',
+          regionName: _query.region,
+        }
       },
     },
-    ...createPreviewApplications(vacancies),
+    ...hiring,
   }
 }

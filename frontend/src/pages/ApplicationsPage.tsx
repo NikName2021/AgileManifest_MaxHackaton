@@ -22,6 +22,7 @@ import { ApplicationDialog } from '../features/applications/ApplicationDialog'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
+import { ShiftSummary } from '../features/shifts/ShiftSummary'
 
 const pageSize = 20
 type Loaded =
@@ -296,9 +297,12 @@ export function ApplicationsPage() {
                           month: 'short',
                         })}
                       </time>
-                      <span className={`application-status ${item.status}`}>
-                        {applicationLabels[item.status]}
-                      </span>
+                      <div>
+                        <span className={`application-status ${item.status}`}>
+                          {applicationLabels[item.status]}
+                        </span>
+                        <ShiftSummary shift={item} />
+                      </div>
                       <Button
                         variant="ghost"
                         size="small"

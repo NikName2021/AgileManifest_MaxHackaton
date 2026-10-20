@@ -5,6 +5,7 @@ import { applicationLabels, type Vacancy } from '../../entities/hiring'
 import { statuses } from '../applications/api'
 import type { HiringSummary } from './loadSummary'
 import './overview.css'
+import { Capacity } from '../capacity/Capacity'
 
 export function HiringFunnel({
   summary,
@@ -19,7 +20,7 @@ export function HiringFunnel({
   loading: boolean
   failed: boolean
   reload: () => void
-  vacancy?: Pick<Vacancy, 'id' | 'status'>
+  vacancy?: Pick<Vacancy, 'id' | 'status' | 'headcount'>
   refreshing?: boolean
   compact?: boolean
 }) {
@@ -51,6 +52,16 @@ export function HiringFunnel({
         <p className="funnel-total">
           Всего откликов: <strong>{summary?.total?.toLocaleString('ru-RU') ?? '—'}</strong>
         </p>
+      )}
+      {vacancy?.headcount && (
+        <Capacity
+          headcount={vacancy.headcount}
+          spotsLeft={
+            summary?.stages.hired == null
+              ? null
+              : Math.max(0, vacancy.headcount - summary.stages.hired)
+          }
+        />
       )}
       {compact && (
         <div className="distribution-bar" aria-hidden="true">

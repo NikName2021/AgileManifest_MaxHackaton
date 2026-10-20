@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-export type Cabinet = 'employer' | 'worker'
+export type Cabinet = 'employer' | 'worker' | 'partner'
 export const CabinetContext = createContext<{ cabinet: Cabinet; switchCabinet: () => void } | null>(
   null,
 )

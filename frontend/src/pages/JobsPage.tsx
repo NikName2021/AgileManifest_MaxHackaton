@@ -12,6 +12,8 @@ import { CandidateError, Loading, Pagination } from '../features/candidate/ui'
 import { jobQuery } from '../features/candidate/query'
 import { formatSalary, scheduleLabels } from '../features/vacancies/model'
 import type { JobFilters } from '../features/candidate/api'
+import { EmployerBadge } from '../features/trust/EmployerTrust'
+import { Capacity } from '../features/capacity/Capacity'
 
 function SearchForm({
   params,
@@ -71,6 +73,15 @@ function SearchForm({
         </div>
       </div>
       <div className="catalog-filters">
+        <label className="student-check">
+          <input
+            type="checkbox"
+            name="student_friendly"
+            value="true"
+            defaultChecked={params.get('student_friendly') === 'true'}
+          />
+          Для студентов
+        </label>
         <Select label="Регион" name="region_code" defaultValue={params.get('region_code') ?? ''}>
           <option value="">Все регионы</option>
           {options('regions', 'region_code')}
@@ -179,6 +190,9 @@ export function JobsPage() {
           <p>Вакансии от работодателей. Без лишних шагов.</p>
         </div>
       </div>
+      <Link className="text-link" to={`/subscriptions?${params}`}>
+        Подписаться на новые вакансии →
+      </Link>
       <SearchForm
         key={`${key}:${formRevision}`}
         params={params}
@@ -224,6 +238,7 @@ export function JobsPage() {
                           </span>
                           <div>
                             <strong>{job.employer.displayName?.trim() || 'Работодатель'}</strong>
+                            <EmployerBadge confirmedHires={job.employer.confirmedHires} />
                             <small>{job.regionCode || 'Регион не указан'}</small>
                           </div>
                         </div>
@@ -241,6 +256,10 @@ export function JobsPage() {
                         </div>
                         {job.myApplication && (
                           <span className="candidate-applied">Вы уже откликнулись</span>
+                        )}
+                        <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
+                        {job.studentFriendly && (
+                          <span className="student-badge">Подходит студентам</span>
                         )}
                         <div className="job-card-footer">
                           <small>

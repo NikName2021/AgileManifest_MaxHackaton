@@ -1,8 +1,11 @@
 import type { Vacancy } from '../../entities/hiring'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
+import { fetchPoster } from '../poster/api'
 
 export interface VacancyInput {
+  headcount?: number | null
+  student_friendly?: boolean
   title: string
   region_code: string
   category: string
@@ -14,6 +17,7 @@ export interface VacancyInput {
 }
 
 export interface VacancyRepository {
+  poster?(id: number, signal?: AbortSignal): Promise<Blob>
   list(signal?: AbortSignal): Promise<Vacancy[]>
   get(id: number, signal?: AbortSignal): Promise<Vacancy>
   create(input: VacancyInput): Promise<Vacancy>
@@ -28,9 +32,34 @@ function nullableString(value: unknown): value is string | null {
 function salary(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
 }
+function applyUrl(value: unknown): string | null | undefined {
+  if (value == null) return value as null | undefined
+  if (typeof value !== 'string') throw new ApiError('contract')
+  try {
+    const url = new URL(value)
+    if (
+      !['https://max.ru', 'https://web.max.ru'].includes(url.origin) ||
+      url.username ||
+      url.password
+    )
+      throw new Error()
+    return url.href
+  } catch {
+    throw new ApiError('contract')
+  }
+}
 export function parseVacancy(value: unknown): Vacancy {
   if (!value || typeof value !== 'object') throw new ApiError('contract')
   const v = value as Record<string, unknown>
+  if (
+    v.headcount !== undefined &&
+    v.headcount !== null &&
+    (typeof v.headcount !== 'number' ||
+      !Number.isInteger(v.headcount) ||
+      v.headcount < 1 ||
+      v.headcount > 1000)
+  )
+    throw new ApiError('contract')
   if (
     typeof v.id !== 'number' ||
     !Number.isSafeInteger(v.id) ||
@@ -43,6 +72,7 @@ export function parseVacancy(value: unknown): Vacancy {
     !['draft', 'published', 'closed'].includes(String(v.status)) ||
     !salary(v.salaryMin) ||
     !salary(v.salaryMax) ||
+    (v.studentFriendly !== undefined && typeof v.studentFriendly !== 'boolean') ||
     !nullableString(v.description) ||
     !nullableString(v.contactInfo) ||
     !nullableString(v.cardMessageId) ||
@@ -51,6 +81,7 @@ export function parseVacancy(value: unknown): Vacancy {
   )
     throw new ApiError('contract')
   return {
+    ...(v.headcount !== undefined ? { headcount: v.headcount as number | null } : {}),
     id: v.id,
     title: v.title,
     regionCode: v.regionCode,
@@ -63,6 +94,8 @@ export function parseVacancy(value: unknown): Vacancy {
     contactInfo: v.contactInfo,
     cardMessageId: v.cardMessageId,
     createdAt: v.createdAt,
+    studentFriendly: v.studentFriendly as boolean | undefined,
+    applyUrl: applyUrl(v.applyUrl),
   }
 }
 
@@ -79,6 +112,7 @@ export function createVacancyRepository(
     return `/${id}`
   }
   return {
+    poster: (id, signal) => fetchPoster(base, token, onUnauthorized, id, signal),
     async list(signal) {
       const body = await request('', { signal })
       if (!Array.isArray(body)) throw new ApiError('contract')

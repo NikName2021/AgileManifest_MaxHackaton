@@ -8,6 +8,7 @@ export function createPreviewCandidate(): CandidateRepository {
     displayName: 'Демо-кабинет',
     applicationContact: null,
     hasBotChat: false,
+    employerTrust: { confirmedHires: 3 },
   }
   const jobs: Job[] = [
     {
@@ -16,13 +17,16 @@ export function createPreviewCandidate(): CandidateRepository {
       regionCode: 'Краснодар',
       category: 'Сельское хозяйство',
       schedule: 'seasonal',
+      studentFriendly: true,
       salaryMin: 50000,
       salaryMax: 70000,
       description:
         'Демонстрационная вакансия. Сбор и сортировка урожая, работа в команде. Обучение на месте. Условия проживания и график обсуждаются с работодателем.',
       status: 'published',
       createdAt: '2026-10-19T08:00:00Z',
-      employer: { displayName: 'Демо: фермерское хозяйство' },
+      employer: { displayName: 'Демо: фермерское хозяйство', confirmedHires: 5 },
+      headcount: 15,
+      spotsLeft: 3,
       myApplication: null,
       canApply: true,
       applyUnavailableReason: null,
@@ -80,6 +84,7 @@ export function createPreviewCandidate(): CandidateRepository {
           (!query.region_code || j.regionCode === query.region_code) &&
           (!query.category || j.category === query.category) &&
           (!query.schedule || j.schedule === query.schedule) &&
+          (!query.student_friendly || j.studentFriendly === true) &&
           (query.salary_from === undefined ||
             (j.salaryMax ?? j.salaryMin ?? -1) >= query.salary_from) &&
           (query.salary_to === undefined ||

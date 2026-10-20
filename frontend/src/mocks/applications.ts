@@ -17,6 +17,17 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
     }
   }
   const applications: ApplicationRepository = {
+    async setShift(id, startAt, note) {
+      const row = rows.get(id)
+      if (!row || !['invited', 'hired'].includes(row.status)) throw new ApiError('server', 409)
+      const shift = {
+        startAt,
+        shiftNote: startAt ? note : null,
+        attendance: startAt ? ('pending' as const) : null,
+      }
+      rows.set(id, { ...row, ...shift })
+      return { ...shift, notified: false }
+    },
     async list(query) {
       const matching = Array.from(rows.values()).filter(
         (row) => !query.status || row.status === query.status,
@@ -51,7 +62,21 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
         updatedAt: unchanged ? row.updatedAt : new Date().toISOString(),
       }
       rows.set(id, updated)
-      return { application: await current(updated), notified: false, unchanged }
+      const vacancy = await vacancies.get(updated.vacancyId)
+      const hired = [...rows.values()].filter(
+        (item) => item.vacancyId === vacancy.id && item.status === 'hired',
+      ).length
+      const vacancyClosed =
+        status === 'hired' &&
+        vacancy.status === 'published' &&
+        Boolean(vacancy.headcount && hired >= vacancy.headcount)
+      if (vacancyClosed) {
+        await vacancies.close(vacancy.id)
+        for (const [key, item] of rows)
+          if (item.vacancyId === vacancy.id && ['new', 'contacted'].includes(item.status))
+            rows.set(key, { ...item, status: 'rejected' })
+      }
+      return { application: await current(updated), notified: false, unchanged, vacancyClosed }
     },
   }
   async function loadApplicationExamples() {

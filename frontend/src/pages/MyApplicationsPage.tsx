@@ -11,6 +11,7 @@ import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
 import { CandidateError, JobFacts, Loading, Pagination } from '../features/candidate/ui'
 import { offsetFrom, pageSize } from '../features/candidate/query'
+import { ShiftSummary } from '../features/shifts/ShiftSummary'
 
 export function MyApplicationsPage() {
   const { candidate } = useSession(),
@@ -75,6 +76,7 @@ export function MyApplicationsPage() {
                       </span>
                     </div>
                     <JobFacts job={application.vacancy} />
+                    <ShiftSummary shift={application} worker />
                     {application.vacancy.status !== 'published' && (
                       <p className="vacancy-notice">
                         Вакансия больше не принимает отклики. Ваш отклик остаётся в истории.

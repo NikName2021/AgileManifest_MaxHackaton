@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
 import { hasForbiddenChars, isMeaningful, normalizeMultiLine, normalizeSingleLine, SALARY_MAX } from './text.js';
+import { BADGE_KEYS, MAX_BADGES_PER_VACANCY } from './vacancies/badges.js';
 
 export const SCHEDULE_ENUM = z.enum(['seasonal', 'temporary', 'permanent']);
 
@@ -68,6 +69,12 @@ const vacancyBaseShape = {
   contact_info: orNull(text('contact_info', { max: 300 })).nullable().optional(),
   headcount: z.number().int().min(1).max(1000).nullable().optional(),
   student_friendly: z.boolean().optional(),
+  // Ключи из GET /api/badges; повторы убираются.
+  badges: z
+    .array(z.enum(BADGE_KEYS, { errorMap: () => ({ message: 'unknown badge, see GET /api/badges' }) }))
+    .max(MAX_BADGES_PER_VACANCY, `at most ${MAX_BADGES_PER_VACANCY} badges`)
+    .transform((keys) => [...new Set(keys)])
+    .optional(),
 };
 
 function checkSalaryRange<T extends { salary_min?: number | null; salary_max?: number | null }>(
@@ -101,6 +108,7 @@ function checkCardLength(data: {
   contact_info?: string | null;
   headcount?: number | null;
   student_friendly?: boolean;
+  badges?: string[];
 }, ctx: z.RefinementCtx) {
   const length = vacancyCardTextLength({
     title: data.title,
@@ -112,6 +120,7 @@ function checkCardLength(data: {
     contactInfo: data.contact_info ?? null,
     headcount: data.headcount ?? null,
     studentFriendly: data.student_friendly ?? false,
+    badges: data.badges ?? [],
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     ctx.addIssue({
@@ -178,6 +187,13 @@ export const listJobsQuerySchema = z
     salary_from: queryInt(0, SALARY_MAX),
     salary_to: queryInt(0, SALARY_MAX),
     student_friendly: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+    // Через запятую; вакансия должна иметь все перечисленные бейджи.
+    badges: z
+      .string()
+      .max(500)
+      .transform((v) => [...new Set(v.split(',').map((k) => k.trim()).filter(Boolean))])
+      .pipe(z.array(z.enum(BADGE_KEYS, { errorMap: () => ({ message: 'unknown badge, see GET /api/badges' }) })).max(MAX_BADGES_PER_VACANCY))
+      .optional(),
     sort: JOB_SORT_ENUM.optional().default('newest'),
     limit: queryInt(1, 100).default('20'),
     offset: queryInt(0, POSTGRES_INT4_MAX).default('0'),
@@ -271,6 +287,7 @@ export function checkMergedVacancyConstraints(merged: {
   contact_info?: string | null;
   headcount?: number | null;
   student_friendly?: boolean;
+  badges?: string[];
 }): { ok: true } | { ok: false; field: string; message: string } {
   if (
     merged.salary_min !== null &&
@@ -292,6 +309,7 @@ export function checkMergedVacancyConstraints(merged: {
     contactInfo: merged.contact_info ?? null,
     headcount: merged.headcount ?? null,
     studentFriendly: merged.student_friendly ?? false,
+    badges: merged.badges ?? [],
   });
   if (length > MAX_CARD_TEXT_LIMIT) {
     return {

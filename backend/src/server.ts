@@ -15,6 +15,7 @@ import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { setShift, startShiftReminders } from './shifts/service.js';
 import { normalizeRegion } from './regions/dictionary.js';
+import { BADGE_GROUPS, MAX_BADGES_PER_VACANCY, resolveBadges } from './vacancies/badges.js';
 import { loadTimelines, markViewed } from './application/timeline.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
@@ -68,6 +69,8 @@ function withApplyUrl(vacancy: Vacancy) {
   return {
     ...vacancy,
     subject: regionDto(vacancy.regionSubject),
+    // В ответах — готовые объекты { key, emoji, label }; на вход PATCH/POST принимаются ключи.
+    badges: resolveBadges(vacancy.badges, vacancy.studentFriendly),
     applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null,
   };
 }
@@ -143,6 +146,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       contactInfo: body.contact_info ?? null,
       headcount: body.headcount ?? null,
       studentFriendly: body.student_friendly ?? false,
+      badges: body.badges ?? [],
       status: 'draft',
       // Пусто, если пользователь ещё не писал боту — тогда publish вернёт employer_chat_missing.
       employerChatId: employer?.dialogChatId || employer?.chatId || null,
@@ -194,6 +198,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     contact_info: body.contact_info !== undefined ? body.contact_info : existing.contactInfo,
     headcount: body.headcount !== undefined ? body.headcount : existing.headcount,
     student_friendly: body.student_friendly ?? existing.studentFriendly,
+    badges: body.badges ?? existing.badges,
   };
   const constraintCheck = checkMergedVacancyConstraints(merged);
   if (!constraintCheck.ok) {
@@ -217,6 +222,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
       contactInfo: merged.contact_info,
       headcount: merged.headcount,
       studentFriendly: merged.student_friendly,
+      badges: merged.badges,
     },
   });
   if (updateResult.count === 0) {
@@ -456,6 +462,9 @@ app.patch('/api/applications/:id/shift', { preHandler: requireAuth }, async (req
   const a = result.application;
   return { id: a.id, startAt: a.startAt, shiftNote: a.shiftNote, attendance: a.attendance, notified: result.notified };
 });
+
+// Справочник бейджей вакансии по группам — для выбора в форме и подписей в каталоге.
+app.get('/api/badges', async () => ({ groups: BADGE_GROUPS, maxPerVacancy: MAX_BADGES_PER_VACANCY }));
 
 // Справочник субъектов РФ для выбора региона в мини-приложении.
 app.get('/api/regions', async () => ({ items: listRegions() }));

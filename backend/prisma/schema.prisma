@@ -49,6 +49,8 @@ model Vacancy {
   headcount       Int?
   // Подходит студентам: без опыта, гибкий график, на каникулы.
   studentFriendly Boolean   @default(false) @map("student_friendly")
+  // Ключи бейджей из справочника vacancies/badges.ts (жильё, питание, оплата и т.п.).
+  badges          String[]  @default([])
   status          String    @default("draft") // draft | published | closed
   cardMessageId   String?   @map("card_message_id")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -67,6 +69,8 @@ model Vacancy {
 
   // GET /api/jobs
   @@index([status, createdAt(sort: Desc), id(sort: Desc)])
+  // Фильтр каталога ?badges= (оператор @>).
+  @@index([badges], type: Gin)
   @@map("vacancies")
 }
 

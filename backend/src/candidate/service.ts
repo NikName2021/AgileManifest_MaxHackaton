@@ -4,6 +4,7 @@ import { regionDto, type RegionDto } from '../regions/service.js';
 import { config } from '../config.js';
 import { employerTrustMap, type EmployerTrust } from '../employers/trust.js';
 import { loadTimelines } from '../application/timeline.js';
+import { resolveBadges, type BadgeDef } from '../vacancies/badges.js';
 
 // Кабинет работника. Только явные DTO: chatId, maxUserId и служебные поля доставки наружу не уходят.
 // Доступ — по userId из сессии; режим «работник/работодатель» выбирает интерфейс, а не права.
@@ -31,6 +32,7 @@ export interface JobDto {
   // null — headcount не указан.
   spotsLeft: number | null;
   studentFriendly: boolean;
+  badges: BadgeDef[];
   status: string;
   createdAt: Date;
   // trusted — «Надёжный работодатель», confirmedHires — сколько людей подтвердили выход к нему.
@@ -53,6 +55,7 @@ interface JobRow {
   headcount: number | null;
   hiredCount: number;
   studentFriendly: boolean;
+  badges: string[];
   status: string;
   createdAt: Date;
   employerUserId: number;
@@ -75,6 +78,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     headcount: row.headcount,
     spotsLeft: row.headcount === null ? null : Math.max(0, row.headcount - row.hiredCount),
     studentFriendly: row.studentFriendly,
+    badges: resolveBadges(row.badges, row.studentFriendly),
     status: row.status,
     createdAt: row.createdAt,
     // Поля «компания» нет — это имя пользователя в MAX.
@@ -97,7 +101,7 @@ async function findMyApplications(viewerUserId: number, vacancyIds: number[]): P
 
 const JOB_COLUMNS = Prisma.sql`
   v.id, v.title, v.region_code AS "regionCode", v.region_subject AS "regionSubject", v.category, v.schedule,
-  v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.student_friendly AS "studentFriendly", v.status,
+  v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.student_friendly AS "studentFriendly", v.badges, v.status,
   (SELECT COUNT(*)::int FROM applications a WHERE a.vacancy_id = v.id AND a.status = 'hired') AS "hiredCount",
   v.created_at AS "createdAt", v.employer_user_id AS "employerUserId",
   u.display_name AS "employerDisplayName"`;
@@ -108,6 +112,7 @@ export interface ListJobsParams {
   category?: string;
   schedule?: string;
   student_friendly?: boolean;
+  badges?: string[];
   salary_from?: number;
   salary_to?: number;
   sort: 'newest' | 'salary_desc';
@@ -142,6 +147,7 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   if (category) conditions.push(Prisma.sql`v.category = ${category}`);
   if (params.schedule) conditions.push(Prisma.sql`v.schedule = ${params.schedule}`);
   if (params.student_friendly !== undefined) conditions.push(Prisma.sql`v.student_friendly = ${params.student_friendly}`);
+  if (params.badges?.length) conditions.push(Prisma.sql`v.badges @> ${params.badges}::text[]`);
 
   // Пересечение диапазонов; единственная граница вакансии служит обеими. Вакансия без зарплаты
   // при активном фильтре отсекается (сравнение с NULL ложно).
@@ -261,6 +267,7 @@ export async function listMyApplications(
             description: true,
             headcount: true,
             studentFriendly: true,
+            badges: true,
             contactInfo: true,
             status: true,
             employerUserId: true,
@@ -278,7 +285,12 @@ export async function listMyApplications(
   const items = rows.map(({ vacancy: { regionSubject, employerUserId, employer, ...vacancy }, ...application }) => ({
     ...application,
     timeline: timelines.get(application.id)!,
-    vacancy: { ...vacancy, subject: regionDto(regionSubject), employer: { ...employer, ...trust.get(employerUserId)! } },
+    vacancy: {
+      ...vacancy,
+      badges: resolveBadges(vacancy.badges, vacancy.studentFriendly),
+      subject: regionDto(regionSubject),
+      employer: { ...employer, ...trust.get(employerUserId)! },
+    },
   }));
   return { items, total, limit: params.limit, offset: params.offset };
 }

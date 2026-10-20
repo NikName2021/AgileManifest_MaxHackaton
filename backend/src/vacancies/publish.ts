@@ -40,6 +40,7 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         contactInfo: vacancy.contactInfo,
         headcount: vacancy.headcount,
         studentFriendly: vacancy.studentFriendly,
+        badges: vacancy.badges,
         trustedEmployer: (await employerTrust(vacancy.employerUserId)).trusted,
     }, applyUrl);
     // Старые записи могли сохраниться до резерва под ссылку — проверяем итоговый текст ещё раз.

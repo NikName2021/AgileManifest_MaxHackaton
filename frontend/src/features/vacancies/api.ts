@@ -1,6 +1,7 @@
 import type { Vacancy } from '../../entities/hiring'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
+import { fetchPoster } from '../poster/api'
 
 export interface VacancyInput {
   title: string
@@ -14,6 +15,7 @@ export interface VacancyInput {
 }
 
 export interface VacancyRepository {
+  poster?(id: number, signal?: AbortSignal): Promise<Blob>
   list(signal?: AbortSignal): Promise<Vacancy[]>
   get(id: number, signal?: AbortSignal): Promise<Vacancy>
   create(input: VacancyInput): Promise<Vacancy>
@@ -79,6 +81,7 @@ export function createVacancyRepository(
     return `/${id}`
   }
   return {
+    poster: (id, signal) => fetchPoster(base, token, onUnauthorized, id, signal),
     async list(signal) {
       const body = await request('', { signal })
       if (!Array.isArray(body)) throw new ApiError('contract')

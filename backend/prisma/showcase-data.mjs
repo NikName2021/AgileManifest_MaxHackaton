@@ -28,28 +28,28 @@ export const VACANCIES = [
     title: 'Сборщик черешни — сезон 2025', region: 'Краснодарский край, Динской район', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 70000, salaryMax: 95000, headcount: 8,
     description: 'Сбор черешни в садах. Работа с 6:00 до 14:00, оплата раз в две недели.',
-    contact: '+7 000 000-10-10', badges: ['housing_free', 'meals_3', 'pay_twice_month'],
+    contact: '@demo_yuzhny_agro', badges: ['housing_free', 'meals_3', 'pay_twice_month'],
   },
   {
     key: 'south_harvest', employer: 'south', ageDays: 1,
     title: 'Сборщик урожая / Рабочий сада', region: 'Краснодарский край, Динской район', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 85000, salaryMax: 120000, headcount: 10,
     description: 'Сбор черешни и абрикосов, сортировка в ящики. Смена 8 часов, перерыв на обед. Официальный договор, выплаты дважды в месяц.',
-    contact: '+7 000 000-10-10', badges: ['housing_free', 'meals_3', 'tickets_paid'], studentFriendly: true,
+    contact: '@demo_yuzhny_agro', badges: ['housing_free', 'meals_3', 'tickets_paid'], studentFriendly: true,
   },
   {
     key: 'south_sorter', employer: 'south', ageDays: 3,
     title: 'Сортировщик фруктов', region: 'Краснодарский край', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 60000, salaryMax: 75000, headcount: 6,
     description: 'Сортировка и калибровка фруктов на линии под навесом. Обучение на месте.',
-    contact: '+7 000 000-10-10', badges: ['training', 'meals_2', 'shuttle'],
+    contact: '@demo_yuzhny_agro', badges: ['training', 'meals_2', 'shuttle'],
   },
   {
     key: 'south_tractor', employer: 'south', ageDays: 6,
     title: 'Тракторист-машинист', region: 'Краснодарский край', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 110000, salaryMax: 140000, headcount: 2,
     description: 'Работа на МТЗ-82 в садах: междурядная обработка, перевозка урожая. Нужны права категории D.',
-    contact: '+7 000 000-10-10', badges: ['housing_provided', 'official_contract', 'overtime_paid'],
+    contact: '@demo_yuzhny_agro', badges: ['housing_provided', 'official_contract', 'overtime_paid'],
   },
   // Отель «Морской бриз»
   {
@@ -86,21 +86,21 @@ export const VACANCIES = [
     title: 'Шеф-повар горячего цеха', region: 'Красная Поляна, Сочи', category: 'Общепит',
     schedule: 'seasonal', salaryMin: 95000, salaryMax: 95000, headcount: 1,
     description: 'Ресторан на 80 посадок, европейская и кавказская кухня. Опыт от 3 лет, санитарная книжка.',
-    contact: '+7 000 000-11-11', badges: ['housing_provided', 'meals_3', 'kitchen', 'mountains'],
+    contact: '@demo_alpiyskiy', badges: ['housing_provided', 'meals_3', 'kitchen', 'mountains'],
   },
   {
     key: 'alpine_waiter', employer: 'alpine', ageDays: 7,
     title: 'Официант', region: 'Красная Поляна, Сочи', category: 'Общепит',
     schedule: 'seasonal', salaryMin: 55000, salaryMax: 90000, headcount: 5,
     description: 'Оклад плюс процент от чека. Горнолыжный сезон с декабря по апрель.',
-    contact: '+7 000 000-11-11', badges: ['tips', 'meals_2', 'mountains'], studentFriendly: true,
+    contact: '@demo_alpiyskiy', badges: ['tips', 'meals_2', 'mountains'], studentFriendly: true,
   },
   {
     key: 'alpine_dishwasher', employer: 'alpine', ageDays: 11, status: 'closed',
     title: 'Мойщик посуды', region: 'Красная Поляна, Сочи', category: 'Общепит',
     schedule: 'temporary', salaryMin: 45000, salaryMax: 50000, headcount: 2,
     description: 'Работа на посудомоечной машине, поддержание чистоты на кухне.',
-    contact: '+7 000 000-11-11', badges: ['meals_3', 'pay_weekly', 'no_experience'],
+    contact: '@demo_alpiyskiy', badges: ['meals_3', 'pay_weekly', 'no_experience'],
   },
   // База отдыха «Сосновый берег»
   {
@@ -108,21 +108,21 @@ export const VACANCIES = [
     title: 'Инструктор по сапбордингу', region: 'Республика Карелия, Сортавала', category: 'Туризм и отдых',
     schedule: 'seasonal', salaryMin: 60000, salaryMax: 80000, headcount: 2,
     description: 'Прокат и групповые прогулки на сапах по Ладоге. Нужен сертификат инструктора или опыт.',
-    contact: '+7 000 000-12-12', badges: ['housing_free', 'meals_3', 'outdoor', 'whole_season'],
+    contact: '@demo_sosnovy_bereg', badges: ['housing_free', 'meals_3', 'outdoor', 'whole_season'],
   },
   {
     key: 'pines_cook', employer: 'pines', ageDays: 8,
     title: 'Повар-универсал', region: 'Карелия', category: 'Туризм и отдых',
     schedule: 'seasonal', salaryMin: 75000, salaryMax: 90000, headcount: 1,
     description: 'Завтраки и ужины для гостей базы до 40 человек, заготовки.',
-    contact: '+7 000 000-12-12', badges: ['housing_free', 'kitchen', 'countryside'],
+    contact: '@demo_sosnovy_bereg', badges: ['housing_free', 'kitchen', 'countryside'],
   },
   {
     key: 'pines_handyman', employer: 'pines', ageDays: 12,
     title: 'Разнорабочий', region: 'Карелия', category: 'Туризм и отдых',
     schedule: 'temporary', salaryMin: 50000, salaryMax: 60000, headcount: 3,
     description: 'Мелкий ремонт домиков, уход за территорией, колка дров.',
-    contact: '+7 000 000-12-12', badges: ['housing_free', 'pay_daily', 'tools'],
+    contact: '@demo_sosnovy_bereg', badges: ['housing_free', 'pay_daily', 'tools'],
   },
   // КФХ «Медовый луг»
   {
@@ -130,14 +130,14 @@ export const VACANCIES = [
     title: 'Помощник пасечника', region: 'Алтайский край, Бийск', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 45000, salaryMax: 60000, headcount: 2,
     description: 'Осмотр ульев, откачка мёда, фасовка. Аллергия на укусы пчёл — противопоказание.',
-    contact: '+7 000 000-13-13', badges: ['housing_free', 'meals_3', 'training', 'countryside'],
+    contact: '@demo_medovy_lug', badges: ['housing_free', 'meals_3', 'training', 'countryside'],
   },
   {
     key: 'honey_seabuckthorn', employer: 'honey', ageDays: 10,
     title: 'Сборщик облепихи', region: 'Алтайский край', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 40000, salaryMax: 70000, headcount: 12,
     description: 'Сдельная оплата за килограмм, лучшие сборщики получают от 3 500 ₽ в день.',
-    contact: '+7 000 000-13-13', badges: ['piecework', 'housing_free', 'field_garden'], studentFriendly: true,
+    contact: '@demo_medovy_lug', badges: ['piecework', 'housing_free', 'field_garden'], studentFriendly: true,
   },
   // Кафе «Чайка»
   {
@@ -160,14 +160,14 @@ export const VACANCIES = [
     title: 'Сборщик винограда', region: 'Севастополь, Балаклавская долина', category: 'Сельское хозяйство',
     schedule: 'seasonal', salaryMin: 65000, salaryMax: 90000, headcount: 20,
     description: 'Ручной сбор винограда с конца августа по октябрь. Развозка от остановок города.',
-    contact: '+7 000 000-14-14', badges: ['shuttle', 'meals_2', 'field_garden'], studentFriendly: true,
+    contact: '@demo_solnechnaya_dolina', badges: ['shuttle', 'meals_2', 'field_garden'], studentFriendly: true,
   },
   {
     key: 'valley_cellar', employer: 'valley', ageDays: 14,
     title: 'Рабочий винного цеха', region: 'Севастополь', category: 'Производство',
     schedule: 'seasonal', salaryMin: 70000, salaryMax: 85000, headcount: 3,
     description: 'Приёмка винограда, мойка ёмкостей, работа с прессом.',
-    contact: '+7 000 000-14-14', badges: ['official_contract', 'workwear', 'shuttle'],
+    contact: '@demo_solnechnaya_dolina', badges: ['official_contract', 'workwear', 'shuttle'],
   },
   // Ёлочный базар
   {
@@ -190,14 +190,14 @@ export const VACANCIES = [
     title: 'Овощевод в теплице', region: 'Республика Татарстан, Казань', category: 'Сельское хозяйство',
     schedule: 'permanent', salaryMin: 50000, salaryMax: 65000, headcount: 10,
     description: 'Подвязка, прищипка и сбор томатов и огурцов в круглогодичных теплицах.',
-    contact: '+7 000 000-15-15', badges: ['official_contract', 'shuttle', 'lunch', 'pensioners_ok'],
+    contact: '@demo_zeleny_dom', badges: ['official_contract', 'shuttle', 'lunch', 'pensioners_ok'],
   },
   {
     key: 'greenhouse_picker', employer: 'greenhouse', ageDays: 13,
     title: 'Сборщик томатов', region: 'Казань', category: 'Сельское хозяйство',
     schedule: 'temporary', salaryMin: 45000, salaryMax: 55000, headcount: 6,
     description: 'Подработка на сборе урожая, можно на неполный день.',
-    contact: '+7 000 000-15-15', badges: ['part_time', 'pay_weekly', 'no_experience'], studentFriendly: true,
+    contact: '@demo_zeleny_dom', badges: ['part_time', 'pay_weekly', 'no_experience'], studentFriendly: true,
   },
   // Детский лагерь «Звёздный»
   {

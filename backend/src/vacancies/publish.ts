@@ -37,7 +37,6 @@ export async function publishVacancyCard(vacancy: Vacancy): Promise<void> {
         salaryMin: vacancy.salaryMin,
         salaryMax: vacancy.salaryMax,
         description: vacancy.description,
-        contactInfo: vacancy.contactInfo,
         headcount: vacancy.headcount,
         studentFriendly: vacancy.studentFriendly,
         badges: vacancy.badges,

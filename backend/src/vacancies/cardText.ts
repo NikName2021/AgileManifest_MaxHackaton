@@ -12,7 +12,6 @@ export interface VacancyCardFields {
   salaryMin: number | null;
   salaryMax: number | null;
   description: string | null;
-  contactInfo: string | null;
   // Сколько человек нужно; null — не указано.
   headcount?: number | null;
   studentFriendly?: boolean;
@@ -89,7 +88,7 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
     // «Подходит студентам» входит в строку бейджей (resolveBadges добавляет его по флагу).
     escapeOptional(badgesLine(resolveBadges(vacancy.badges, vacancy.studentFriendly))),
     vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
-    vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
+    // Контакт работодателя в публичную карточку не попадает: кандидат видит его после приглашения.
     applyUrl ? applyLinkBlock(applyUrl) : undefined,
   ].filter(Boolean).join('\n');
 }

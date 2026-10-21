@@ -156,7 +156,7 @@ describe('POST /api/vacancies/:id/team-invites', () => {
 
   it('выборочно: не из бригады, уже откликнулся', async () => {
     const season = await publish(A, 'Сезон 2026');
-    await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: season, contact: '+7' } });
+    await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: season, contact: '+7 900 111-22-33' } });
     const res = await invite(A, season, { candidate_ids: [B.user.id, D.user.id, 999999] });
     expect(res.json()).toEqual({
       sent: 0,

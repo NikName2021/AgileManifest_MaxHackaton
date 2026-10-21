@@ -21,6 +21,7 @@ if (process.env.ALLOW_SHOWCASE_SEED !== 'true') {
 // Справочники — те же, что использует приложение (нужна сборка: npm run build).
 const { normalizeRegion } = await import('../dist/regions/dictionary.js');
 const { MAX_BADGES_PER_VACANCY, isBadgeKey, shownBadgeCount } = await import('../dist/vacancies/badges.js');
+const { findContactLike, normalizeContactList } = await import('../dist/moderation.js');
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -68,6 +69,12 @@ function checkData() {
     for (const b of v.badges ?? []) if (!isBadgeKey(b)) throw new Error(`${v.key}: unknown badge ${b}`);
     if (shownBadgeCount(v.badges, v.studentFriendly) > MAX_BADGES_PER_VACANCY) throw new Error(`${v.key}: too many badges`);
     if (!normalizeRegion(v.region)) throw new Error(`${v.key}: region not recognised: ${v.region}`);
+    // Те же правила модерации, что у API: контакты в тексте запрещены, контакт — в своём формате.
+    for (const field of ['title', 'region', 'category', 'description']) {
+      const kind = findContactLike(v[field] ?? '');
+      if (kind) throw new Error(`${v.key}: ${field} contains a ${kind}`);
+    }
+    if (normalizeContactList(v.contact) !== v.contact) throw new Error(`${v.key}: invalid contact ${v.contact}`);
   }
 }
 
@@ -128,7 +135,7 @@ async function createApplication(vacancy, candidate, plan, withContacted) {
     data: {
       vacancyId: vacancy.id,
       candidateUserId: candidate.id,
-      contact: candidate.applicationContact ?? '+7 000 000-00-00',
+      contact: candidate.applicationContact ?? '@demo_candidate',
       candidateChatId: candidate.dialogChatId,
       source,
       createdAt: events[0].createdAt,
@@ -177,7 +184,7 @@ async function seed(owner) {
           chatId,
           dialogChatId: chatId,
           displayName: name,
-          applicationContact: `+7 000 000-${String(20 + i).padStart(2, '0')}-${String(20 + i).padStart(2, '0')}`,
+          applicationContact: `@demo_candidate_${i + 1}`,
         },
       })
     );

@@ -42,7 +42,7 @@ async function vacancy(headcount: number | null) {
 }
 
 async function apply(user: TestUser, vacancyId: number) {
-  return (await app.inject({ method: 'POST', url: '/api/applications', headers: user.auth, payload: { vacancy_id: vacancyId, contact: '+7' } })).json().id as number;
+  return (await app.inject({ method: 'POST', url: '/api/applications', headers: user.auth, payload: { vacancy_id: vacancyId, contact: '+7 900 111-22-33' } })).json().id as number;
 }
 
 function setStatus(applicationId: number, status: string) {
@@ -85,7 +85,7 @@ describe('набор бригады (headcount)', () => {
 
     // Новые отклики на закрытую вакансию не принимаются.
     const late = await createUser('Late');
-    const lateRes = await app.inject({ method: 'POST', url: '/api/applications', headers: late.auth, payload: { vacancy_id: id, contact: '+7' } });
+    const lateRes = await app.inject({ method: 'POST', url: '/api/applications', headers: late.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } });
     expect(lateRes.json().error.code).toBe('vacancy_unavailable');
   });
 

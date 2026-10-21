@@ -103,10 +103,10 @@ describe('отклик и профиль', () => {
   it('vacancy_id — только целое число или строка из цифр', async () => {
     const id = await published();
     for (const vacancy_id of [true, '1e1', `${id}abc`, -1, 1.5, null]) {
-      const res = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id, contact: '+7 900' } });
+      const res = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id, contact: '+7 900 111-22-33' } });
       expectFieldError(res, 'vacancy_id');
     }
-    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: String(id), contact: '+7 900' } });
+    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: String(id), contact: '+7 900 111-22-33' } });
     expect(ok.statusCode).toBe(201);
   });
 
@@ -114,17 +114,17 @@ describe('отклик и профиль', () => {
     const id = await published();
     expectFieldError(await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+++' } }), 'contact');
     expectFieldError(
-      await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7', status: 'hired' } }),
+      await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33', status: 'hired' } }),
       'status'
     );
-    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '  +7  900\n111  ' } });
-    expect(ok.json().contact).toBe('+7 900 111');
+    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '  8 (900)\n111-22-33  ' } });
+    expect(ok.json().contact).toBe('+7 900 111-22-33');
     expectFieldError(await app.inject({ method: 'PATCH', url: '/api/me', headers: B.auth, payload: { application_contact: '???' } }), 'application_contact');
   });
 
   it('смена статуса — строгое тело', async () => {
     const id = await published();
-    const appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7' } })).json().id;
+    const appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } })).json().id;
     expectFieldError(
       await app.inject({ method: 'PATCH', url: `/api/applications/${appId}`, headers: A.auth, payload: { status: 'hired', notify: false } }),
       'notify'
@@ -133,7 +133,7 @@ describe('отклик и профиль', () => {
 
   it('смена не дальше чем через год', async () => {
     const id = await published();
-    const appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7' } })).json().id;
+    const appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } })).json().id;
     await app.inject({ method: 'PATCH', url: `/api/applications/${appId}`, headers: A.auth, payload: { status: 'invited' } });
     const far = new Date(Date.now() + 400 * 864e5).toISOString();
     expectFieldError(await app.inject({ method: 'PATCH', url: `/api/applications/${appId}/shift`, headers: A.auth, payload: { start_at: far } }), 'start_at');
@@ -182,7 +182,7 @@ describe('диалог бота', () => {
     expect(lastReply()).toContain('лишние нули');
     await message('40000-60000');
     await message('нет');
-    await message('+7 900');
+    await message('+7 900 111-22-33');
     const vacancy = await db.vacancy.findFirstOrThrow({ where: { employerUserId: A.user.id } });
     expect(vacancy).toMatchObject({ salaryMin: 40000, salaryMax: 60000, status: 'draft' });
   });

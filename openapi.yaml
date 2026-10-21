@@ -441,7 +441,7 @@ paths:
               $ref: '#/components/schemas/ApplicationInput'
             example:
               vacancy_id: 42
-              contact: '+7 900 000-00-00'
+              contact: '+7 900 123-45-67'
       responses:
         '201':
           description: Отклик создан
@@ -691,7 +691,7 @@ paths:
         Карточка вакансии для работника (полное description). Своя опубликованная вакансия
         доступна с canApply=false и applyUnavailableReason=own_vacancy (управление — по-прежнему
         /api/vacancies/{id}). Контакт работодателя (contactInfo) здесь не отдаётся — он виден
-        кандидату в GET /api/me/applications после собственного отклика.
+        кандидату в GET /api/me/applications, когда работодатель его пригласил (invited/hired).
       operationId: getJob
       parameters:
         - $ref: '#/components/parameters/VacancyId'
@@ -815,7 +815,7 @@ paths:
                   nullable: true
                   minLength: 1
                   maxLength: 200
-                  description: trim, 1–200 символов; null очищает сохранённый контакт
+                  description: Телефон (+7/8 и 10 цифр или международный с «+»), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me; приводится к единому виду (например «8 (900) 123-45-67» → «+7 900 123-45-67»). Выдуманные номера (+7 000…, 13 цифр) и ссылки на другие сайты — 400. null очищает сохранённый контакт
                 company_name:
                   type: string
                   nullable: true
@@ -1647,7 +1647,9 @@ components:
         contactInfo:
           type: string
           nullable: true
-          description: Контакт работодателя для откликнувшихся (телефон/юзернейм MAX), показывается на карточке вакансии.
+          description: >
+            Контакт работодателя (до 3 контактов через запятую). В публичную карточку MAX не попадает:
+            кандидат видит его в «Моих откликах» и в уведомлении после приглашения.
         status:
           type: string
           enum: [draft, published, closed]
@@ -1700,7 +1702,7 @@ components:
       required: [title]
       description: >
         employer_id больше не передаётся — работодатель определяется по Bearer-токену.
-        title+region_code+schedule+зарплата+description+contact_info собираются в текст карточки
+        title+region_code+schedule+зарплата+description собираются в текст карточки
         MAX (после markdown-экранирования) — итоговая длина не должна превышать 4000 символов
         (документированный лимит MAX на сообщение), иначе 400 validation_error с полем description.
         salary_min/salary_max — целые JSON-числа от 0 до 10 000 000 ₽ (строки вроде "" или
@@ -1708,7 +1710,8 @@ components:
         region_code, category, contact_info) пробелы и переносы схлопываются в один пробел; длина
         считается после этого. Управляющие и невидимые символы отклоняются; непустое значение
         должно содержать букву или цифру. Пустые description и contact_info сохраняются как null.
-        Лишние поля — 400.
+        Модерация: в title, region_code, category и description ссылки, телефоны, e-mail и @ники
+        запрещены (400 с именем поля) — контакт указывается только в contact_info. Лишние поля — 400.
       properties:
         title:
           type: string
@@ -1731,6 +1734,10 @@ components:
         contact_info:
           type: string
           nullable: true
+          maxLength: 300
+          description: >
+            До 3 контактов через запятую, точку с запятой или «или». Каждый — Телефон (+7/8 и 10 цифр или международный с «+»), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me; приводится к единому виду (например «8 (900) 123-45-67» → «+7 900 123-45-67»). Выдуманные номера (+7 000…, 13 цифр) и ссылки на другие сайты — 400.
+            Пустая строка — null.
         headcount:
           type: integer
           nullable: true
@@ -1781,6 +1788,10 @@ components:
         contact_info:
           type: string
           nullable: true
+          maxLength: 300
+          description: >
+            До 3 контактов через запятую, точку с запятой или «или». Каждый — Телефон (+7/8 и 10 цифр или международный с «+»), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me; приводится к единому виду (например «8 (900) 123-45-67» → «+7 900 123-45-67»). Выдуманные номера (+7 000…, 13 цифр) и ссылки на другие сайты — 400.
+            Пустая строка — null.
         headcount:
           type: integer
           nullable: true
@@ -1892,7 +1903,7 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-          description: Телефон, username или ссылка MAX; trim, 1–200 символов
+          description: Телефон (+7/8 и 10 цифр или международный с «+»), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me; приводится к единому виду (например «8 (900) 123-45-67» → «+7 900 123-45-67»). Выдуманные номера (+7 000…, 13 цифр) и ссылки на другие сайты — 400
 
     CreatedApplication:
       type: object
@@ -2026,13 +2037,15 @@ components:
             contactInfo:
               type: string
               nullable: true
-              description: Контакт работодателя — показывается только в собственной истории откликов
+              description: >
+                Контакт работодателя — только в собственной истории откликов и только когда
+                работодатель пригласил (status invited или hired); иначе null.
             status: { type: string, enum: [draft, published, closed] }
             employer: { $ref: '#/components/schemas/EmployerPublic' }
       example:
         id: 15
         status: invited
-        contact: '+7 900 000-00-00'
+        contact: '+7 900 123-45-67'
         createdAt: '2026-10-17T09:10:00.000Z'
         updatedAt: '2026-10-17T10:00:00.000Z'
         vacancy:
@@ -2106,7 +2119,7 @@ components:
           description: false — бот не может написать человеку, приглашение вернёт outcome=no_bot_chat
       example:
         candidate: { id: 7, displayName: Саша }
-        contact: '+7 900 000-00-00'
+        contact: '+7 900 123-45-67'
         hiredCount: 2
         lastHiredAt: '2025-07-01T09:00:00.000Z'
         lastVacancy: { id: 12, title: Сборщик черешни }

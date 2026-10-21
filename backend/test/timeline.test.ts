@@ -32,7 +32,7 @@ beforeEach(async () => {
   B = await createUser('B');
   vacancyId = (await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'Сбор черешни' } })).json().id;
   await app.inject({ method: 'POST', url: `/api/vacancies/${vacancyId}/publish`, headers: A.auth });
-  appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: vacancyId, contact: '+7' } })).json().id;
+  appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: vacancyId, contact: '+7 900 111-22-33' } })).json().id;
 });
 
 async function timeline(user: TestUser = B) {

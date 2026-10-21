@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
 import { hasForbiddenChars, isMeaningful, normalizeMultiLine, normalizeSingleLine, SALARY_MAX } from './text.js';
 import { BADGE_KEYS, MAX_BADGES_PER_VACANCY, shownBadgeCount } from './vacancies/badges.js';
+import { CONTACT_LINK_HOSTS, MAX_CONTACTS_PER_FIELD, findContactLike, normalizeContact, normalizeContactList } from './moderation.js';
 
 export const SCHEDULE_ENUM = z.enum(['seasonal', 'temporary', 'permanent']);
 
@@ -9,9 +10,12 @@ export const SCHEDULE_ENUM = z.enum(['seasonal', 'temporary', 'permanent']);
 const POSTGRES_INT4_MAX = 2147483647;
 
 // Текстовое поле: нормализация пробелов, длина после нормализации, запрет управляющих и невидимых
-// символов. meaningful — непустое значение должно содержать букву или цифру.
-function text(field: string, opts: { min?: number; max: number; multiline?: boolean; meaningful?: boolean }) {
-  const { min = 0, max, multiline = false, meaningful = true } = opts;
+// символов. meaningful — непустое значение должно содержать букву или цифру. Сохраняемые поля
+// (meaningful) проходят модерацию: ссылки, телефоны, почта и @ники запрещены, кроме полей контакта
+// (allowContacts). Поисковые запросы (meaningful: false) не модерируются — они нигде не показываются.
+function text(field: string, opts: { min?: number; max: number; multiline?: boolean; meaningful?: boolean; allowContacts?: boolean }) {
+  const { min = 0, max, multiline = false, meaningful = true, allowContacts = false } = opts;
+  const moderated = meaningful && !allowContacts;
   return z
     .string({ required_error: `${field} is required`, invalid_type_error: `${field} must be a string` })
     .transform(multiline ? normalizeMultiLine : normalizeSingleLine)
@@ -22,7 +26,25 @@ function text(field: string, opts: { min?: number; max: number; multiline?: bool
         .max(max, `${field} must be at most ${max} characters`)
         .refine((v) => !hasForbiddenChars(v), `${field} contains control or invisible characters`)
         .refine((v) => !meaningful || v === '' || isMeaningful(v), `${field} must contain letters or digits`)
+        .superRefine((v, ctx) => {
+          const kind = moderated ? findContactLike(v) : null;
+          if (kind) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${field} must not contain a ${kind}: contacts go only to the contact field` });
+        })
     );
+}
+
+const CONTACT_FORMAT = `a phone (+7 900 123-45-67), @username, e-mail or a link to ${CONTACT_LINK_HOSTS.join(', ')}`;
+
+// Поле контакта: только телефон, @ник, e-mail или ссылка на мессенджер — в едином виде.
+function contactField(field: string, max: number) {
+  return text(field, { min: 1, max, allowContacts: true }).transform((v, ctx) => {
+    const contact = normalizeContact(v);
+    if (contact === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${field} must be ${CONTACT_FORMAT}` });
+      return z.NEVER;
+    }
+    return contact;
+  });
 }
 
 // Пустая строка в необязательном поле означает «нет значения».
@@ -66,7 +88,19 @@ const vacancyBaseShape = {
   salary_max: salary.nullable().optional(),
   // Ограничение самого поля; длина всей карточки проверяется отдельно (checkCardLength).
   description: orNull(text('description', { max: 4000, multiline: true })).nullable().optional(),
-  contact_info: orNull(text('contact_info', { max: 300 })).nullable().optional(),
+  // До трёх контактов через запятую; пустая строка — «нет контакта». Кандидат видит его после приглашения.
+  contact_info: text('contact_info', { max: 300, allowContacts: true })
+    .transform((v, ctx) => {
+      if (v === '') return null;
+      const contacts = normalizeContactList(v);
+      if (contacts === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `contact_info must be up to ${MAX_CONTACTS_PER_FIELD} contacts separated by commas, each ${CONTACT_FORMAT}` });
+        return z.NEVER;
+      }
+      return contacts;
+    })
+    .nullable()
+    .optional(),
   headcount: z.number().int().min(1).max(1000).nullable().optional(),
   student_friendly: z.boolean().optional(),
   // Ключи из GET /api/badges; повторы убираются.
@@ -125,7 +159,6 @@ function checkCardLength(data: {
     salaryMin: data.salary_min ?? null,
     salaryMax: data.salary_max ?? null,
     description: data.description ?? null,
-    contactInfo: data.contact_info ?? null,
     headcount: data.headcount ?? null,
     studentFriendly: data.student_friendly ?? false,
     badges: data.badges ?? [],
@@ -133,7 +166,7 @@ function checkCardLength(data: {
   if (length > MAX_CARD_TEXT_LIMIT) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: `resulting vacancy card text is ${length} characters, exceeds MAX limit of ${MAX_CARD_TEXT_LIMIT}; shorten description or contact_info`,
+      message: `resulting vacancy card text is ${length} characters, exceeds MAX limit of ${MAX_CARD_TEXT_LIMIT}; shorten description`,
       path: ['description'],
     });
   }
@@ -159,7 +192,7 @@ export const updateVacancySchema = z
 // Телефон, username или ссылка MAX. Тот же лимит применяет бот (application/service.ts).
 export const APPLICATION_CONTACT_MAX_LENGTH = 200;
 
-const contactString = (field: string) => text(field, { min: 1, max: APPLICATION_CONTACT_MAX_LENGTH });
+const contactString = (field: string) => contactField(field, APPLICATION_CONTACT_MAX_LENGTH);
 
 export const createApplicationSchema = z
   .object({
@@ -323,7 +356,6 @@ export function checkMergedVacancyConstraints(merged: {
     salaryMin: merged.salary_min ?? null,
     salaryMax: merged.salary_max ?? null,
     description: merged.description ?? null,
-    contactInfo: merged.contact_info ?? null,
     headcount: merged.headcount ?? null,
     studentFriendly: merged.student_friendly ?? false,
     badges: merged.badges ?? [],
@@ -332,7 +364,7 @@ export function checkMergedVacancyConstraints(merged: {
     return {
       ok: false,
       field: 'description',
-      message: `resulting vacancy card text is ${length} characters, exceeds MAX limit of ${MAX_CARD_TEXT_LIMIT}; shorten description or contact_info`,
+      message: `resulting vacancy card text is ${length} characters, exceeds MAX limit of ${MAX_CARD_TEXT_LIMIT}; shorten description`,
     };
   }
 

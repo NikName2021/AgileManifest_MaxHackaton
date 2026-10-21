@@ -11,6 +11,7 @@ import { JobsPage } from '../../pages/JobsPage'
 import { JobPage } from '../../pages/JobPage'
 import { MyApplicationsPage } from '../../pages/MyApplicationsPage'
 import { WorkerProfilePage } from '../../pages/WorkerProfilePage'
+import { SubscriptionsPage } from '../../pages/SubscriptionsPage'
 import { ApiError } from '../../shared/api/client'
 
 vi.mock('@maxhub/max-ui', async (importOriginal) => ({
@@ -43,6 +44,20 @@ vi.mock('@maxhub/max-ui', async (importOriginal) => ({
 }))
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn())
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: {
+      configurable: true,
+      value() {
+        this.setAttribute('open', '')
+      },
+    },
+    close: {
+      configurable: true,
+      value() {
+        this.removeAttribute('open')
+      },
+    },
+  })
 })
 function Frame() {
   const { switchCabinet } = useCabinet()
@@ -71,7 +86,7 @@ function start(session = createPreviewSession(), path = '/') {
           { path: '/my-applications', element: <MyApplicationsPage /> },
           { path: '/profile', element: <WorkerProfilePage /> },
           { path: '/channels', element: <h1>Каналы партнёра</h1> },
-          { path: '/subscriptions', element: <h1>Подписки работника</h1> },
+          { path: '/subscriptions', element: <SubscriptionsPage /> },
         ],
       },
     ],
@@ -91,6 +106,61 @@ function worker() {
 }
 
 describe('cabinet selection and candidate flows', () => {
+  it('saves the selected category value and confirms deletion from the icon', async () => {
+    const session = createPreviewSession()
+    vi.spyOn(session.candidate, 'filters').mockResolvedValue({
+      regions: [],
+      categories: [{ value: 'agriculture', label: 'Сельское хозяйство' }],
+    })
+    const create = vi.spyOn(session.subscriptions!, 'create')
+    const remove = vi.spyOn(session.subscriptions!, 'remove')
+    start(session, '/subscriptions')
+    worker()
+    const category = await screen.findByRole('combobox', { name: 'Сфера деятельности' })
+    await waitFor(() => expect(category).toBeEnabled())
+    fireEvent.click(category)
+    fireEvent.click(screen.getByRole('radio', { name: 'Сельское хозяйство' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить подписку' }))
+    await screen.findByRole('heading', { name: 'Мои подписки (1/5)' })
+    expect(create).toHaveBeenCalledExactlyOnceWith({
+      category: 'agriculture',
+      region_code: null,
+      schedule: null,
+      salary_from: null,
+      student_only: false,
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Удалить подписку:/ }))
+    expect(remove).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }))
+    expect(remove).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /Удалить подписку:/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить удаление' }))
+    await screen.findByRole('heading', { name: 'Мои подписки (0/5)' })
+    expect(remove).toHaveBeenCalledExactlyOnceWith(1)
+  })
+  it('retries failed subscription categories before allowing save', async () => {
+    const session = createPreviewSession()
+    vi.spyOn(session.candidate, 'filters').mockRejectedValueOnce(new ApiError('network'))
+    start(session, '/subscriptions')
+    worker()
+    const retry = await screen.findByRole('button', { name: 'Повторить загрузку сфер' })
+    expect(screen.getByRole('button', { name: 'Сохранить подписку' })).toBeDisabled()
+    fireEvent.click(retry)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Сохранить подписку' })).toBeEnabled(),
+    )
+    expect(screen.getByRole('combobox', { name: 'Сфера деятельности' })).toHaveTextContent(
+      'Любая сфера',
+    )
+  })
+  it('shows the employer section even without a hiring quota or trust statistics', async () => {
+    const session = createPreviewSession()
+    start(session, '/jobs/1002')
+    worker()
+    const employer = await screen.findByRole('region', { name: 'Работодатель' })
+    expect(within(employer).getByText('Демо: загородный отель')).toBeVisible()
+    expect(within(employer).queryByText('Надёжный работодатель')).not.toBeInTheDocument()
+  })
   it('shows the search loader until the pending vacancy request completes', async () => {
     const session = createPreviewSession()
     const data = await session.candidate.jobs({ sort: 'newest', limit: 20, offset: 0 })
@@ -121,7 +191,7 @@ describe('cabinet selection and candidate flows', () => {
     worker()
     await screen.findByText('Помощник на сбор урожая')
     await act(() => router.navigate('/subscriptions'))
-    expect(await screen.findByRole('heading', { name: 'Подписки работника' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Подписки на вакансии' })).toBeInTheDocument()
     await act(() => router.navigate('/channels'))
     await waitFor(() => expect(router.state.location.pathname).toBe('/jobs'))
   })
@@ -218,7 +288,8 @@ describe('cabinet selection and candidate flows', () => {
     expect(
       within(application).getByRole('heading', { name: 'Помощник на сбор урожая' }),
     ).toBeInTheDocument()
-    fireEvent.click(within(application).getByText('Условия и контакты'))
+    fireEvent.click(within(application).getByText('Условия и ваш отклик'))
+    expect(within(application).queryByText('Контакт работодателя')).not.toBeInTheDocument()
     expect(within(application).getByText('@candidate')).toBeVisible()
     expect(apply).toHaveBeenCalledExactlyOnceWith(1001, '@candidate')
   })

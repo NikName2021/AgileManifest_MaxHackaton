@@ -112,10 +112,10 @@ describe('источник отклика', () => {
     const D = await createUser('D');
 
     await botStarted(B, `apply_${id}_qr`);
-    await message(B, '+7 900 1');
+    await message(B, '+7 900 111-11-11');
     await botStarted(C, `apply_${id}`);
-    await message(C, '+7 900 2');
-    await app.inject({ method: 'POST', url: '/api/applications', headers: D.auth, payload: { vacancy_id: id, contact: '+7 900 3' } });
+    await message(C, '+7 900 222-22-22');
+    await app.inject({ method: 'POST', url: '/api/applications', headers: D.auth, payload: { vacancy_id: id, contact: '+7 900 333-33-30' } });
 
     const sources = Object.fromEntries((await db.application.findMany({ where: { vacancyId: id }, include: { candidate: true } })).map((a) => [a.candidate.maxUserId, a.source]));
     expect(sources).toEqual({ 'max-B': 'qr', 'max-C': 'link', 'max-D': 'miniapp' });
@@ -128,7 +128,7 @@ describe('источник отклика', () => {
   it('неизвестная метка в ссылке считается обычной ссылкой', async () => {
     const id = await published();
     await botStarted(B, `apply_${id}_zzz`);
-    await message(B, '+7 900 1');
+    await message(B, '+7 900 111-11-11');
     expect((await db.application.findFirstOrThrow()).source).toBe('link');
   });
 });

@@ -3,7 +3,8 @@ import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
 import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
 import { markViewed, recordEvents, type EventType } from './timeline.js';
-import { hasForbiddenChars, isMeaningful, normalizeSingleLine } from '../text.js';
+import { hasForbiddenChars, normalizeSingleLine } from '../text.js';
+import { CONTACT_FORMAT_HINT, normalizeContact } from '../moderation.js';
 import type { Application, User, Vacancy } from '@prisma/client';
 
 const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
@@ -19,13 +20,16 @@ function statusLabel(status: string): string {
     return labels[status] ?? status;
 }
 
-function statusMessageForCandidate(status: string, vacancyTitle: string): string | undefined {
+// После приглашения кандидату открывается контакт работодателя — он же приходит в сообщении.
+function statusMessageForCandidate(status: string, vacancyTitle: string, contactInfo: string | null): string | undefined {
     const title = escapeMarkdown(vacancyTitle);
+    const contact = contactInfo ? `
+Контакт работодателя: ${escapeMarkdown(contactInfo)}` : '';
     if (status === 'invited') {
-        return `Хорошие новости! Вас пригласили на вакансию «${title}». Работодатель свяжется с вами.`;
+        return `Хорошие новости! Вас пригласили на вакансию «${title}». Работодатель свяжется с вами.${contact}`;
     }
     if (status === 'hired') {
-        return `Поздравляем! Вас приняли на вакансию «${title}».`;
+        return `Поздравляем! Вас приняли на вакансию «${title}».${contact}`;
     }
     if (status === 'rejected') {
         return `По вакансии «${title}», к сожалению, вам отказали.`;
@@ -163,11 +167,12 @@ export async function resolvePendingApplication(
     const pending = await db.pendingApplication.findUnique({ where: { chatId } });
     if (!pending) return false;
 
-    const contact = normalizeSingleLine(contactRaw ?? '');
-    if (!contact || !isMeaningful(contact) || hasForbiddenChars(contact)) {
+    const text = normalizeSingleLine(contactRaw ?? '');
+    const contact = hasForbiddenChars(text) ? null : normalizeContact(text);
+    if (!contact) {
         await maxApi.sendMessage(
             chatId,
-            'Не понял контакт — напишите телефон/юзернейм текстом или нажмите кнопку «Поделиться контактом».'
+            `Не понял контакт — напишите ${escapeMarkdown(CONTACT_FORMAT_HINT)} или нажмите кнопку «Поделиться контактом».`
         );
         return true;
     }
@@ -316,7 +321,7 @@ async function notifyCandidate(
     application: Application & { vacancy: Vacancy; candidate: User },
     status: string
 ): Promise<{ notified: boolean; notifyError?: string }> {
-    const candidateText = statusMessageForCandidate(status, application.vacancy.title);
+    const candidateText = statusMessageForCandidate(status, application.vacancy.title, application.vacancy.contactInfo);
     // Фолбэк — только личный чат: последний chatId мог быть групповым.
     const targetChatId = application.candidateChatId || application.candidate.dialogChatId;
     if (!candidateText || !targetChatId) return { notified: false };

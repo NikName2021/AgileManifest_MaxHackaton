@@ -91,7 +91,7 @@ describe('данные кандидата в API работодателя', () =
   it('не раскрывают чаты и сохранённый контакт кандидата, контракт фронтенда сохранён', async () => {
     const id = await publishedVacancy(A);
     await db.user.update({ where: { id: B.user.id }, data: { applicationContact: '@private_contact' } });
-    const created = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900' } })).json();
+    const created = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } })).json();
 
     const list = (await app.inject({ method: 'GET', url: '/api/applications', headers: A.auth })).json();
     const byVacancy = (await app.inject({ method: 'GET', url: `/api/vacancies/${id}/applications`, headers: A.auth })).json();
@@ -114,7 +114,7 @@ describe('данные кандидата в API работодателя', () =
 describe('смена статуса', () => {
   it('параллельные одинаковые смены: одна запись и одно уведомление кандидату', async () => {
     const id = await publishedVacancy(A);
-    const created = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900' } })).json();
+    const created = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } })).json();
     sendMessageMock.mockClear();
 
     const results = await Promise.all(
@@ -144,7 +144,7 @@ describe('диалог создания вакансии в групповом �
     await groupMessage(B, group, 'Чужой ответ');
     expect((await db.dialogSession.findUniqueOrThrow({ where: { chatId: group } })).step).toBe(0);
 
-    for (const answer of ['Сборщик', 'Краснодар', 'seasonal', '40000-60000', 'нет', '+7 900']) {
+    for (const answer of ['Сборщик', 'Краснодар', 'seasonal', '40000-60000', 'нет', '+7 900 111-22-33']) {
       await groupMessage(A, group, answer);
       // B последним писал в группу — по старой логике (findFirst по chatId) вакансия могла уйти ему.
       await db.user.update({ where: { id: B.user.id }, data: { chatId: group } });

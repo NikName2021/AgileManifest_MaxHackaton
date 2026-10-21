@@ -32,47 +32,49 @@ export function Contact({ value, profile = false }: { value: string; profile?: b
   return (
     <div className="candidate-contact-item">
       {profile && <p className="secondary-contact">Телефон профиля</p>}
-      <p className="candidate-contact-value">{value}</p>
-      <div className="candidate-contact-actions">
-        {link && (
-          <a
-            className="candidate-contact-link"
-            href={link.href}
-            target={link.kind === 'max' ? '_blank' : undefined}
-            rel={link.kind === 'max' ? 'noopener noreferrer' : undefined}
-            aria-label={profile ? 'Позвонить по телефону профиля' : undefined}
-            onClick={(event) => {
-              if (
-                link.kind !== 'max' ||
-                !bridge?.openMaxLink ||
-                event.ctrlKey ||
-                event.metaKey ||
-                event.shiftKey ||
-                event.altKey
-              )
-                return
-              try {
-                bridge.openMaxLink(link.href)
-                event.preventDefault()
-              } catch {
-                // A normal link remains available when the native client rejects the call.
-              }
-            }}
+      <div className="candidate-contact-row">
+        <p className="candidate-contact-value">{value}</p>
+        <div className="candidate-contact-actions">
+          <Button
+            variant="ghost"
+            size="small"
+            className="contact-copy-icon"
+            disabled={copying}
+            aria-label={profile ? 'Копировать телефон профиля' : 'Копировать контакт'}
+            onClick={() => void copy()}
           >
-            <Icon size={16} aria-hidden="true" />
-            {link.label}
-          </a>
-        )}
-        <Button
-          variant="secondary"
-          size="small"
-          iconBefore={<Copy size={16} />}
-          disabled={copying}
-          aria-label={profile ? 'Копировать телефон профиля' : undefined}
-          onClick={() => void copy()}
-        >
-          {profile ? 'Копировать телефон' : 'Копировать контакт'}
-        </Button>
+            <Copy size={18} aria-hidden="true" />
+          </Button>
+          {link && (
+            <a
+              className={`candidate-contact-link${link.kind === 'phone' ? ' contact-phone' : ''}`}
+              href={link.href}
+              target={link.kind === 'max' ? '_blank' : undefined}
+              rel={link.kind === 'max' ? 'noopener noreferrer' : undefined}
+              aria-label={profile ? 'Позвонить по телефону профиля' : link.label}
+              onClick={(event) => {
+                if (
+                  link.kind !== 'max' ||
+                  !bridge?.openMaxLink ||
+                  event.ctrlKey ||
+                  event.metaKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return
+                try {
+                  bridge.openMaxLink(link.href)
+                  event.preventDefault()
+                } catch {
+                  // A normal link remains available when the native client rejects the call.
+                }
+              }}
+            >
+              <Icon size={16} aria-hidden="true" />
+              <span className="contact-action-label">{link.label}</span>
+            </a>
+          )}
+        </div>
       </div>
       <p className="copy-result" role="status" aria-live="polite">
         {message}

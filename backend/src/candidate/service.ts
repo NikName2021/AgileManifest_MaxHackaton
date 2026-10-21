@@ -220,7 +220,7 @@ export async function listJobFilters(viewerUserId: number) {
 }
 
 // Черновик, закрытая и несуществующая — одинаковый null, чтобы подбором ID их нельзя было различить.
-// contactInfo здесь не отдаётся — только в истории после собственного отклика.
+// contactInfo здесь не отдаётся — только в истории откликов, когда работодатель пригласил (CONTACT_OPEN_STATUSES).
 export async function getJob(viewerUserId: number, vacancyId: number): Promise<JobDto | null> {
   const rows = await db.$queryRaw<JobRow[]>`
     SELECT ${JOB_COLUMNS}
@@ -283,11 +283,12 @@ export async function listMyApplications(
     employerTrustMap(rows.map((r) => r.vacancy.employerUserId)),
     loadTimelines(rows.map((r) => r.id)),
   ]);
-  const items = rows.map(({ vacancy: { regionSubject, employerUserId, employer, ...vacancy }, ...application }) => ({
+  const items = rows.map(({ vacancy: { regionSubject, employerUserId, employer, contactInfo, ...vacancy }, ...application }) => ({
     ...application,
     timeline: timelines.get(application.id)!,
     vacancy: {
       ...vacancy,
+      contactInfo: CONTACT_OPEN_STATUSES.has(application.status) ? contactInfo : null,
       badges: resolveBadges(vacancy.badges, vacancy.studentFriendly),
       subject: regionDto(regionSubject),
       employer: { displayName: employer.companyName ?? employer.displayName, companyName: employer.companyName, ...trust.get(employerUserId)! },
@@ -295,6 +296,10 @@ export async function listMyApplications(
   }));
   return { items, total, limit: params.limit, offset: params.offset };
 }
+
+// Контакт работодателя открывается кандидату только после приглашения: иначе отклик с любым
+// контактом становится способом собрать контакты работодателей.
+const CONTACT_OPEN_STATUSES = new Set(['invited', 'hired']);
 
 export interface ProfileDto {
   id: number;

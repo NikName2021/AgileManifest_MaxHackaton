@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { Button } from '@maxhub/max-ui'
+import { Check, X } from 'lucide-react'
 import type { ApplicationTimeline } from './model'
 
 export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimeline }) {
@@ -23,6 +24,7 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
       </div>
       <ol className="roadmap-track">
         {points.map((step, index) => {
+          const state = terminal && step.state === 'current' ? 'done' : step.state
           const description = step.reachedAt
             ? new Date(step.reachedAt)
                 .toLocaleString('ru-RU', {
@@ -39,7 +41,7 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
                 ? 'Ещё впереди'
                 : 'Время не указано'
           return (
-            <li key={step.key} className={`roadmap-step ${step.state}`}>
+            <li key={step.key} className={`roadmap-step ${state}`}>
               <Button
                 type="button"
                 variant="ghost"
@@ -57,7 +59,13 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
                 }}
               >
                 <span className="roadmap-dot" aria-hidden="true">
-                  {step.state === 'done' ? '✓' : step.state === 'terminal' ? '×' : index + 1}
+                  {state === 'done' ? (
+                    <Check size={16} strokeWidth={2} />
+                  ) : state === 'terminal' ? (
+                    <X size={16} strokeWidth={2} />
+                  ) : (
+                    index + 1
+                  )}
                 </span>
               </Button>
               {active === step.key && (
@@ -67,7 +75,10 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
                   className={`roadmap-tooltip ${index === points.length - 1 ? 'align-end' : ''}`}
                 >
                   <strong>
-                    {step.emoji} {step.label}
+                    <span className="roadmap-event-icon" aria-hidden="true">
+                      {step.emoji}
+                    </span>
+                    <span>{step.label}</span>
                   </strong>
                   <span>{description}</span>
                   <small>{step.hint}</small>

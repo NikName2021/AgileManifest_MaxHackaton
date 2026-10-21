@@ -2,6 +2,7 @@ import { Input } from '../shared/ui/Input'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
+import { ArrowLeft } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
@@ -235,8 +236,14 @@ export function JobPage() {
           <aside>
             {expanded && (
               <div className="application-step-heading">
-                <Button variant="ghost" disabled={busy} onClick={() => setParams({}, { state })}>
-                  ← К условиям вакансии
+                <Button
+                  className="application-back-button"
+                  variant="secondary"
+                  iconBefore={<ArrowLeft size={20} aria-hidden="true" />}
+                  disabled={busy}
+                  onClick={() => setParams({}, { state })}
+                >
+                  К условиям вакансии
                 </Button>
                 <h1 ref={stepHeading} tabIndex={-1}>
                   {result.data.myApplication ? 'Отклик отправлен' : 'Как с вами связаться?'}

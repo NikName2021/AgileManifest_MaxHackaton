@@ -72,7 +72,7 @@ describe('бейджи вакансии', () => {
     expect(job.badges.map((b: { key: string }) => b.key)).toEqual(['housing_free', 'students_ok']);
     expect((await app.inject({ method: 'GET', url: '/api/jobs', headers: B.auth })).json().items[0].badges).toHaveLength(2);
 
-    await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7' } });
+    await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } });
     const history = (await app.inject({ method: 'GET', url: '/api/me/applications', headers: B.auth })).json();
     expect(history.items[0].vacancy.badges.map((b: { key: string }) => b.key)).toEqual(['housing_free', 'students_ok']);
   });

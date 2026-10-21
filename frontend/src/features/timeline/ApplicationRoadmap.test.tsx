@@ -57,6 +57,12 @@ describe('application roadmap', () => {
         />,
       )
       expect(screen.getAllByRole('listitem')).toHaveLength(5)
+      const lastReached = screen.getByRole('button', { name: /Приглашён/ })
+      expect(lastReached.closest('li')).toHaveClass('done')
+      expect(lastReached).not.toHaveAttribute('aria-current')
+      expect(screen.getByRole('button', { name: /Просмотрен/ }).closest('li')).toHaveClass(
+        'skipped',
+      )
       expect(
         screen.queryByRole('button', { name: /Выход подтверждён|Нанят/ }),
       ).not.toBeInTheDocument()

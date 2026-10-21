@@ -44,7 +44,7 @@ async function publish(owner: TestUser, title: string) {
 // Найм с подтверждённым выходом — напрямую в БД (полный путь через API проверяется отдельно).
 async function confirmedHire(vacancyId: number, user: TestUser, attendance: string | null = 'confirmed') {
   await db.application.create({
-    data: { vacancyId, candidateUserId: user.user.id, status: 'hired', contact: '+7', attendance, startAt: new Date() },
+    data: { vacancyId, candidateUserId: user.user.id, status: 'hired', contact: '+7 900 111-22-33', attendance, startAt: new Date() },
   });
 }
 
@@ -102,7 +102,7 @@ describe('надёжный работодатель', () => {
 
   it('полный путь: найм -> назначение смены -> «Приду» засчитывается; снятие найма убирает его', async () => {
     const v = await publish(A, 'Сбор');
-    const appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: workers[0].auth, payload: { vacancy_id: v, contact: '+7' } })).json().id;
+    const appId = (await app.inject({ method: 'POST', url: '/api/applications', headers: workers[0].auth, payload: { vacancy_id: v, contact: '+7 900 111-22-33' } })).json().id;
     await app.inject({ method: 'PATCH', url: `/api/applications/${appId}`, headers: A.auth, payload: { status: 'hired' } });
     expect((await employerTrust(A.user.id)).confirmedHires).toBe(0);
 

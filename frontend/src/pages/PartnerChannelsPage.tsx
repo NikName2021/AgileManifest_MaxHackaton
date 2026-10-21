@@ -1,11 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
-import { Button } from '@maxhub/max-ui'
+import { Button, Switch } from '@maxhub/max-ui'
 import { RegionSelect } from '../shared/ui/RegionSelect'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import type { PartnerChannel } from '../features/partners/api'
-import { config } from '../shared/config'
 import '../features/partners/partners.css'
 
 function ChannelEditor({ channel }: { channel: PartnerChannel }) {
@@ -17,7 +16,7 @@ function ChannelEditor({ channel }: { channel: PartnerChannel }) {
     lock = useRef(false)
   const [error, setError] = useState<unknown>(),
     [notice, setNotice] = useState('')
-  async function save() {
+  async function save(nextActive = active) {
     if (lock.current) return
     lock.current = true
     setBusy(true)
@@ -25,7 +24,7 @@ function ChannelEditor({ channel }: { channel: PartnerChannel }) {
     setNotice('')
     try {
       const result = await partners!.update(channel.id, {
-        active,
+        active: nextActive,
         region_code: region || null,
         student_only: student,
       })
@@ -47,34 +46,45 @@ function ChannelEditor({ channel }: { channel: PartnerChannel }) {
     }
   }
   return (
-    <article className="partner-card">
+    <article
+      className={`partner-card${!active || channel.removed ? ' is-inactive' : ''}`}
+      aria-busy={busy}
+    >
       <h2>{channel.title || `${channel.isChannel ? 'Канал' : 'Чат'} № ${channel.id}`}</h2>
       {channel.removed ? (
         <p role="status">Бот удалён из канала. Добавьте его снова и проверьте подключение.</p>
       ) : (
         <>
-          <RegionSelect value={region} onChange={setRegion} disabled={busy} />
-          <label className="student-check">
-            <input
-              type="checkbox"
-              checked={student}
-              disabled={busy}
-              onChange={(e) => setStudent(e.target.checked)}
-            />
-            Только вакансии для студентов
-          </label>
-          <label className="student-check">
-            <input
-              type="checkbox"
+          <label className="partner-publication-toggle">
+            <span>
+              <strong>Автопубликация</strong>
+              <span>{busy ? 'Сохраняем…' : active ? 'Включена' : 'Выключена'}</span>
+            </span>
+            <Switch
+              aria-label="Автопубликация в канал"
               checked={active}
               disabled={busy}
-              onChange={(e) => setActive(e.target.checked)}
+              onChange={(e) => void save(e.target.checked)}
             />
-            Публиковать новые подходящие вакансии
           </label>
-          <Button className="primary-button" disabled={busy} onClick={() => void save()}>
-            Сохранить настройки канала
-          </Button>
+          <fieldset className="partner-settings" disabled={busy || !active}>
+            <RegionSelect value={region} onChange={setRegion} disabled={busy || !active} />
+            <label className="student-check">
+              <input
+                type="checkbox"
+                checked={student}
+                onChange={(e) => setStudent(e.target.checked)}
+              />
+              Только вакансии для студентов
+            </label>
+            <Button
+              className="primary-button"
+              disabled={busy || !active}
+              onClick={() => void save()}
+            >
+              Сохранить настройки
+            </Button>
+          </fieldset>
         </>
       )}
       {error !== undefined && <CandidateError error={error} />}
@@ -103,7 +113,8 @@ export function PartnerChannelsPage() {
           </li>
           <li>Откройте этот кабинет из того же аккаунта MAX, которым добавили бота.</li>
           <li>
-            Выберите регион и включите публикацию. Новые вакансии будут поступать автоматически.
+            Включите автопубликацию, выберите регион и сохраните настройки. Новые подходящие
+            вакансии будут поступать автоматически.
           </li>
         </ol>
         <p>
@@ -111,11 +122,6 @@ export function PartnerChannelsPage() {
           включает рассылку.
         </p>
         <div className="partner-actions">
-          {config.botUrl && (
-            <a className="text-link" href={config.botUrl} target="_blank" rel="noreferrer">
-              Открыть бота MAX
-            </a>
-          )}
           <Button variant="secondary" onClick={reload}>
             Проверить подключение каналов
           </Button>

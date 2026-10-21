@@ -33,7 +33,7 @@ export function JobsPage() {
       <div className="page-heading">
         <div>
           <span className="eyebrow">КАБИНЕТ РАБОТНИКА</span>
-          <h1>Найди работу за пару кликов</h1>
+          <h1>Найди работу за&nbsp;пару&nbsp;кликов</h1>
         </div>
       </div>
       <JobSearch

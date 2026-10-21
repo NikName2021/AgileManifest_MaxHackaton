@@ -9,8 +9,8 @@ export function JobOverview({ job }: { job: PublicVacancy }) {
   return (
     <>
       <header className="job-detail-heading">
-        <EmployerHeading employer={job.employer} />
         <h1>{job.title}</h1>
+        <EmployerHeading employer={job.employer} />
         <strong className="vacancy-salary">{formatSalary(job.salaryMin, job.salaryMax)}</strong>
         <p className="salary-period">Период и условия оплаты уточняйте у работодателя.</p>
         <VacancyBadges job={job} detailed />

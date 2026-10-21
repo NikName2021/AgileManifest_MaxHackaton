@@ -6,19 +6,25 @@ import { EmployerHeading } from './EmployerHeading'
 import { VacancyBadges } from '../badges/VacancyBadges'
 import { formatSalary } from '../vacancies/model'
 import { RemainingPlaces } from '../capacity/Capacity'
+import { formatPublicationDate } from './publicationDate'
 
 export function JobCard({ job, search }: { job: Job; search: string }) {
+  const publicationDate = formatPublicationDate(job.createdAt)
   return (
     <article className="job-list-item catalog-job linked-card">
-      <EmployerHeading employer={job.employer} region={job.regionCode} />
       <Link className="card-main-link" to={`/jobs/${job.id}`} state={{ catalogSearch: search }}>
         <h2>{job.title}</h2>
       </Link>
+      <EmployerHeading employer={job.employer} region={job.regionCode} />
       <strong className="vacancy-salary">{formatSalary(job.salaryMin, job.salaryMax)}</strong>
       <VacancyBadges job={job} />
       {job.myApplication && <span className="candidate-applied">Вы уже откликнулись</span>}
       <div className="job-card-footer">
-        <small>Опубликована {new Date(job.createdAt).toLocaleDateString('ru-RU')}</small>
+        <small>
+          <time dateTime={job.createdAt} aria-label={`Дата публикации: ${publicationDate}`}>
+            {publicationDate}
+          </time>
+        </small>
         <RemainingPlaces spotsLeft={job.spotsLeft} />
         <Button
           asChild

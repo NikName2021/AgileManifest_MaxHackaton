@@ -190,7 +190,7 @@ describe('cabinet selection and candidate flows', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     worker()
     expect(
-      await screen.findByRole('heading', { name: 'Найди работу за пару кликов' }),
+      await screen.findByRole('heading', { name: /Найди работу за\sпару\sкликов/ }),
     ).toBeInTheDocument()
     await act(() => router.navigate('/my-applications'))
     expect(await screen.findByRole('heading', { name: 'Мои отклики' })).toBeInTheDocument()

@@ -19,8 +19,8 @@ export function JobCard({ job, search }: { job: Job; search: string }) {
       <VacancyBadges job={job} />
       {job.myApplication && <span className="candidate-applied">Вы уже откликнулись</span>}
       <div className="job-card-footer">
-        <RemainingPlaces spotsLeft={job.spotsLeft} />
         <JobPublicationDate value={job.createdAt} />
+        <RemainingPlaces spotsLeft={job.spotsLeft} />
         <Button
           asChild
           className="desktop-job-details"

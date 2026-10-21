@@ -390,12 +390,11 @@ html:has(dialog[open]) {
   font-size: 14px;
 }
 .publication-date {
-  margin-left: auto;
-  flex: 1 0 160px;
+  flex: 1 1 120px;
   overflow-wrap: normal;
-  text-align: right;
+  text-align: left;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 14px;
 }
 .publication-date.is-recent {
   color: #7744bd;
@@ -424,6 +423,7 @@ html:has(dialog[open]) {
 }
 .job-card-footer .remaining-places {
   flex-shrink: 0;
+  margin-left: auto;
 }
 .remaining-places {
   display: inline-flex;
@@ -866,7 +866,7 @@ html:has(dialog[open]) {
     padding: 10px;
   }
   .publication-date {
-    font-size: 15px;
+    font-size: 13px;
   }
   .worker-shell .main-content {
     padding: 24px 16px 30px;

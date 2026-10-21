@@ -163,7 +163,9 @@ html:has(dialog[open]) {
 .max-root .select-trigger {
   font-size: 14px;
 }
-.max-root :is(.select-trigger, .badge-choice, .desktop-job-details, .roadmap-point, .badges-expand) > [class*='Button__content'] {
+.max-root
+  :is(.select-trigger, .badge-choice, .desktop-job-details, .roadmap-point, .badges-expand)
+  > [class*='Button__content'] {
   font-size: inherit;
   line-height: inherit;
 }
@@ -443,6 +445,9 @@ html:has(dialog[open]) {
 .history-card {
   gap: 12px;
 }
+.history-card .card-main-link {
+  color: var(--text);
+}
 .history-card .vacancy-badges {
   margin: 5px 0 0;
 }
@@ -497,9 +502,12 @@ html:has(dialog[open]) {
 }
 .roadmap-step:not(:last-child)::after {
   content: '';
+  position: absolute;
+  left: 34px;
+  top: calc(50% - 1px);
+  width: calc(100% - 26px);
   height: 2px;
   background: var(--timeline-future);
-  flex: 1;
 }
 .roadmap-step.done::after {
   background: #00bfff;
@@ -668,6 +676,17 @@ html:has(dialog[open]) {
 .subscription-form {
   margin-bottom: 30px;
   border-radius: 16px;
+}
+.subscription-form > h2 {
+  margin-bottom: 20px;
+}
+.candidate-profile-form .vacancy-actions {
+  justify-content: flex-start;
+  margin-top: 4px;
+  gap: 12px;
+}
+.candidate-profile-form .vacancy-actions > p:empty {
+  display: none;
 }
 .subscription-form + h2 {
   margin: 8px 0 18px;

@@ -1,7 +1,7 @@
 import { Button } from '@maxhub/max-ui'
-import { BriefcaseBusiness, Clock3, MapPin } from 'lucide-react'
+import { BriefcaseBusiness, MapPin } from 'lucide-react'
 import type { Vacancy, VacancyStatus } from '../../entities/hiring'
-import { errorText, formatSalary, scheduleLabels, statusLabels } from './model'
+import { errorText, formatSalary, statusLabels } from './model'
 import { VacancyBadges } from '../badges/VacancyBadges'
 
 export function VacancyStatusBadge({ status }: { status: VacancyStatus }) {
@@ -47,7 +47,6 @@ export function VacancyPreview({ vacancy }: { vacancy: Vacancy }) {
           Нужно человек: <strong>{vacancy.headcount}</strong>
         </p>
       )}
-      <VacancyBadges job={vacancy} />
       <strong className="vacancy-salary">
         {formatSalary(vacancy.salaryMin, vacancy.salaryMax)}
       </strong>
@@ -56,14 +55,8 @@ export function VacancyPreview({ vacancy }: { vacancy: Vacancy }) {
           <MapPin size={16} />
           {vacancy.regionCode || 'Регион не указан'}
         </span>
-        <span>
-          <Clock3 size={16} />
-          {scheduleLabels[vacancy.schedule]}
-        </span>
       </div>
-      {vacancy.category && vacancy.category !== 'general' && (
-        <p className="vacancy-category">{vacancy.category}</p>
-      )}
+      <VacancyBadges job={vacancy} />
       <div className="vacancy-description">
         {vacancy.description || 'Описание пока не добавлено.'}
       </div>

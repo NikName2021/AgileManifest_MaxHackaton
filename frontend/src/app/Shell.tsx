@@ -124,13 +124,12 @@ export function Shell() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <Link
-            className="sidebar-help"
-            to={partner ? '/channels' : worker ? '/profile' : '/guide'}
-          >
-            <CircleHelp size={18} aria-hidden="true" />
-            {partner ? 'Подключение каналов' : worker ? 'Мой профиль' : 'Как работает Сезон'}
-          </Link>
+          {!worker && (
+            <Link className="sidebar-help" to={partner ? '/channels' : '/guide'}>
+              <CircleHelp size={18} aria-hidden="true" />
+              {partner ? 'Подключение каналов' : 'Как работает Сезон'}
+            </Link>
+          )}
           <Button
             variant="secondary"
             iconBefore={<LogOut size={18} aria-hidden="true" />}
@@ -199,7 +198,7 @@ export function Shell() {
           <Outlet />
         </main>
       </div>
-      <nav className="mobile-nav" aria-label="Навигация на телефоне">
+      <nav className="mobile-nav" aria-label="Нижняя навигация">
         {navigation.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

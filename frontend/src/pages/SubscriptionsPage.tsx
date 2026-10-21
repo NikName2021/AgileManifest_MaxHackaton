@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button, Switch } from '@maxhub/max-ui'
+import { Trash2 } from 'lucide-react'
 import { Toast } from '../shared/ui/Toast'
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
@@ -14,7 +15,9 @@ import { config } from '../shared/config'
 import { ApiError } from '../shared/api/client'
 
 export function SubscriptionsPage() {
-  const { subscriptions, mode } = useSession()
+  const { subscriptions, candidate, mode } = useSession()
+  const filters = useResource(candidate.filters, 'subscription-filters')
+  const categories = filters.result.state === 'ready' ? filters.result.data.categories : []
   const [params] = useSearchParams()
   const [region, setRegion] = useState(params.get('region_code') ?? '')
   const load = useCallback((signal: AbortSignal) => subscriptions!.list(signal), [subscriptions])
@@ -135,14 +138,37 @@ export function SubscriptionsPage() {
               />
               <label>
                 Сфера деятельности
-                <Input
-                  aria-label="Сфера деятельности"
+                <Select
+                  label="Сфера деятельности"
                   name="category"
-                  maxLength={100}
                   defaultValue={params.get('category') ?? ''}
-                  placeholder="Любая сфера"
-                />
+                  disabled={
+                    busy || uncertain || data.items.length >= 5 || filters.result.state !== 'ready'
+                  }
+                >
+                  <option value="">Любая сфера</option>
+                  {params.get('category') &&
+                    !categories.some((c) => c.value === params.get('category')) && (
+                      <option value={params.get('category')!}>{params.get('category')}</option>
+                    )}
+                  {categories.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
               </label>
+              {filters.result.state === 'loading' && (
+                <p role="status">Загружаем сферы деятельности…</p>
+              )}
+              {filters.result.state === 'error' && (
+                <div role="alert">
+                  <p>Не удалось загрузить сферы деятельности.</p>
+                  <Button type="button" variant="secondary" onClick={filters.reload}>
+                    Повторить загрузку сфер
+                  </Button>
+                </div>
+              )}
               <label>
                 Занятость
                 <Select
@@ -180,7 +206,9 @@ export function SubscriptionsPage() {
               <Button
                 className="primary-button"
                 type="submit"
-                disabled={busy || data.items.length >= 5 || uncertain}
+                disabled={
+                  busy || data.items.length >= 5 || uncertain || filters.result.state !== 'ready'
+                }
               >
                 Сохранить подписку
               </Button>
@@ -193,7 +221,7 @@ export function SubscriptionsPage() {
           {!data.items.length && <p>Подписок пока нет. Настройте первую выше.</p>}
           <div className="job-list">
             {data.items.map((s) => (
-              <article className="job-list-item" key={s.id}>
+              <article className="job-list-item subscription-card" key={s.id}>
                 <h3>
                   {s.region?.name ?? 'Вся Россия'} · {s.category ?? 'Любая сфера'}
                 </h3>
@@ -203,7 +231,7 @@ export function SubscriptionsPage() {
                   {s.studentOnly ? ' · Для студентов' : ''}
                 </p>
                 {deleting === s.id ? (
-                  <div>
+                  <div className="subscription-delete-confirmation">
                     <p>Удалить эту подписку?</p>
                     <Button
                       disabled={busy}
@@ -218,8 +246,14 @@ export function SubscriptionsPage() {
                     </Button>
                   </div>
                 ) : (
-                  <Button variant="secondary" disabled={busy} onClick={() => setDeleting(s.id)}>
-                    Удалить подписку
+                  <Button
+                    className="subscription-delete"
+                    variant="ghost"
+                    aria-label={`Удалить подписку: ${s.region?.name ?? 'Вся Россия'} · ${s.category ?? 'Любая сфера'}`}
+                    disabled={busy}
+                    onClick={() => setDeleting(s.id)}
+                  >
+                    <Trash2 size={20} aria-hidden="true" />
                   </Button>
                 )}
               </article>

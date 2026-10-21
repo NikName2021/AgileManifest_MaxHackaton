@@ -399,6 +399,7 @@ html:has(dialog[open]) {
   padding-top: 18px;
   border-top: 1px solid var(--border);
   display: flex;
+  flex-wrap: wrap;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
@@ -474,6 +475,9 @@ html:has(dialog[open]) {
   background: #392823;
 }
 .max-root .desktop-job-details {
+  width: auto;
+  max-width: 100%;
+  flex: 0 0 auto;
   min-height: 38px;
   font-size: 13px;
 }
@@ -892,6 +896,35 @@ html:has(dialog[open]) {
   align-items: center;
   gap: 10px;
 }
+.subscription-card {
+  position: relative;
+}
+.subscription-card > h3,
+.subscription-card > p {
+  padding-right: 44px;
+  overflow-wrap: anywhere;
+}
+.max-root .subscription-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  padding: 12px;
+  color: #c43434;
+  background: transparent;
+}
+:root[data-app-theme='dark'] .subscription-delete {
+  color: #ff9999;
+}
+.subscription-delete-confirmation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.subscription-delete-confirmation > p {
+  flex-basis: 100%;
+}
 .app-toast {
   position: fixed;
   z-index: 120;
@@ -917,6 +950,59 @@ html:has(dialog[open]) {
   min-height: 36px;
   padding: 6px;
   flex-shrink: 0;
+}
+@media (min-width: 601px) and (max-width: 1024px) {
+  .worker-shell {
+    display: block;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .worker-shell .app-sidebar,
+  .worker-shell .header-product,
+  .worker-shell .header-role,
+  .worker-shell .catalog-aside,
+  .worker-shell .desktop-job-details {
+    display: none;
+  }
+  .worker-shell .catalog-layout,
+  .worker-shell .job-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .worker-shell .mobile-brand,
+  .worker-shell .mobile-exit {
+    display: inline-flex;
+  }
+  .worker-shell .mobile-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 50;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .worker-shell .mobile-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    min-height: 56px;
+    padding: 8px 4px;
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+  }
+  .worker-shell .mobile-nav a.active {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+  .worker-shell .app-toast {
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
 }
 @media (max-width: 760px) {
   .cabinet-choice-content {

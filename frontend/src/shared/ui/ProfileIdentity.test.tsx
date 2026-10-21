@@ -11,20 +11,31 @@ const bridge = {
 }
 
 describe('MAX profile identity', () => {
-  it('uses the server name and MAX avatar, falls back to initials when the photo fails', () => {
+  it('falls back to the API name when MAX does not supply a name', () => {
     const session = createPreviewSession()
-    session.bridge = {
-      ...bridge,
-      initDataUnsafe: {
-        user: { first_name: 'MAX name', photo_url: 'https://example.test/avatar.png' },
-      },
-    }
-    const { container } = render(
+    session.bridge = { ...bridge, initDataUnsafe: { user: { first_name: '  ' } } }
+    render(
       <SessionContext value={session}>
         <ProfileIdentity name="Никита" />
       </SessionContext>,
     )
     expect(screen.getByText('Никита')).toBeInTheDocument()
+  })
+  it('keeps the current MAX name and avatar together even when the API name is stale', () => {
+    const session = createPreviewSession()
+    session.bridge = {
+      ...bridge,
+      initDataUnsafe: {
+        user: { first_name: 'Никита', photo_url: 'https://example.test/avatar.png' },
+      },
+    }
+    const { container } = render(
+      <SessionContext value={session}>
+        <ProfileIdentity name="Дмитрий" />
+      </SessionContext>,
+    )
+    expect(screen.getByText('Никита')).toBeInTheDocument()
+    expect(screen.queryByText('Дмитрий')).not.toBeInTheDocument()
     const photo = container.querySelector('img')!
     expect(photo).toHaveAttribute('src', 'https://example.test/avatar.png')
     expect(photo).toHaveAttribute('referrerpolicy', 'no-referrer')

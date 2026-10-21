@@ -85,44 +85,46 @@ export function JobSearch({
         value={term}
         onChange={(event) => setTerm(event.target.value)}
       />
-      <div className="worker-filter-row" aria-label="Фильтры вакансий">
-        <Button
-          type="button"
-          variant="secondary"
-          className="filter-icon-button"
-          aria-label="Фильтры и сортировка"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => {
-            setError('')
-            setOpen(true)
-          }}
-        >
-          <SlidersHorizontal size={19} />
-        </Button>
-        <Select
-          label="Регион"
-          className="compact-filter"
-          iconBefore={<MapPin size={16} />}
-          value={params.get('region_code') ?? ''}
-          onChange={(event) => setFilter('region_code', event.target.value)}
-        >
-          <option value="">Регионы</option>
-          {options('regions', 'region_code')}
-        </Select>
-        <Select
-          label="Занятость"
-          className="compact-filter"
-          value={params.get('schedule') ?? ''}
-          onChange={(event) => setFilter('schedule', event.target.value)}
-        >
-          <option value="">Занятость</option>
-          {Object.entries(scheduleLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
+      <div className="worker-filter-controls" aria-label="Фильтры вакансий">
+        <div className="worker-filter-row" role="group" aria-label="Прокручиваемые фильтры">
+          <Button
+            type="button"
+            variant="secondary"
+            className="filter-icon-button"
+            aria-label="Фильтры и сортировка"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            onClick={() => {
+              setError('')
+              setOpen(true)
+            }}
+          >
+            <SlidersHorizontal size={19} />
+          </Button>
+          <Select
+            label="Регион"
+            className="compact-filter"
+            iconBefore={<MapPin size={16} />}
+            value={params.get('region_code') ?? ''}
+            onChange={(event) => setFilter('region_code', event.target.value)}
+          >
+            <option value="">Регионы</option>
+            {options('regions', 'region_code')}
+          </Select>
+          <Select
+            label="Занятость"
+            className="compact-filter"
+            value={params.get('schedule') ?? ''}
+            onChange={(event) => setFilter('schedule', event.target.value)}
+          >
+            <option value="">Занятость</option>
+            {Object.entries(scheduleLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
         <label className="student-filter">
           <Switch
             aria-label="Для студентов"

@@ -39,7 +39,7 @@ export function VacancyBadges({
       while (
         count > 1 &&
         chips[count - 1].offsetTop === secondRow &&
-        chips[count - 1].offsetLeft + chips[count - 1].offsetWidth > element.clientWidth - 48
+        chips[count - 1].offsetLeft + chips[count - 1].offsetWidth > element.clientWidth - 40
       )
         count--
       setVisibleCount(Math.max(1, count))

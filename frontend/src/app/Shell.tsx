@@ -37,7 +37,7 @@ const titles: Record<string, string> = {
   '/settings': 'Настройки',
 }
 export function Shell() {
-  const { mode, bridge } = useSession()
+  const { bridge } = useSession()
   const { cabinet, switchCabinet } = useCabinet()
   const { preference, setPreference } = useTheme()
   const dark =
@@ -185,12 +185,6 @@ export function Shell() {
             </div>
           </div>
         </header>
-        {mode === 'preview' && (
-          <div className="preview-banner">
-            <span className="preview-pill">Демо</span>
-            <span>Данные хранятся до перезагрузки страницы. Сообщения в MAX не отправляются.</span>
-          </div>
-        )}
         <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
           {(inVacancy || (inJob && !applying)) && (
             <Link className="back-link" to={backTo}>

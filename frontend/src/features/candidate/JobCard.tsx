@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { ArrowRight, Building2 } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import type { Job } from './api'
-import { EmployerBadge } from '../trust/EmployerTrust'
+import { EmployerHeading } from './EmployerHeading'
 import { VacancyBadges } from '../badges/VacancyBadges'
 import { formatSalary } from '../vacancies/model'
 import { RemainingPlaces } from '../capacity/Capacity'
@@ -10,16 +10,7 @@ import { RemainingPlaces } from '../capacity/Capacity'
 export function JobCard({ job, search }: { job: Job; search: string }) {
   return (
     <article className="job-list-item catalog-job linked-card">
-      <div className="job-employer">
-        <span className="category-icon">
-          <Building2 size={22} aria-hidden="true" />
-        </span>
-        <div>
-          <strong>{job.employer.displayName?.trim() || 'Работодатель'}</strong>
-          <EmployerBadge confirmedHires={job.employer.confirmedHires} />
-          <small>{job.regionCode || 'Регион не указан'}</small>
-        </div>
-      </div>
+      <EmployerHeading employer={job.employer} region={job.regionCode} />
       <Link className="card-main-link" to={`/jobs/${job.id}`} state={{ catalogSearch: search }}>
         <h2>{job.title}</h2>
       </Link>

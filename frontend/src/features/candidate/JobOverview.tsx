@@ -1,6 +1,6 @@
-import { Building2, MapPin } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 import type { PublicVacancy } from './api'
-import { EmployerBadge } from '../trust/EmployerTrust'
+import { EmployerHeading } from './EmployerHeading'
 import { VacancyBadges } from '../badges/VacancyBadges'
 import { Capacity } from '../capacity/Capacity'
 import { formatSalary } from '../vacancies/model'
@@ -9,15 +9,7 @@ export function JobOverview({ job }: { job: PublicVacancy }) {
   return (
     <>
       <header className="job-detail-heading">
-        <div className="job-employer">
-          <span className="category-icon">
-            <Building2 size={26} />
-          </span>
-          <div>
-            <strong>{job.employer.displayName?.trim() || 'Работодатель'}</strong>
-            <EmployerBadge confirmedHires={job.employer.confirmedHires} />
-          </div>
-        </div>
+        <EmployerHeading employer={job.employer} />
         <h1>{job.title}</h1>
         <strong className="vacancy-salary">{formatSalary(job.salaryMin, job.salaryMax)}</strong>
         <p className="salary-period">Период и условия оплаты уточняйте у работодателя.</p>

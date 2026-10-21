@@ -187,15 +187,33 @@ html:has(dialog[open]) {
 }
 .catalog-job .job-employer {
   margin-bottom: 20px;
-  gap: 14px;
 }
-.job-employer > div {
+.job-employer {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+}
+.job-employer .employer-name {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
   min-width: 0;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
-.job-employer strong {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.6;
+.employer-name > svg {
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: #438663;
+}
+:root[data-app-theme='dark'] .employer-name > svg {
+  color: #86c9a7;
+}
+.job-employer > .employer-badge {
+  margin: 0;
 }
 .job-employer small {
   font-size: 13px;
@@ -273,10 +291,10 @@ html:has(dialog[open]) {
 .vacancy-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  max-width: calc(100% - 48px);
-  padding: 6px 12px;
+  gap: 5px;
+  min-height: 28px;
+  max-width: calc(100% - 40px);
+  padding: 3px 9px;
   background: var(--benefit-bg);
   border: 1px solid var(--benefit-border);
   color: var(--benefit-text);
@@ -291,15 +309,28 @@ html:has(dialog[open]) {
 .vacancy-badge > span {
   flex-shrink: 0;
 }
-.max-root .badges-expand {
-  min-height: 34px;
-  height: 34px;
-  width: 36px;
-  padding: 6px;
+.max-root button.badges-expand {
+  min-height: 28px;
+  height: 28px;
+  min-width: 32px;
+  width: 32px;
+  flex: 0 0 32px;
+  padding: 0;
   border: 1px solid var(--benefit-border);
   background: var(--benefit-bg);
   color: var(--benefit-text);
   border-radius: 999px;
+}
+.max-root .badges-expand > [class*='Button__content'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 0;
+}
+.badges-expand svg {
+  display: block;
 }
 .job-card-footer {
   margin-top: 2px;
@@ -373,8 +404,6 @@ html:has(dialog[open]) {
 }
 .job-detail-heading .vacancy-badge {
   font-size: 13px;
-  padding: 10px 14px;
-  border-radius: 12px;
 }
 .job-description-section {
   padding-top: 24px;
@@ -397,17 +426,20 @@ html:has(dialog[open]) {
   gap: 8px;
 }
 .vacancy-capacity {
-  padding: 16px;
-  border-radius: 12px;
-  background: var(--subtle);
-  border: 1px solid var(--border);
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgb(0 191 255 / 7%);
+  border: 1px solid rgb(0 191 255 / 12%);
+}
+:root[data-app-theme='dark'] .vacancy-capacity {
+  background: rgb(149 107 255 / 10%);
+  border-color: rgb(170 139 255 / 18%);
 }
 .vacancy-capacity p {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  justify-content: space-between;
-  font-size: 13px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
 }
 .vacancy-capacity strong {
   color: var(--text);
@@ -417,7 +449,7 @@ html:has(dialog[open]) {
   appearance: none;
   width: 100%;
   height: 6px;
-  margin-top: 14px;
+  margin-top: 9px;
   border: 0;
   border-radius: 4px;
   background: var(--border);
@@ -767,15 +799,14 @@ html:has(dialog[open]) {
   .history-card .vacancy-salary {
     font-size: 23px;
   }
-  .job-employer strong {
-    font-size: 13px;
+  .job-employer .employer-name {
+    font-size: 16px;
   }
   .job-employer small {
     font-size: 12px;
   }
   .catalog-job .job-employer {
     margin-bottom: 18px;
-    gap: 12px;
   }
   .category-icon {
     width: 42px;
@@ -784,7 +815,7 @@ html:has(dialog[open]) {
   }
   .vacancy-badge {
     font-size: 11px;
-    padding: 5px 10px;
+    padding: 3px 8px;
   }
   .vacancy-badges {
     margin: 18px 0;
@@ -818,7 +849,6 @@ html:has(dialog[open]) {
   }
   .job-detail-heading .vacancy-badge {
     font-size: 12px;
-    padding: 8px 10px;
   }
   .job-description-section h2 {
     font-size: 18px;

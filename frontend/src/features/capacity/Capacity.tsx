@@ -6,13 +6,16 @@ export function Capacity({
   spotsLeft?: number | null
 }) {
   if (!headcount) return null
-  const hired = spotsLeft == null ? null : Math.max(0, headcount - spotsLeft)
+  const hired = spotsLeft == null ? null : Math.min(headcount, Math.max(0, headcount - spotsLeft))
+  const percent = hired === null ? null : Math.round((hired / headcount) * 100)
   return (
     <div className="vacancy-capacity">
       <p>
-        <strong>{spotsLeft === 0 ? 'Набор завершён' : 'Набор команды'}</strong>
+        <strong>{spotsLeft === 0 ? 'Набор завершён:' : 'Квота мест:'}</strong>{' '}
         <span>
-          {hired === null ? `Нужно ${headcount} человек` : `${hired} из ${headcount} нанято`}
+          {hired === null
+            ? `Нужно ${headcount} человек`
+            : `${hired} из ${headcount} набрано (${percent}%)`}
         </span>
       </p>
       {hired !== null && (

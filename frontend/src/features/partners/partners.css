@@ -1,11 +1,25 @@
 .partner-instructions {
-  padding: 20px;
+  display: grid;
+  gap: 20px;
+  padding: 28px;
   border: 1px solid var(--border);
   border-radius: 10px;
   margin-bottom: 24px;
 }
+.partner-instructions > h2,
+.partner-instructions > p {
+  margin: 0;
+}
+.partner-instructions ol {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding-left: 24px;
+}
 .partner-instructions li {
-  margin-bottom: 12px;
+  margin: 0;
+  padding-left: 6px;
+  line-height: 1.6;
 }
 .partner-grid {
   display: grid;
@@ -52,6 +66,9 @@
   margin-bottom: 8px;
 }
 @media (max-width: 767px) {
+  .partner-instructions {
+    padding: 20px;
+  }
   .app-shell.partner-shell .mobile-nav {
     grid-template-columns: 1fr;
   }

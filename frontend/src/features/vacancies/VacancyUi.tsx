@@ -2,6 +2,7 @@ import { Button } from '@maxhub/max-ui'
 import { BriefcaseBusiness, Clock3, MapPin } from 'lucide-react'
 import type { Vacancy, VacancyStatus } from '../../entities/hiring'
 import { errorText, formatSalary, scheduleLabels, statusLabels } from './model'
+import { VacancyBadges } from '../badges/VacancyBadges'
 
 export function VacancyStatusBadge({ status }: { status: VacancyStatus }) {
   return (
@@ -46,7 +47,7 @@ export function VacancyPreview({ vacancy }: { vacancy: Vacancy }) {
           Нужно человек: <strong>{vacancy.headcount}</strong>
         </p>
       )}
-      {vacancy.studentFriendly && <span className="student-badge">Подходит студентам</span>}
+      <VacancyBadges job={vacancy} />
       <strong className="vacancy-salary">
         {formatSalary(vacancy.salaryMin, vacancy.salaryMax)}
       </strong>

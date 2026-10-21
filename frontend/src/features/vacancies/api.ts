@@ -2,8 +2,10 @@ import type { Vacancy } from '../../entities/hiring'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
 import { fetchPoster } from '../poster/api'
+import { parseBadges } from '../badges/api'
 
 export interface VacancyInput {
+  badges?: string[]
   headcount?: number | null
   student_friendly?: boolean
   title: string
@@ -95,6 +97,7 @@ export function parseVacancy(value: unknown): Vacancy {
     cardMessageId: v.cardMessageId,
     createdAt: v.createdAt,
     studentFriendly: v.studentFriendly as boolean | undefined,
+    badges: v.badges === undefined ? undefined : parseBadges(v.badges),
     applyUrl: applyUrl(v.applyUrl),
   }
 }

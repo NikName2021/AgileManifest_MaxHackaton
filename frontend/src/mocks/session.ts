@@ -7,6 +7,7 @@ import { createPreviewCandidate } from './candidate'
 import { createPreviewTeam } from './team'
 import { createPreviewSubscriptions } from './subscriptions'
 import { createPreviewPartners } from './partners'
+import { previewBadgeCatalog } from './badges'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -19,6 +20,12 @@ export function createPreviewSession(): Session {
   }
   function fields(input: VacancyInput) {
     return {
+      badges: previewBadgeCatalog.groups
+        .flatMap((g) => g.items)
+        .filter(
+          (b) =>
+            input.badges?.includes(b.key) || (b.key === 'students_ok' && input.student_friendly),
+        ),
       headcount: input.headcount ?? null,
       title: input.title,
       regionCode: input.region_code,

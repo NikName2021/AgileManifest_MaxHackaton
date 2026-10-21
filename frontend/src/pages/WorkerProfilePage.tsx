@@ -4,7 +4,8 @@ import { Button } from '@maxhub/max-ui'
 import { useSession } from '../features/session/context'
 import { useCabinet } from '../features/cabinet/context'
 import type { Profile } from '../features/candidate/api'
-import { BotChatNote, CandidateError, Loading } from '../features/candidate/ui'
+import { CandidateError, Loading } from '../features/candidate/ui'
+import { ProfileIdentity } from '../shared/ui/ProfileIdentity'
 import { useResource } from '../shared/api/useResource'
 import { AppearanceSettings } from './SettingsPage'
 
@@ -80,7 +81,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
 }
 
 export function WorkerProfilePage() {
-  const { candidate, user } = useSession(),
+  const { candidate } = useSession(),
     { switchCabinet } = useCabinet()
   const resource = useResource(candidate.profile, 'worker-profile'),
     { result } = resource
@@ -90,18 +91,13 @@ export function WorkerProfilePage() {
         <div>
           <span className="eyebrow">КАБИНЕТ РАБОТНИКА</span>
           <h1>Мой профиль</h1>
-          <p>Ваш контакт для откликов и настройки приложения.</p>
+          <ProfileIdentity name={result.state === 'ready' ? result.data.displayName : undefined} />
         </div>
       </div>
       {result.state === 'loading' && <Loading />}
       {result.state === 'error' && <CandidateError error={result.error} retry={resource.reload} />}
       {result.state === 'ready' && (
         <>
-          <section className="settings-panel">
-            <h2>{result.data.displayName || user.display_name}</h2>
-            <p>Аккаунт MAX · № {result.data.id}</p>
-            {!result.data.hasBotChat && <BotChatNote />}
-          </section>
           <ProfileForm
             key={`${result.data.id}:${result.data.applicationContact}`}
             profile={result.data}

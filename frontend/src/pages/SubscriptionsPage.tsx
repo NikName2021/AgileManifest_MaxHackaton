@@ -1,6 +1,7 @@
-import { useCallback, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Button } from '@maxhub/max-ui'
+import { Button, Switch } from '@maxhub/max-ui'
+import { Toast } from '../shared/ui/Toast'
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
 import { RegionSelect } from '../shared/ui/RegionSelect'
@@ -26,6 +27,11 @@ export function SubscriptionsPage() {
   const [deleting, setDeleting] = useState<number | null>(null)
   const [uncertain, setUncertain] = useState(false)
   const data = resource.result.state === 'ready' ? resource.result.data : undefined
+  useEffect(() => {
+    if (!message) return
+    const timer = window.setTimeout(() => setMessage(''), 4500)
+    return () => window.clearTimeout(timer)
+  }, [message])
   async function mutate(work: () => Promise<unknown>, success: string) {
     if (lock.current) return
     lock.current = true
@@ -51,8 +57,8 @@ export function SubscriptionsPage() {
     e.preventDefault()
     const form = new FormData(e.currentTarget),
       rawSalary = String(form.get('salary') || '').trim()
-    if (rawSalary && (!/^\d+$/.test(rawSalary) || Number(rawSalary) > 2147483647)) {
-      setValidation('Зарплата должна быть целой суммой от 0 до 2 147 483 647 ₽.')
+    if (rawSalary && (!/^\d+$/.test(rawSalary) || Number(rawSalary) > 10000000)) {
+      setValidation('Зарплата должна быть целой суммой от 0 до 10 000 000 ₽.')
       return
     }
     setValidation('')
@@ -78,6 +84,20 @@ export function SubscriptionsPage() {
           <h1>Подписки на вакансии</h1>
           <p>
             Новые подходящие вакансии придут в личный чат с ботом. Можно сохранить до 5 подписок.
+            {data && !data.hasBotChat && (
+              <>
+                {' '}
+                Чтобы получать уведомления,{' '}
+                {config.botUrl ? (
+                  <a className="text-link" href={config.botUrl} target="_blank" rel="noreferrer">
+                    откройте чат с ботом
+                  </a>
+                ) : (
+                  'откройте чат с ботом в MAX'
+                )}{' '}
+                и нажмите «Начать».
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -91,24 +111,9 @@ export function SubscriptionsPage() {
         ) : (
           <CandidateError error={error} />
         ))}
-      {message && (
-        <p role="status" className="vacancy-notice">
-          {message}
-        </p>
-      )}
+      {message && <Toast message={message} onClose={() => setMessage('')} />}
       {data && (
         <>
-          {!data.hasBotChat && (
-            <div className="vacancy-notice">
-              <strong>Начните чат с ботом, чтобы получать вакансии.</strong>
-              <p>Подписку можно сохранить сейчас. Доставка начнётся после запуска бота.</p>
-              {config.botUrl && (
-                <a href={config.botUrl} target="_blank" rel="noreferrer">
-                  Открыть бота MAX
-                </a>
-              )}
-            </div>
-          )}
           {uncertain && (
             <div role="alert">
               <p>
@@ -164,9 +169,9 @@ export function SubscriptionsPage() {
                 />
               </label>
               <label className="subscription-check">
-                <input
-                  type="checkbox"
+                <Switch
                   name="student"
+                  aria-label="Только для студентов"
                   defaultChecked={params.get('student_friendly') === 'true'}
                 />{' '}
                 Только для студентов

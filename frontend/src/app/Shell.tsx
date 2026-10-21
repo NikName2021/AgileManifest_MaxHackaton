@@ -206,12 +206,6 @@ export function Shell() {
           )}
           <Outlet />
         </main>
-        <footer className="content-footer">
-          <span>
-            Сезон · Кабинет {partner ? 'партнёра' : worker ? 'работника' : 'работодателя'}
-          </span>
-          <span>Мини-приложение для MAX</span>
-        </footer>
       </div>
       <nav className="mobile-nav" aria-label="Навигация на телефоне">
         {navigation.map(({ to, label, icon: Icon }) => (

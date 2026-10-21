@@ -1,6 +1,7 @@
 import type { Vacancy, VacancyStatus } from '../../entities/hiring'
 import type { VacancyInput } from './api'
 import { ApiError } from '../../shared/api/client'
+import { displayedBadges } from '../badges/api'
 
 export const statusLabels: Record<VacancyStatus, string> = {
   draft: 'Черновик',
@@ -13,6 +14,7 @@ export const scheduleLabels: Record<Vacancy['schedule'], string> = {
   permanent: 'Постоянная работа',
 }
 export const fieldLabels = {
+  badges: 'Условия и преимущества',
   headcount: 'Сколько человек нужно',
   student_friendly: 'Подходит студентам',
   title: 'Название вакансии',
@@ -26,8 +28,15 @@ export const fieldLabels = {
 }
 export type VacancyForm = Omit<
   VacancyInput,
-  'salary_min' | 'salary_max' | 'description' | 'contact_info' | 'headcount' | 'student_friendly'
+  | 'salary_min'
+  | 'salary_max'
+  | 'description'
+  | 'contact_info'
+  | 'headcount'
+  | 'student_friendly'
+  | 'badges'
 > & {
+  badges: string
   headcount: string
   student_friendly: string
   salary_min: string
@@ -38,6 +47,7 @@ export type VacancyForm = Omit<
 export type FieldErrors = Partial<Record<keyof VacancyForm, string>>
 export function formValues(v?: Vacancy): VacancyForm {
   return {
+    badges: v?.badges?.map((b) => b.key).join(',') ?? '',
     headcount: v?.headcount?.toString() ?? '',
     student_friendly: v?.studentFriendly ? 'yes' : '',
     title: v?.title ?? '',
@@ -52,6 +62,9 @@ export function formValues(v?: Vacancy): VacancyForm {
 }
 export function validateForm(form: VacancyForm): { input: VacancyInput; errors: FieldErrors } {
   const errors: FieldErrors = {}
+  const badges = [...new Set(form.badges.split(',').filter(Boolean))]
+  if (new Set([...badges, ...(form.student_friendly === 'yes' ? ['students_ok'] : [])]).size > 4)
+    errors.badges = 'Выберите не больше 4 бейджей, включая отметку для студентов.'
   const headcount = form.headcount.trim() ? Number(form.headcount) : null
   if (
     headcount !== null &&
@@ -76,9 +89,8 @@ export function validateForm(form: VacancyForm): { input: VacancyInput; errors: 
     const value = form[key].replace(/\s/g, '')
     if (!value) return null
     const number = Number(value)
-    // Prisma stores salaries as a PostgreSQL Int (32-bit), despite a looser REST validator.
-    if (!/^\d+$/.test(value) || !Number.isInteger(number) || number > 2147483647) {
-      errors[key] = 'Введите целую сумму от 0 до 2 147 483 647 ₽.'
+    if (!/^\d+$/.test(value) || !Number.isInteger(number) || number > 10000000) {
+      errors[key] = 'Введите целую сумму от 0 до 10 000 000 ₽.'
       return null
     }
     return number
@@ -90,6 +102,7 @@ export function validateForm(form: VacancyForm): { input: VacancyInput; errors: 
   return {
     errors,
     input: {
+      badges,
       headcount,
       student_friendly: form.student_friendly === 'yes',
       title: form.title.trim(),
@@ -134,7 +147,11 @@ export function cardTextLength(v: Vacancy): number {
     `График: ${escape(schedule)}`,
     `Зарплата: ${salary}`,
     v.headcount ? `Нужно человек: ${v.headcount}` : undefined,
-    v.studentFriendly ? 'Подходит студентам' : undefined,
+    escape(
+      displayedBadges(v.badges, v.studentFriendly)
+        .map((b) => `${b.emoji} ${b.label}`)
+        .join(' · '),
+    ) || undefined,
     v.description ? escape(v.description) : undefined,
     v.contactInfo ? `Контакт: ${escape(v.contactInfo)}` : undefined,
     `Откликнуться:\n[${escape(link)}](${link})`,

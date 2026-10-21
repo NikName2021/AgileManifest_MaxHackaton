@@ -54,14 +54,14 @@ describe('MAX UI select picker', () => {
     const button = screen.getByRole('combobox', { name: 'Занятость' })
     fireEvent.keyDown(button, { key: 'ArrowDown' })
     expect(screen.getByRole('radio', { name: 'Недоступно' })).toBeDisabled()
-    expect(document.body.style.overflow).toBe('hidden')
+    expect(document.documentElement.style.overflow).toBe('hidden')
     fireEvent.click(screen.getByRole('radio', { name: 'По сменам' }))
     expect(change).toHaveBeenCalledExactlyOnceWith('shift')
     expect(button).toHaveTextContent('По сменам')
     expect(new FormData(screen.getByRole('form') as HTMLFormElement).get('schedule')).toBe('shift')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(button).toHaveFocus()
-    expect(document.body.style.overflow).toBe('')
+    expect(document.documentElement.style.overflow).toBe('')
   })
   it('restores the default on form reset and does not select on Escape', () => {
     render(

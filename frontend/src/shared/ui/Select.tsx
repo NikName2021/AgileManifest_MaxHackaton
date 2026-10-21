@@ -14,7 +14,7 @@ import { Button, Radio } from '@maxhub/max-ui'
 import { ChevronDown, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
-type Props = SelectHTMLAttributes<HTMLSelectElement> & { label: string }
+type Props = SelectHTMLAttributes<HTMLSelectElement> & { label: string; iconBefore?: ReactNode }
 type Option = { value: string; label: string; disabled: boolean }
 function readOptions(children: ReactNode): Option[] {
   const result: Option[] = []
@@ -41,6 +41,7 @@ export function Select({
   onChange,
   id,
   className,
+  iconBefore,
   ...props
 }: Props) {
   const options = readOptions(children)
@@ -71,14 +72,14 @@ export function Select({
     if (!open) return
     const element = dialog.current!
     element.showModal()
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    element.querySelector<HTMLInputElement>('input:checked')?.focus()
+    const previousOverflow = document.documentElement.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    element.querySelector<HTMLInputElement>('input:checked')?.focus({ preventScroll: true })
     const button = trigger.current
     return () => {
       element.close()
-      document.body.style.overflow = previousOverflow
-      button?.focus()
+      document.documentElement.style.overflow = previousOverflow
+      button?.focus({ preventScroll: true })
     }
   }, [open])
   function close() {
@@ -127,6 +128,7 @@ export function Select({
         aria-describedby={props['aria-describedby']}
         disabled={props.disabled}
         iconAfter={<ChevronDown size={17} aria-hidden="true" />}
+        iconBefore={iconBefore}
         onClick={show}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

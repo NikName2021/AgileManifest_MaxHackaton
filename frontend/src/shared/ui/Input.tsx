@@ -8,6 +8,8 @@ export function Input(props: InputProps) {
         container: 'season-input',
         input: 'season-input-element',
         body: 'season-input-body',
+        clearButton: 'season-input-clear',
+        iconBefore: 'season-input-icon',
       }}
     />
   )

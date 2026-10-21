@@ -1,5 +1,6 @@
 // Documented subset: https://dev.max.ru/docs/webapps/bridge
 export interface MaxBridge {
+  initDataUnsafe?: { user?: { first_name?: string; last_name?: string; photo_url?: string } }
   initData: string
   platform: string
   openMaxLink?(url: string): void

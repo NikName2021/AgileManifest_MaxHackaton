@@ -7,7 +7,8 @@ import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { ApiError } from '../shared/api/client'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
-import { BotChatNote, CandidateError, JobFacts, Loading } from '../features/candidate/ui'
+import { BotChatNote, CandidateError, Loading } from '../features/candidate/ui'
+import { JobOverview } from '../features/candidate/JobOverview'
 import type { Job, Profile } from '../features/candidate/api'
 
 function ApplyForm({
@@ -108,7 +109,6 @@ function ApplyForm({
         <Button className="primary-button" onClick={onExpand}>
           Откликнуться
         </Button>
-        <div className="vacancy-notice">Контакт передаётся только работодателю этой вакансии.</div>
       </section>
     )
   return (
@@ -230,14 +230,7 @@ export function JobPage() {
       {result.state === 'ready' && (
         <div className={`job-detail-layout ${expanded ? 'application-step' : ''}`}>
           <article className="job-detail">
-            <span className="eyebrow">ВАКАНСИЯ</span>
-            <h1>{result.data.title}</h1>
-            <JobFacts job={result.data} />
-            <h2>Условия и обязанности</h2>
-            <div className="vacancy-description">
-              {result.data.description || 'Работодатель пока не добавил описание.'}
-            </div>
-            <p>Период и условия оплаты уточняйте у работодателя.</p>
+            <JobOverview job={result.data} />
           </article>
           <aside>
             {expanded && (

@@ -5,8 +5,38 @@ import { jobQuery } from './query'
 
 const query = { sort: 'newest' as const, limit: 20, offset: 0 }
 describe('candidate API contracts', () => {
+  it('filters titles across API pages before calculating totals and slicing results', async () => {
+    const original = await createPreviewCandidate().job(1001)
+    const items = Array.from({ length: 103 }, (_, i) => ({
+      ...original,
+      id: i + 1,
+      title: [1, 100, 102].includes(i) ? `Повар ${i}` : 'Другая работа',
+      description: 'Нужен повар',
+    }))
+    const fetcher = vi.fn().mockImplementation((url: string) => {
+      const params = new URL(url).searchParams
+      const offset = Number(params.get('offset')),
+        limit = Number(params.get('limit'))
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            items: items.slice(offset, offset + limit),
+            total: items.length,
+            offset,
+            limit,
+          }),
+        ),
+      )
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const api = createCandidateRepository('https://example.test', 'fixture', vi.fn())
+    const result = await api.jobs({ ...query, q: 'ПОВАР', offset: 1, limit: 1 })
+    expect(result).toMatchObject({ total: 3, offset: 1, limit: 1 })
+    expect(result.items.map((j) => j.id)).toEqual([101])
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
   it('uses isolated candidate endpoints, bearer headers and encoded filters', async () => {
-    const example = await createPreviewCandidate().jobs(query)
+    const example = await createPreviewCandidate().jobs({ ...query, limit: 100 })
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(example)))
     vi.stubGlobal('fetch', fetcher)
     const api = createCandidateRepository('https://example.test', 'fixture', vi.fn())

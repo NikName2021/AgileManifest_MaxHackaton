@@ -1,5 +1,5 @@
-import darkWordmark from '../../assets/max/max-full-dark.png'
-import lightWordmark from '../../assets/max/max-full-light.png'
+import darkWordmark from '../../assets/max/max-wordmark-light.svg'
+import lightWordmark from '../../assets/max/max-wordmark-dark.svg'
 
 // Original MAX artwork supplied with the project. Preserve proportions and colors.
 export function MaxLogo() {

@@ -3,6 +3,8 @@ import { isApplicationStatus } from '../applications/api'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
 import { parseShift, type Shift } from '../shifts/model'
+import { parseBadges, type VacancyBadge } from '../badges/api'
+import { parseTimeline, type ApplicationTimeline } from '../timeline/model'
 
 export interface ApplicationRef {
   id: number
@@ -26,6 +28,7 @@ export interface PublicVacancy extends Pick<
   headcount?: number | null
   spotsLeft?: number | null
   studentFriendly?: boolean
+  badges?: VacancyBadge[]
 }
 export interface Job extends PublicVacancy {
   status: 'published'
@@ -35,6 +38,7 @@ export interface Job extends PublicVacancy {
   applyUnavailableReason: 'already_applied' | 'own_vacancy' | null
 }
 export interface MyApplication extends ApplicationRef, Shift {
+  timeline?: ApplicationTimeline
   contact: string | null
   vacancy: PublicVacancy & { contactInfo: string | null }
 }
@@ -52,6 +56,7 @@ export interface Page<T> {
   offset: number
 }
 export interface JobQuery {
+  badges?: string
   student_friendly?: boolean
   q?: string
   region_code?: string
@@ -153,6 +158,7 @@ function vacancy(body: unknown): PublicVacancy {
         : {}),
     },
     studentFriendly: v.studentFriendly as boolean | undefined,
+    badges: v.badges === undefined ? undefined : parseBadges(v.badges),
   }
 }
 export function parseJob(body: unknown): Job {
@@ -197,6 +203,7 @@ export function parseMyApplication(body: unknown): MyApplication {
     ...ref(v),
     contact: nullable(v.contact),
     ...parseShift(v),
+    timeline: v.timeline === undefined ? undefined : parseTimeline(v.timeline),
     vacancy: { ...vacancy(job), contactInfo: nullable(job.contactInfo) },
   }
 }
@@ -235,7 +242,39 @@ export function createCandidateRepository(
   const request = (path: string, options?: RequestInit) => send(root + path, options)
   return {
     async jobs(query, signal) {
-      return page(await request(`/jobs?${queryString(query)}`, { signal }), parseJob, query)
+      if (!query.q)
+        return page(await request(`/jobs?${queryString(query)}`, { signal }), parseJob, query)
+      // The current API searches both title and description. Scan all matching pages
+      // before slicing so title-only search keeps correct totals and pagination.
+      const matches: Job[] = [],
+        seen = new Set<number>()
+      let offset = 0
+      while (true) {
+        signal?.throwIfAborted()
+        const batchQuery = { ...query, limit: 100, offset }
+        const batch = page(
+          await request(`/jobs?${queryString(batchQuery)}`, { signal }),
+          parseJob,
+          batchQuery,
+        )
+        for (const job of batch.items) {
+          if (
+            !seen.has(job.id) &&
+            job.title.toLocaleLowerCase('ru').includes(query.q.toLocaleLowerCase('ru'))
+          )
+            matches.push(job)
+          seen.add(job.id)
+        }
+        offset += batch.items.length
+        if (offset >= batch.total) break
+        if (!batch.items.length) throw new ApiError('contract')
+      }
+      return {
+        items: matches.slice(query.offset, query.offset + query.limit),
+        total: matches.length,
+        limit: query.limit,
+        offset: query.offset,
+      }
     },
     async filters(signal) {
       const v = record(await request('/jobs/filters', { signal }))

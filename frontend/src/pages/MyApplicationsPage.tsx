@@ -1,5 +1,6 @@
 import { Select } from '../shared/ui/Select'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import { Button } from '@maxhub/max-ui'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { useSession } from '../features/session/context'
@@ -12,8 +13,13 @@ import { RefreshStatus } from '../shared/ui/RefreshStatus'
 import { CandidateError, JobFacts, Loading, Pagination } from '../features/candidate/ui'
 import { offsetFrom, pageSize } from '../features/candidate/query'
 import { ShiftSummary } from '../features/shifts/ShiftSummary'
+import { ApplicationRoadmap } from '../features/timeline/ApplicationRoadmap'
+import { Modal } from '../shared/ui/Modal'
+import { JobOverview } from '../features/candidate/JobOverview'
+import type { MyApplication } from '../features/candidate/api'
 
 export function MyApplicationsPage() {
+  const [archived, setArchived] = useState<MyApplication | null>(null)
   const { candidate } = useSession(),
     [params, setParams] = useSearchParams()
   const raw = params.get('status'),
@@ -35,8 +41,7 @@ export function MyApplicationsPage() {
           <p>Ответы работодателей и контакты по вакансиям, на которые вы откликнулись.</p>
         </div>
       </div>
-      <label className="candidate-input candidate-status-filter">
-        Этап рассмотрения
+      <div className="candidate-input candidate-status-filter">
         <Select
           label="Этап рассмотрения"
           value={status ?? ''}
@@ -49,7 +54,7 @@ export function MyApplicationsPage() {
             </option>
           ))}
         </Select>
-      </label>
+      </div>
       <div className="history-layout">
         <div>
           <RefreshStatus
@@ -68,9 +73,21 @@ export function MyApplicationsPage() {
               </p>
               <div className="job-list">
                 {result.data.items.map((application) => (
-                  <article key={application.id} className="job-list-item">
+                  <article key={application.id} className="job-list-item history-card linked-card">
                     <div className="candidate-application-heading">
-                      <h2>{application.vacancy.title}</h2>
+                      {application.vacancy.status === 'published' ? (
+                        <Link className="card-main-link" to={`/jobs/${application.vacancy.id}`}>
+                          <h2>{application.vacancy.title}</h2>
+                        </Link>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          className="card-main-link archived-title"
+                          onClick={() => setArchived(application)}
+                        >
+                          <h2>{application.vacancy.title}</h2>
+                        </Button>
+                      )}
                       <span className={`application-status ${application.status}`}>
                         {applicationLabels[application.status]}
                       </span>
@@ -82,10 +99,6 @@ export function MyApplicationsPage() {
                         Вакансия больше не принимает отклики. Ваш отклик остаётся в истории.
                       </p>
                     )}
-                    <p>
-                      Отправлен {new Date(application.createdAt).toLocaleDateString('ru-RU')}.
-                      Обновлён {new Date(application.updatedAt).toLocaleString('ru-RU')}.
-                    </p>
                     <details className="candidate-application-details">
                       <summary>Условия и контакты</summary>
                       <div className="vacancy-description">
@@ -105,11 +118,7 @@ export function MyApplicationsPage() {
                         {application.contact || 'Контакт не был указан'}
                       </p>
                     </details>
-                    {application.vacancy.status === 'published' && (
-                      <Link className="text-link" to={`/jobs/${application.vacancy.id}`}>
-                        Открыть вакансию →
-                      </Link>
-                    )}
+                    <ApplicationRoadmap timeline={application.timeline} />
                   </article>
                 ))}
               </div>
@@ -163,6 +172,14 @@ export function MyApplicationsPage() {
           <small>Закрытые вакансии остаются в истории.</small>
         </aside>
       </div>
+      {archived && (
+        <Modal title="Вакансия из истории" onClose={() => setArchived(null)}>
+          <div className="job-detail archived-job">
+            <JobOverview job={archived.vacancy} />
+            <p>Набор завершён. Условия сохранены в вашем отклике.</p>
+          </div>
+        </Modal>
+      )}
     </>
   )
 }

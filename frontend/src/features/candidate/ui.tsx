@@ -1,10 +1,10 @@
 import { Button } from '@maxhub/max-ui'
 import { ApiError } from '../../shared/api/client'
 import { config } from '../../shared/config'
-import { formatSalary, scheduleLabels } from '../vacancies/model'
+import { formatSalary } from '../vacancies/model'
 import type { PublicVacancy } from './api'
 import { EmployerBadge } from '../trust/EmployerTrust'
-import { Capacity } from '../capacity/Capacity'
+import { VacancyBadges } from '../badges/VacancyBadges'
 
 function candidateError(error: unknown) {
   if (!(error instanceof ApiError)) return 'Не удалось загрузить данные. Попробуйте ещё раз.'
@@ -100,15 +100,12 @@ export function JobFacts({ job }: { job: PublicVacancy }) {
   return (
     <>
       <strong className="vacancy-salary">{formatSalary(job.salaryMin, job.salaryMax)}</strong>
-      {job.studentFriendly && <span className="student-badge">Подходит студентам</span>}
       <div className="vacancy-meta">
         <span>{job.regionCode || 'Регион не указан'}</span>
-        <span>{scheduleLabels[job.schedule]}</span>
-        {job.category && job.category !== 'general' && <span>{job.category}</span>}
       </div>
       <p>Работодатель: {job.employer.displayName?.trim() || 'Имя не указано'}</p>
       <EmployerBadge confirmedHires={job.employer.confirmedHires} />
-      <Capacity headcount={job.headcount} spotsLeft={job.spotsLeft} />
+      <VacancyBadges job={job} />
     </>
   )
 }

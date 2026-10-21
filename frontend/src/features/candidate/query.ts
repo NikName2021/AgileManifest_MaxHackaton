@@ -10,8 +10,8 @@ export function jobQuery(params: URLSearchParams): { query: JobQuery; error?: st
   function salary(key: string) {
     const raw = params.get(key)?.trim()
     if (!raw) return undefined
-    if (!/^\d+$/.test(raw) || Number(raw) > 2147483647) {
-      error = 'Зарплата должна быть целой суммой от 0 до 2 147 483 647 ₽.'
+    if (!/^\d+$/.test(raw) || Number(raw) > 10000000) {
+      error = 'Зарплата должна быть целой суммой от 0 до 10 000 000 ₽.'
       return undefined
     }
     return Number(raw)
@@ -31,6 +31,7 @@ export function jobQuery(params: URLSearchParams): { query: JobQuery; error?: st
   return {
     error,
     query: {
+      badges: params.get('badges') || undefined,
       ...(params.get('student_friendly') === 'true' ? { student_friendly: true } : {}),
       q,
       region_code: region,

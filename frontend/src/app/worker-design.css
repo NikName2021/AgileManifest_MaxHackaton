@@ -40,6 +40,43 @@ html:has(dialog[open]) {
 .workspace {
   background: var(--bg);
 }
+.entry-brand .max-wordmark,
+.choice-logo .max-wordmark {
+  width: 80px;
+}
+.entry-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.cabinet-choice-content {
+  position: relative;
+  padding-top: 120px;
+}
+.cabinet-intro p {
+  margin-bottom: auto;
+}
+.choice-logo {
+  position: absolute;
+  top: clamp(32px, 5vw, 72px);
+  right: 64px;
+  margin: 0;
+}
+.candidate-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 180px;
+  padding: 32px 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 14px;
+}
 :root[data-app-theme='dark'] .max-root .primary-button {
   background: #8052e6 !important;
 }
@@ -136,7 +173,7 @@ html:has(dialog[open]) {
   white-space: nowrap;
   font-size: 14px;
   color: var(--text);
-  padding: 0 10px;
+  padding: 0;
 }
 .filter-modal-form {
   display: grid;
@@ -214,9 +251,10 @@ html:has(dialog[open]) {
 }
 .job-employer > .employer-badge {
   margin: 0;
+  padding: 0;
 }
 .job-employer small {
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 3px;
 }
 .category-icon {
@@ -345,7 +383,50 @@ html:has(dialog[open]) {
 .job-card-footer small {
   font-size: 14px;
 }
+.publication-date {
+  flex: 1 1 120px;
+  overflow-wrap: normal;
+  text-align: left;
+  color: var(--muted);
+  font-size: 14px;
+}
+.publication-date.is-recent {
+  color: #7744bd;
+  font-weight: 500;
+}
+:root[data-app-theme='dark'] .publication-date.is-recent {
+  color: #c3a1ff;
+}
+.employer-details .job-employer {
+  margin: 0;
+}
+.employer-details-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.employer-details .employer-details-heading h2 {
+  margin: 0;
+}
+.employer-hiring-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(0 191 255 / 12%);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+:root[data-app-theme='dark'] .employer-hiring-badge {
+  background: var(--subtle);
+}
 .job-card-footer .remaining-places {
+  flex-shrink: 0;
   margin-left: auto;
 }
 .remaining-places {
@@ -760,7 +841,31 @@ html:has(dialog[open]) {
   padding: 6px;
   flex-shrink: 0;
 }
+@media (max-width: 760px) {
+  .cabinet-choice-content {
+    padding-top: 36px;
+  }
+  .cabinet-mobile-brand {
+    padding-right: 100px;
+  }
+  .choice-logo {
+    top: 36px;
+    right: 22px;
+    margin: 0;
+  }
+}
 @media (max-width: 700px) {
+  .header-account {
+    gap: 4px;
+  }
+  .max-root .mobile-exit {
+    width: 44px;
+    min-width: 44px;
+    padding: 10px;
+  }
+  .publication-date {
+    font-size: 13px;
+  }
   .worker-shell .main-content {
     padding: 24px 16px 30px;
   }
@@ -802,9 +907,6 @@ html:has(dialog[open]) {
   .job-employer .employer-name {
     font-size: 16px;
   }
-  .job-employer small {
-    font-size: 12px;
-  }
   .category-icon {
     width: 42px;
     height: 42px;
@@ -820,6 +922,7 @@ html:has(dialog[open]) {
   .job-card-footer {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
   }

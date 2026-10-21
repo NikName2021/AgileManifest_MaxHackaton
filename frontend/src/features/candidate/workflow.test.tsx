@@ -91,6 +91,26 @@ function worker() {
 }
 
 describe('cabinet selection and candidate flows', () => {
+  it('shows the search loader until the pending vacancy request completes', async () => {
+    const session = createPreviewSession()
+    const data = await session.candidate.jobs({ sort: 'newest', limit: 20, offset: 0 })
+    let finish!: (value: typeof data) => void
+    vi.spyOn(session.candidate, 'jobs').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    start(session)
+    worker()
+    expect(await screen.findByRole('status', { name: 'Ищем вакансии…' })).toBeVisible()
+    expect(screen.queryByText('Пока нет подходящих вакансий')).not.toBeInTheDocument()
+    await act(async () => {
+      finish(data)
+    })
+    expect(await screen.findByRole('heading', { name: 'Помощник на сбор урожая' })).toBeVisible()
+    expect(screen.queryByRole('status', { name: 'Ищем вакансии…' })).not.toBeInTheDocument()
+  })
   it('keeps partner channels separate and permits worker subscriptions after leaving', async () => {
     const { router } = start(createPreviewSession(), '/channels')
     fireEvent.click(screen.getByRole('button', { name: /Зайти как партнёр/ }))

@@ -1,4 +1,4 @@
-import { Button } from '@maxhub/max-ui'
+import { Button, Spinner } from '@maxhub/max-ui'
 import { ApiError } from '../../shared/api/client'
 import { config } from '../../shared/config'
 import { formatSalary } from '../vacancies/model'
@@ -34,11 +34,12 @@ export function CandidateError({ error, retry }: { error: unknown; retry?: () =>
     </div>
   )
 }
-export function Loading() {
+export function Loading({ label = 'Загружаем данные…' }: { label?: string }) {
   return (
-    <p role="status" className="vacancy-loading">
-      Загружаем данные…
-    </p>
+    <div role="status" aria-label={label} className="candidate-loading">
+      <Spinner size={36} appearance="themed" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
   )
 }
 export function Pagination({

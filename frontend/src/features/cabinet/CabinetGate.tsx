@@ -52,9 +52,11 @@ export function CabinetGate({ children }: { children: ReactNode }) {
             начинается с людей.
           </h2>
           <p>Найдите работу или соберите команду — прямо в MAX.</p>
-          <MaxLogo />
         </aside>
         <div className="cabinet-choice-content">
+          <div className="choice-logo">
+            <MaxLogo />
+          </div>
           <div className="cabinet-mobile-brand">
             <Brand />
           </div>
@@ -88,9 +90,6 @@ export function CabinetGate({ children }: { children: ReactNode }) {
                 <ArrowRight aria-hidden="true" />
               </button>
             </Button>
-          </div>
-          <div className="choice-logo">
-            <MaxLogo />
           </div>
           {mode === 'preview' && (
             <p className="vacancy-notice">

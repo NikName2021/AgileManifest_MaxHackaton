@@ -134,9 +134,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     <main className="entry-page">
       <div className="entry-brand">
         <Brand />
+        <MaxLogo />
       </div>
       <div className="entry-intro">
-        <MaxLogo />
         <h2>
           Сезонный найм.
           <br />В вашем мессенджере.

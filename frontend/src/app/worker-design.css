@@ -204,6 +204,22 @@ html:has(dialog[open]) {
   gap: 12px;
   padding-top: 6px;
 }
+.max-root .application-back-button {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+.max-root .application-back-button > [class*='Button__content'] {
+  font-size: inherit;
+  line-height: 20px;
+}
 .max-root .select-trigger {
   font-size: 14px;
 }

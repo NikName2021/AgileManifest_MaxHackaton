@@ -148,29 +148,6 @@ export function MyApplicationsPage() {
             </>
           )}
         </div>
-        <aside className="status-guide">
-          <h2>Что означают статусы</h2>
-          {statuses.map((stage) => (
-            <div className="status-guide-item" key={stage}>
-              <span className={`status-dot ${stage}`} />
-              <div>
-                <strong>{applicationLabels[stage]}</strong>
-                <p>
-                  {
-                    {
-                      new: 'Работодатель получил отклик.',
-                      contacted: 'Началось общение с работодателем.',
-                      invited: 'Уточните детали встречи или выхода.',
-                      hired: 'Работодатель отметил вас как нанятого.',
-                      rejected: 'Работодатель завершил рассмотрение отклика.',
-                    }[stage]
-                  }
-                </p>
-              </div>
-            </div>
-          ))}
-          <small>Закрытые вакансии остаются в истории.</small>
-        </aside>
       </div>
       {archived && (
         <Modal title="Вакансия из истории" onClose={() => setArchived(null)}>

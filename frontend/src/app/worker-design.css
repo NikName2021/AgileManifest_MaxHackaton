@@ -132,7 +132,14 @@ html:has(dialog[open]) {
   min-height: 52px;
   background: var(--surface);
 }
+.worker-filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 .worker-filter-row {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -197,6 +204,22 @@ html:has(dialog[open]) {
   gap: 12px;
   padding-top: 6px;
 }
+.max-root .application-back-button {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+.max-root .application-back-button > [class*='Button__content'] {
+  font-size: inherit;
+  line-height: 20px;
+}
 .max-root .select-trigger {
   font-size: 14px;
 }
@@ -249,7 +272,8 @@ html:has(dialog[open]) {
 :root[data-app-theme='dark'] .employer-name > svg {
   color: #86c9a7;
 }
-.job-employer > .employer-badge {
+.job-employer > .employer-badge,
+.history-card > .employer-badge {
   margin: 0;
   padding: 0;
 }
@@ -586,6 +610,42 @@ html:has(dialog[open]) {
   border-top: 1px solid var(--border);
   padding-top: 18px;
 }
+.history-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.candidate-contact-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.candidate-contact-row .candidate-contact-value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.candidate-contact-row .candidate-contact-actions {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.max-root button.contact-copy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.contact-copy-icon svg {
+  display: block;
+}
+.copy-result:empty {
+  margin: 0;
+}
 .roadmap-caption {
   display: flex;
   align-items: center;
@@ -688,6 +748,23 @@ html:has(dialog[open]) {
 .roadmap-tooltip small,
 .roadmap-tooltip > span {
   color: var(--muted);
+}
+.roadmap-tooltip > strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.roadmap-event-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.roadmap-event-icon:empty {
+  display: none;
 }
 .roadmap-unavailable {
   font-size: 12px;
@@ -883,9 +960,30 @@ html:has(dialog[open]) {
     gap: 20px;
     margin-bottom: 12px;
   }
+  .worker-filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
   .worker-filter-row {
-    flex-wrap: wrap;
-    overflow: visible;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .student-filter {
+    align-self: flex-start;
+  }
+  .candidate-contact-link.contact-phone {
+    justify-content: center;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 10px;
+    border: 0;
+    background: transparent;
+  }
+  .contact-phone .contact-action-label {
+    display: none;
   }
   .worker-filter-row .select-field {
     max-width: 220px;

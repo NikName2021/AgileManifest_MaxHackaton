@@ -91,6 +91,14 @@ function worker() {
 }
 
 describe('cabinet selection and candidate flows', () => {
+  it('shows the employer section even without a hiring quota or trust statistics', async () => {
+    const session = createPreviewSession()
+    start(session, '/jobs/1002')
+    worker()
+    const employer = await screen.findByRole('region', { name: 'Работодатель' })
+    expect(within(employer).getByText('Демо: загородный отель')).toBeVisible()
+    expect(within(employer).queryByText('Надёжный работодатель')).not.toBeInTheDocument()
+  })
   it('shows the search loader until the pending vacancy request completes', async () => {
     const session = createPreviewSession()
     const data = await session.candidate.jobs({ sort: 'newest', limit: 20, offset: 0 })

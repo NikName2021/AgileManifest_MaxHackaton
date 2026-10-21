@@ -6,8 +6,8 @@ export function ProfileIdentity({ name }: { name?: string | null }) {
   const [failed, setFailed] = useState(false)
   const nativeUser = bridge?.initDataUnsafe?.user
   const displayName =
+    [nativeUser?.first_name?.trim(), nativeUser?.last_name?.trim()].filter(Boolean).join(' ') ||
     name?.trim() ||
-    [nativeUser?.first_name, nativeUser?.last_name].filter(Boolean).join(' ') ||
     user.display_name
   let photo: string | undefined
   try {

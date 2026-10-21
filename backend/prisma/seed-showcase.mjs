@@ -9,7 +9,8 @@
 // --owner-id — ваш id в «Сезоне» (GET /api/me) или --owner-max-id — MAX id; аккаунт должен хоть раз
 // открыть мини-приложение.
 // Демо-хозяйство «Агрокомплекс «Южный»» с бригадой и откликами станет вашим, а от вашего имени
-// появятся отклики на чужие вакансии — оба кабинета будут с данными.
+// появятся отклики на чужие вакансии — оба кабинета будут с данными. Если у аккаунта не задано
+// название компании, на время демо им станет «Агрокомплекс «Южный»» (--remove его уберёт).
 import { PrismaClient } from '@prisma/client';
 import { APPLICATIONS, CANDIDATES, EMPLOYERS, OWNER_APPLICATIONS, VACANCIES } from './showcase-data.mjs';
 
@@ -32,6 +33,7 @@ const args = Object.fromEntries(
 // (поле доставки карточки в MAX: для каталога не используется, а повторную отправку блокирует).
 const PREFIX = 'showcase:';
 const MARK = 'showcase-seed';
+const OWNER_COMPANY_NAME = EMPLOYERS.find((e) => e.key === 'south').name;
 
 const db = new PrismaClient();
 const NOW = Date.now();
@@ -56,6 +58,8 @@ async function removeShowcase() {
   await db.vacancy.deleteMany({ where: { id: { in: vacancyIds } } });
   await db.jobSubscription.deleteMany({ where: { user: showcaseUsers } });
   const users = await db.user.deleteMany({ where: showcaseUsers });
+  // Название компании, выданное владельцу сидером; своё название владельца не трогается.
+  await db.user.updateMany({ where: { companyName: OWNER_COMPANY_NAME }, data: { companyName: null } });
   return { vacancies: vacancyIds.length, users: users.count };
 }
 
@@ -155,7 +159,10 @@ async function seed(owner) {
     employers[e.key] =
       e.key === 'south' && owner
         ? owner
-        : await db.user.create({ data: { maxUserId: `${PREFIX}employer:${e.key}`, chatId: '', displayName: e.name } });
+        : await db.user.create({ data: { maxUserId: `${PREFIX}employer:${e.key}`, chatId: '', displayName: e.name, companyName: e.name } });
+  }
+  if (owner && !owner.companyName) {
+    await db.user.update({ where: { id: owner.id }, data: { companyName: OWNER_COMPANY_NAME } });
   }
 
   // У демо-кандидатов есть «личный чат» с ботом, иначе их подтверждённые выходы не засчитались бы

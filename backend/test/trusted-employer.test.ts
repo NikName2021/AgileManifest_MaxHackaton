@@ -59,7 +59,7 @@ describe('надёжный работодатель', () => {
 
     const viewer = workers[5];
     const job = (await app.inject({ method: 'GET', url: `/api/jobs/${v1}`, headers: viewer.auth })).json();
-    expect(job.employer).toEqual({ displayName: 'A', trusted: true, confirmedHires: 5 });
+    expect(job.employer).toEqual({ displayName: 'A', companyName: null, trusted: true, confirmedHires: 5 });
     const list = (await app.inject({ method: 'GET', url: '/api/jobs', headers: viewer.auth })).json();
     expect(list.items.every((j: { employer: { trusted: boolean } }) => j.employer.trusted)).toBe(true);
 
@@ -74,7 +74,7 @@ describe('надёжный работодатель', () => {
 
     // История откликов кандидата тоже показывает отметку.
     const history = (await app.inject({ method: 'GET', url: '/api/me/applications', headers: workers[0].auth })).json();
-    expect(history.items[0].vacancy.employer).toEqual({ displayName: 'A', trusted: true, confirmedHires: 5 });
+    expect(history.items[0].vacancy.employer).toEqual({ displayName: 'A', companyName: null, trusted: true, confirmedHires: 5 });
   });
 
   it('накрутка не работает: неподтверждённые, повторы, сам себе, без чата с ботом; одной вакансии достаточно', async () => {
@@ -125,6 +125,6 @@ describe('надёжный работодатель', () => {
     const card = sendMessageMock.mock.calls.find((c) => String(c[1]).includes('Новичок'));
     expect(card?.[1]).not.toContain(TRUSTED_LINE);
     const job = (await app.inject({ method: 'GET', url: `/api/jobs/${v}`, headers: workers[0].auth })).json();
-    expect(job.employer).toEqual({ displayName: 'A', trusted: false, confirmedHires: 0 });
+    expect(job.employer).toEqual({ displayName: 'A', companyName: null, trusted: false, confirmedHires: 0 });
   });
 });

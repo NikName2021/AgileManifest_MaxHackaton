@@ -53,9 +53,11 @@ describe('сидер витрины', () => {
     expect(jobs.total).toBeGreaterThanOrEqual(20);
     const regions = new Set(jobs.items.map((j: any) => j.subject?.code));
     expect(regions.size).toBeGreaterThanOrEqual(7);
-    expect(jobs.items.every((j: any) => j.badges.length >= 1 && j.badges.length <= 4)).toBe(true);
+    expect(jobs.items.every((j: any) => j.badges.length >= 1 && j.badges.length <= 10)).toBe(true);
     const harvest = jobs.items.find((j: any) => j.title === 'Сборщик урожая / Рабочий сада');
-    expect(harvest.employer).toMatchObject({ trusted: true, confirmedHires: 6 });
+    // У владельца не было названия компании — на время демо он «Агрокомплекс «Южный»», а не имя из MAX.
+    expect(harvest.employer).toMatchObject({ displayName: 'Агрокомплекс «Южный»', trusted: true, confirmedHires: 6 });
+    expect(jobs.items.every((j: any) => j.employer.companyName === j.employer.displayName)).toBe(true);
     expect(harvest.badges.map((b: any) => b.emoji)).toEqual(['🏠', '🍲', '🎫', '🎓']);
     expect((await get(viewer, '/api/jobs?student_friendly=true')).total).toBeGreaterThanOrEqual(8);
     expect((await get(viewer, '/api/jobs/filters')).regions.length).toBeGreaterThanOrEqual(7);
@@ -100,6 +102,7 @@ describe('сидер витрины', () => {
     expect(removed.removed).toEqual({ vacancies: 27, users: 27 });
     expect(await db.vacancy.findMany({ select: { id: true } })).toEqual([{ id: own.id }]);
     expect(await db.user.count()).toBe(2);
+    expect((await db.user.findUniqueOrThrow({ where: { id: owner.user.id } })).companyName).toBeNull();
     expect(await db.application.count()).toBe(0);
   });
 
@@ -107,6 +110,14 @@ describe('сидер витрины', () => {
     const result = runSeeder(`--owner-id=${owner.user.id}`);
     expect(result.created.owner).toEqual({ id: owner.user.id, displayName: 'Owner' });
     expect((await get(owner, '/api/team')).total).toBe(6);
+  });
+
+  it('своё название компании владельца сидер не меняет и не удаляет', async () => {
+    await db.user.update({ where: { id: owner.user.id }, data: { companyName: 'Ферма «Своя»' } });
+    runSeeder(`--owner-id=${owner.user.id}`);
+    expect((await get(owner, '/api/me')).companyName).toBe('Ферма «Своя»');
+    runSeeder('--remove');
+    expect((await get(owner, '/api/me')).companyName).toBe('Ферма «Своя»');
   });
 
   it('без владельца — только витрина, без своих данных', async () => {

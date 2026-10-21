@@ -35,8 +35,9 @@ export interface JobDto {
   badges: BadgeDef[];
   status: string;
   createdAt: Date;
+  // displayName — название компании, а если оно не задано — имя в MAX; companyName — само название или null.
   // trusted — «Надёжный работодатель», confirmedHires — сколько людей подтвердили выход к нему.
-  employer: { displayName: string | null } & EmployerTrust;
+  employer: { displayName: string | null; companyName: string | null } & EmployerTrust;
   myApplication: MyApplicationRef | null;
   canApply: boolean;
   applyUnavailableReason: ApplyUnavailableReason | null;
@@ -60,6 +61,7 @@ interface JobRow {
   createdAt: Date;
   employerUserId: number;
   employerDisplayName: string | null;
+  employerCompanyName: string | null;
 }
 
 function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicationRef | null, trust: EmployerTrust): JobDto {
@@ -81,8 +83,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     badges: resolveBadges(row.badges, row.studentFriendly),
     status: row.status,
     createdAt: row.createdAt,
-    // Поля «компания» нет — это имя пользователя в MAX.
-    employer: { displayName: row.employerDisplayName, ...trust },
+    employer: { displayName: row.employerDisplayName, companyName: row.employerCompanyName, ...trust },
     myApplication,
     canApply: reason === null,
     applyUnavailableReason: reason,
@@ -104,7 +105,7 @@ const JOB_COLUMNS = Prisma.sql`
   v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.student_friendly AS "studentFriendly", v.badges, v.status,
   (SELECT COUNT(*)::int FROM applications a WHERE a.vacancy_id = v.id AND a.status = 'hired') AS "hiredCount",
   v.created_at AS "createdAt", v.employer_user_id AS "employerUserId",
-  u.display_name AS "employerDisplayName"`;
+  COALESCE(u.company_name, u.display_name) AS "employerDisplayName", u.company_name AS "employerCompanyName"`;
 
 export interface ListJobsParams {
   q?: string;
@@ -271,7 +272,7 @@ export async function listMyApplications(
             contactInfo: true,
             status: true,
             employerUserId: true,
-            employer: { select: { displayName: true } },
+            employer: { select: { displayName: true, companyName: true } },
           },
         },
       },
@@ -289,7 +290,7 @@ export async function listMyApplications(
       ...vacancy,
       badges: resolveBadges(vacancy.badges, vacancy.studentFriendly),
       subject: regionDto(regionSubject),
-      employer: { ...employer, ...trust.get(employerUserId)! },
+      employer: { displayName: employer.companyName ?? employer.displayName, companyName: employer.companyName, ...trust.get(employerUserId)! },
     },
   }));
   return { items, total, limit: params.limit, offset: params.offset };
@@ -298,18 +299,21 @@ export async function listMyApplications(
 export interface ProfileDto {
   id: number;
   displayName: string | null;
+  // Название компании для карточек вакансий; null — показывается displayName.
+  companyName: string | null;
   applicationContact: string | null;
   hasBotChat: boolean;
   // Своя отметка «Надёжный работодатель»: сколько подтверждённых наймов и сколько нужно.
   employerTrust: EmployerTrust & { threshold: number };
 }
 
-const PROFILE_SELECT = { id: true, displayName: true, applicationContact: true, dialogChatId: true } as const;
+const PROFILE_SELECT = { id: true, displayName: true, companyName: true, applicationContact: true, dialogChatId: true } as const;
 
-function toProfileDto(user: { id: number; displayName: string | null; applicationContact: string | null; dialogChatId: string | null }): Omit<ProfileDto, 'employerTrust'> {
+function toProfileDto(user: { id: number; displayName: string | null; companyName: string | null; applicationContact: string | null; dialogChatId: string | null }): Omit<ProfileDto, 'employerTrust'> {
   return {
     id: user.id,
     displayName: user.displayName,
+    companyName: user.companyName,
     applicationContact: user.applicationContact,
     // false — уведомлять некуда, пока пользователь не запустит бота в личном чате.
     hasBotChat: Boolean(user.dialogChatId),
@@ -323,9 +327,9 @@ export async function getProfile(userId: number): Promise<ProfileDto | null> {
   return { ...toProfileDto(user), employerTrust: { ...trust, threshold: config.trustedEmployerMinHires } };
 }
 
-// Контакты уже отправленных откликов не меняются.
-export async function updateApplicationContact(userId: number, applicationContact: string | null): Promise<ProfileDto | null> {
-  const result = await db.user.updateMany({ where: { id: userId }, data: { applicationContact } });
+// Контакты уже отправленных откликов не меняются; название компании сразу видно во всех вакансиях.
+export async function updateProfile(userId: number, data: { applicationContact?: string | null; companyName?: string | null }): Promise<ProfileDto | null> {
+  const result = await db.user.updateMany({ where: { id: userId }, data });
   if (result.count === 0) return null;
   return getProfile(userId);
 }

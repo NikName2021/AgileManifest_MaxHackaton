@@ -160,7 +160,7 @@ export async function inviteTeam(employerUserId: number, vacancyId: number, cand
     })).map((a) => a.candidateUserId)
   );
 
-  const text = inviteText(vacancy, vacancy.employer.displayName);
+  const text = inviteText(vacancy, vacancy.employer.companyName ?? vacancy.employer.displayName);
   const results: { candidateId: number; outcome: InviteOutcome }[] = [];
   for (const candidateId of targets.slice(TEAM_INVITE_LIMIT)) {
     results.push({ candidateId, outcome: 'limit_exceeded' });

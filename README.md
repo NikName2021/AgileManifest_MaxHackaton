@@ -148,7 +148,7 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
 
 | Таблица | Ключевые поля | Назначение |
 |---|---|---|
-| `users` | `id`, `max_user_id`, `chat_id`, `dialog_chat_id` (nullable), `display_name`, `phone` (nullable), `application_contact` (nullable) | Все пользователи бота |
+| `users` | `id`, `max_user_id`, `chat_id`, `dialog_chat_id` (nullable), `display_name`, `company_name` (nullable), `phone` (nullable), `application_contact` (nullable) | Все пользователи бота |
 | `vacancies` | `id`, `employer_user_id`, `title`, `region_code`, `category`, `schedule`, `salary_min`, `salary_max`, `description`, `contact_info`, `status` (draft/published/closed), `card_message_id`, `employer_chat_id`, `created_at`, `published_at`, `reminder_sent_at` | Вакансии, созданные через бота или мини-приложение |
 | `applications` | `id`, `vacancy_id`, `candidate_user_id`, `status` (new/contacted/invited/hired/rejected), `contact`, `candidate_chat_id`, `hired_at`, `created_at`, `updated_at` | Отклики кандидатов и статус воронки |
 | `benchmark_cache` | `region_code`, `category`, `avg_salary_min`, `avg_salary_max`, `vacancy_count`, `fetched_at` | Кэш ответов trudvsem, TTL 24 часа |
@@ -181,6 +181,9 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
 `applications.candidate_chat_id`, а если его нет — только в `dialog_chat_id`, но не в группу.
 `users.application_contact` — сохранённый контакт для предзаполнения формы отклика в кабинете
 работника; не заменяет `phone` (номер из MAX) и не переписывает контакты уже отправленных откликов.
+`users.company_name` — название компании работодателя: в публичных данных вакансии
+`employer.displayName` = название компании, а если его нет — имя из MAX (`employer.companyName` — само
+название или null).
 
 ## Решения по контракту (важно для фронтенда)
 
@@ -260,7 +263,7 @@ CORS настроен через `FRONTEND_ORIGIN` (см. таблицу пер�
 | `GET /api/jobs/:id` | Карточка для работника; черновик/закрытая/нет — `404 not_found`; своя — `canApply=false`, `own_vacancy` |
 | `POST /api/applications` | Отклик (прежний маршрут): `contact` теперь обязателен, коды `self_application_forbidden` (403), `vacancy_unavailable`, `already_applied` (409) |
 | `GET /api/me/applications` | История своих откликов (включая закрытые вакансии) с `vacancy.contactInfo` работодателя |
-| `GET /api/me`, `PATCH /api/me` | Профиль `{ id, displayName, applicationContact, hasBotChat }`; PATCH принимает только `application_contact` |
+| `GET /api/me`, `PATCH /api/me` | Профиль `{ id, displayName, companyName, applicationContact, hasBotChat, employerTrust }`; PATCH принимает только `application_contact` и `company_name` |
 
 Зарплаты — целые рубли; период в модели не хранится, по смыслу продукта это рубли в месяц (как и
 бенчмарк «Работы России»). При появлении оплаты за смену/час нужно отдельное поле `salary_period`.

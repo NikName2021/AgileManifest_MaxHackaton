@@ -124,7 +124,7 @@ describe('1. каталог: видимость опубликованных ч�
       badges: [],
       status: 'published',
       createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
-      employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
+      employer: { displayName: 'A', companyName: null, trusted: false, confirmedHires: 0 },
       myApplication: null,
       canApply: true,
       applyUnavailableReason: null,
@@ -483,7 +483,7 @@ describe('8–9. история откликов кандидата', () => {
         badges: [],
         contactInfo: '+7 999 111-22-33',
         status: 'published',
-        employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
+        employer: { displayName: 'A', companyName: null, trusted: false, confirmedHires: 0 },
       },
     });
     expect(JSON.stringify(forB)).not.toContain('+7 900 000-00-02');
@@ -631,11 +631,11 @@ describe('13. профиль', () => {
     const v = await publishedVacancy(A);
     await apply(B, v.id, 'старый контакт');
 
-    expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: null, hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
+    expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', companyName: null, applicationContact: null, hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
 
     const patched = await app.inject({ method: 'PATCH', url: '/api/me', headers: B.auth, payload: { application_contact: '  @new_contact  ' } });
     expect(patched.statusCode).toBe(200);
-    expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', applicationContact: '@new_contact', hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
+    expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', companyName: null, applicationContact: '@new_contact', hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
     expect((await get(B, '/api/me/applications')).json().items[0].contact).toBe('старый контакт');
     expect((await get(C, '/api/me')).json()).toMatchObject({ id: C.user.id, applicationContact: null });
     // Номер из MAX (phone) не трогается.
@@ -653,6 +653,35 @@ describe('13. профиль', () => {
     }
     const user = await db.user.findUniqueOrThrow({ where: { id: B.user.id } });
     expect(user).toMatchObject({ maxUserId: 'max-B', chatId: 'chat-B', applicationContact: null });
+  });
+
+  it('название компании видно в каталоге, карточке, истории откликов и приглашении бригады вместо имени', async () => {
+    const v = await publishedVacancy(A);
+    await apply(B, v.id, '@b');
+
+    const patched = await app.inject({ method: 'PATCH', url: '/api/me', headers: A.auth, payload: { company_name: '  Кафе   «Прибой»  ' } });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json()).toMatchObject({ displayName: 'A', companyName: 'Кафе «Прибой»' });
+    // Контакт для откликов при этом не сбрасывается.
+    expect((await db.user.findUniqueOrThrow({ where: { id: A.user.id } })).companyName).toBe('Кафе «Прибой»');
+
+    const employer = { displayName: 'Кафе «Прибой»', companyName: 'Кафе «Прибой»' };
+    expect((await get(B, '/api/jobs')).json().items[0].employer).toMatchObject(employer);
+    expect((await get(B, `/api/jobs/${v.id}`)).json().employer).toMatchObject(employer);
+    expect((await get(B, '/api/me/applications')).json().items[0].vacancy.employer).toMatchObject(employer);
+
+    // Пустая строка сбрасывает название — снова видно имя из MAX.
+    const cleared = await app.inject({ method: 'PATCH', url: '/api/me', headers: A.auth, payload: { company_name: '   ' } });
+    expect(cleared.json().companyName).toBeNull();
+    expect((await get(B, '/api/jobs')).json().items[0].employer).toMatchObject({ displayName: 'A', companyName: null });
+  });
+
+  it('PATCH /api/me: некорректное название компании', async () => {
+    for (const company_name of ['x'.repeat(121), '!!!', 'Кафе​', 42]) {
+      const res = await app.inject({ method: 'PATCH', url: '/api/me', headers: A.auth, payload: { company_name } });
+      expect(res.statusCode, String(company_name)).toBe(400);
+      expect(res.json().error.fields).toHaveProperty('company_name');
+    }
   });
 });
 

@@ -223,11 +223,16 @@ export const listMyApplicationsQuerySchema = z.object({
   offset: queryInt(0, POSTGRES_INT4_MAX).default('0'),
 });
 
+export const COMPANY_NAME_MAX_LENGTH = 120;
+
+// Пустая строка в company_name сбрасывает название — в вакансиях снова видно имя из MAX.
 export const updateMeSchema = z
   .object({
-    application_contact: contactString('application_contact').nullable(),
+    application_contact: contactString('application_contact').nullable().optional(),
+    company_name: orNull(text('company_name', { max: COMPANY_NAME_MAX_LENGTH })).nullable().optional(),
   })
-  .strict();
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: 'at least one field is required' });
 
 export const benchmarkQuerySchema = z.object({
   region_code: text('region_code', { min: 1, max: 100 }),

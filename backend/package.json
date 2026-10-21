@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "test": "vitest run",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "seed:showcase": "node prisma/seed-showcase.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",

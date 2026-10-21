@@ -8,5 +8,10 @@ export function formatPublicationDate(value: string, now = new Date()): string {
   yesterday.setDate(yesterday.getDate() - 1)
   if (date.toDateString() === yesterday.toDateString()) return 'Вчера'
 
-  return date.toLocaleDateString('ru-RU')
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' })
+    .formatToParts(date)
+    .map((part) =>
+      part.type === 'month' ? part.value[0].toUpperCase() + part.value.slice(1) : part.value,
+    )
+    .join('')
 }

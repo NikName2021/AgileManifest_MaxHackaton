@@ -207,14 +207,7 @@ html:has(dialog[open]) {
   font-size: 14px;
 }
 .max-root
-  :is(
-    .select-trigger,
-    .badge-choice,
-    .desktop-job-details,
-    .roadmap-point,
-    .badges-expand,
-    .publication-date-trigger
-  )
+  :is(.select-trigger, .badge-choice, .desktop-job-details, .roadmap-point, .badges-expand)
   > [class*='Button__content'] {
   font-size: inherit;
   line-height: inherit;
@@ -396,52 +389,19 @@ html:has(dialog[open]) {
   font-size: 14px;
 }
 .publication-date {
-  position: relative;
-  z-index: 3;
-  display: inline-flex;
-  max-width: 60%;
+  margin-left: auto;
+  flex: 1 0 160px;
+  overflow-wrap: normal;
+  text-align: right;
   color: var(--muted);
   font-size: 16px;
 }
 .publication-date.is-recent {
   color: #7744bd;
+  font-weight: 500;
 }
 :root[data-app-theme='dark'] .publication-date.is-recent {
   color: #c3a1ff;
-}
-.max-root button.publication-date-trigger {
-  min-width: 0;
-  min-height: 32px;
-  height: auto;
-  padding: 4px 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font-size: inherit;
-  font-weight: 400;
-}
-.publication-date.is-recent .publication-date-trigger {
-  font-weight: 500;
-}
-.publication-tooltip {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  z-index: 30;
-  width: max-content;
-  max-width: min(230px, calc(100vw - 64px));
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #302544;
-  color: #fff;
-  box-shadow: 0 4px 16px rgb(13 0 26 / 18%);
-  font-size: 13px;
-  line-height: 1.5;
-}
-:root[data-app-theme='dark'] .publication-tooltip {
-  background: #e8dcff;
-  color: #241338;
 }
 .employer-details .job-employer {
   margin: 0;
@@ -466,7 +426,7 @@ html:has(dialog[open]) {
   font-weight: 500;
 }
 .job-card-footer .remaining-places {
-  margin-left: auto;
+  flex-shrink: 0;
 }
 .remaining-places {
   display: inline-flex;
@@ -970,6 +930,7 @@ html:has(dialog[open]) {
   .job-card-footer {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
   }

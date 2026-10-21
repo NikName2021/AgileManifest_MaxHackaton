@@ -17,7 +17,7 @@ describe('vacancy publication date', () => {
   it('shows the date for older publications even when less than 48 hours have passed', () => {
     const now = new Date(2026, 2, 1, 0, 1)
     expect(formatPublicationDate(new Date(2026, 1, 27, 23, 59).toISOString(), now)).toBe(
-      '27.02.2026',
+      '27 Февраля',
     )
   })
 

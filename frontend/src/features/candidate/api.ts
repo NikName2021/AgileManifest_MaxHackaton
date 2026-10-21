@@ -24,7 +24,7 @@ export interface PublicVacancy extends Pick<
   | 'description'
   | 'status'
 > {
-  employer: { displayName: string | null; confirmedHires?: number }
+  employer: { displayName: string | null; companyName?: string | null; confirmedHires?: number }
   headcount?: number | null
   spotsLeft?: number | null
   studentFriendly?: boolean
@@ -153,6 +153,9 @@ function vacancy(body: unknown): PublicVacancy {
     status: v.status as Vacancy['status'],
     employer: {
       displayName: nullable(record(v.employer).displayName),
+      ...(record(v.employer).companyName !== undefined
+        ? { companyName: nullable(record(v.employer).companyName) }
+        : {}),
       ...(record(v.employer).confirmedHires !== undefined
         ? { confirmedHires: integer(record(v.employer).confirmedHires) }
         : {}),

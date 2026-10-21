@@ -17,7 +17,6 @@ import { useSession } from '../features/session/context'
 import { bindBackButton } from '../shared/max/bridge'
 import { useCabinet } from '../features/cabinet/context'
 import { Brand } from '../shared/ui/Brand'
-import { MaxLogo } from '../shared/ui/MaxLogo'
 import { Button } from '@maxhub/max-ui'
 import { useTheme } from '../features/appearance/context'
 
@@ -140,7 +139,6 @@ export function Shell() {
           >
             Выйти
           </Button>
-          <MaxLogo />
           <p className="sidebar-note">Работа и люди в MAX</p>
         </div>
       </aside>

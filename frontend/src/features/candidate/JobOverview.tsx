@@ -6,6 +6,14 @@ import { Capacity } from '../capacity/Capacity'
 import { formatSalary } from '../vacancies/model'
 
 export function JobOverview({ job }: { job: PublicVacancy }) {
+  const hires = job.employer.confirmedHires
+  const hireWord =
+    hires === undefined
+      ? ''
+      : ({ one: 'найм', few: 'найма', many: 'наймов', other: 'наймов' } as Record<string, string>)[
+          new Intl.PluralRules('ru-RU').select(hires)
+        ]
+
   return (
     <>
       <header className="job-detail-heading">
@@ -28,6 +36,17 @@ export function JobOverview({ job }: { job: PublicVacancy }) {
         <div className="vacancy-description">
           {job.description || 'Работодатель пока не добавил описание.'}
         </div>
+      </section>
+      <section className="job-description-section employer-details" aria-label="Работодатель">
+        <div className="employer-details-heading">
+          <h2>Работодатель</h2>
+          {hires !== undefined && (
+            <span className="employer-hiring-badge" aria-label={`Подтверждённые наймы: ${hires}`}>
+              {hires} {hireWord}
+            </span>
+          )}
+        </div>
+        <EmployerHeading employer={job.employer} />
       </section>
     </>
   )

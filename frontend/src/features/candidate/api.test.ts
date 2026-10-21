@@ -5,6 +5,17 @@ import { jobQuery } from './query'
 
 const query = { sort: 'newest' as const, limit: 20, offset: 0 }
 describe('candidate API contracts', () => {
+  it('preserves the public company name without accepting malformed employer data', async () => {
+    const job = await createPreviewCandidate().job(1001)
+    expect(
+      parseJob({ ...job, employer: { ...job.employer, companyName: 'Кафе «Прибой»' } }).employer
+        .companyName,
+    ).toBe('Кафе «Прибой»')
+    expect(
+      parseJob({ ...job, employer: { ...job.employer, companyName: null } }).employer.companyName,
+    ).toBeNull()
+    expect(() => parseJob({ ...job, employer: { ...job.employer, companyName: 42 } })).toThrow()
+  })
   it('filters titles across API pages before calculating totals and slicing results', async () => {
     const original = await createPreviewCandidate().job(1001)
     const items = Array.from({ length: 103 }, (_, i) => ({

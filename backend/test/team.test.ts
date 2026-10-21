@@ -126,6 +126,7 @@ describe('GET /api/team', () => {
 
 describe('POST /api/vacancies/:id/team-invites', () => {
   it('приглашает всю бригаду, пропускает тех, кому некуда написать, повтор не шлёт второе сообщение', async () => {
+    await db.user.update({ where: { id: A.user.id }, data: { companyName: 'Сад «Черешня»' } });
     const season = await publish(A, 'Сборщик черешни 2026');
     sendMessageMock.mockClear();
 
@@ -141,6 +142,7 @@ describe('POST /api/vacancies/:id/team-invites', () => {
     const toB = sentTo('chat-B');
     expect(toB).toHaveLength(1);
     expect(toB[0][1]).toContain('Сборщик черешни 2026');
+    expect(toB[0][1]).toMatch(/^Сад «Черешня» снова набирает/);
     expect(toB[0][1]).toContain('График: сезонная');
     expect(lastButtonsTo('chat-B')?.[0].map((b) => b.payload)).toEqual([expect.stringMatching(/^team_invite:\d+:yes$/), expect.stringMatching(/^team_invite:\d+:no$/)]);
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../auth/middleware.js';
 import { sendError, zodFieldErrors } from '../errors.js';
 import { idParamSchema, listJobsQuerySchema, listMyApplicationsQuerySchema, updateMeSchema } from '../validation.js';
-import { getJob, getProfile, listJobFilters, listJobs, listMyApplications, updateApplicationContact } from './service.js';
+import { getJob, getProfile, listJobFilters, listJobs, listMyApplications, updateProfile } from './service.js';
 
 // /api/vacancies и GET /api/applications остаются кабинетом работодателя.
 export function registerCandidateRoutes(app: FastifyInstance) {
@@ -47,7 +47,7 @@ export function registerCandidateRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return sendError(reply, 400, 'validation_error', 'invalid request body', zodFieldErrors(parsed.error.flatten()));
     }
-    const profile = await updateApplicationContact(request.sessionUserId!, parsed.data.application_contact);
+    const profile = await updateProfile(request.sessionUserId!, { applicationContact: parsed.data.application_contact, companyName: parsed.data.company_name });
     if (!profile) return sendError(reply, 401, 'unauthorized', 'session user no longer exists');
     return profile;
   });

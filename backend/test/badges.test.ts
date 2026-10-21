@@ -99,7 +99,7 @@ describe('бейджи вакансии', () => {
     const unknown = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: ['unicorn'] } });
     expect(unknown.statusCode).toBe(400);
     expect(unknown.json().error.fields).toHaveProperty('badges');
-    const many = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: BADGE_KEYS.slice(0, 5) } });
+    const many = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: BADGE_KEYS.slice(0, 11) } });
     expect(many.statusCode).toBe(400);
     expect(many.json().error.fields).toHaveProperty('badges');
     // «Подходит студентам» тоже бейдж и входит в лимит 4.
@@ -107,7 +107,7 @@ describe('бейджи вакансии', () => {
       method: 'POST',
       url: '/api/vacancies',
       headers: A.auth,
-      payload: { title: 'x', badges: ['housing_free', 'meals_3', 'tickets_paid', 'bar'], student_friendly: true },
+      payload: { title: 'x', badges: ['housing_free', 'meals_3', 'tickets_paid', 'bar', 'by_sea', 'tips', 'pay_weekly', 'workwear', 'training', 'shifts'], student_friendly: true },
     });
     expect(withStudents.statusCode).toBe(400);
     expect(withStudents.json().error.fields).toHaveProperty('badges');
@@ -123,8 +123,8 @@ describe('бейджи вакансии', () => {
     const draft = (await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'Черновик', badges: ['bar'] } })).json();
     const patched = (await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { badges: ['kitchen', 'tips'] } })).json();
     expect(patched.badges.map((b: { key: string }) => b.key)).toEqual(['tips', 'kitchen']);
-    // PATCH проверяет лимит на слиянии: 4 бейджа + включаемая студенческая отметка — 400.
-    await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { badges: ['kitchen', 'tips', 'bar', 'by_sea'] } });
+    // PATCH проверяет лимит на слиянии: 10 бейджей + включаемая студенческая отметка — 400.
+    await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { badges: ['housing_free', 'meals_3', 'tickets_paid', 'bar', 'by_sea', 'tips', 'pay_weekly', 'workwear', 'training', 'shifts'] } });
     const overflow = await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { student_friendly: true } });
     expect(overflow.statusCode).toBe(400);
     expect(overflow.json().error.fields).toHaveProperty('badges');
@@ -133,17 +133,17 @@ describe('бейджи вакансии', () => {
     expect(untouched.badges.map((b: { key: string }) => b.key)).toEqual(['tips', 'kitchen']);
   });
 
-  it('4 бейджа с самым длинным текстом учитываются в лимите карточки', async () => {
+  it('10 бейджей с самым длинным текстом учитываются в лимите карточки', async () => {
     const longest = [...BADGE_KEYS]
       .map((key) => BADGE_GROUPS.flatMap((g) => g.items).find((b) => b.key === key)!)
       .sort((a, b) => b.label.length - a.label.length)
-      .slice(0, 4)
+      .slice(0, 10)
       .map((b) => b.key);
     // Бейджи учитываются в проверке длины: слишком длинное описание вместе с ними — 400.
-    const tooLong = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: longest, description: 'a'.repeat(3900) } });
+    const tooLong = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: longest, description: 'a'.repeat(3700) } });
     expect(tooLong.statusCode).toBe(400);
     expect(tooLong.json().error.fields).toHaveProperty('description');
-    const res = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: longest, description: 'a'.repeat(3500) } });
+    const res = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: longest, description: 'a'.repeat(3200) } });
     expect(res.statusCode).toBe(201);
     await app.inject({ method: 'POST', url: `/api/vacancies/${res.json().id}/publish`, headers: A.auth });
     const card = sendMessageMock.mock.calls.find((c) => String(c[1]).startsWith('**x**'));

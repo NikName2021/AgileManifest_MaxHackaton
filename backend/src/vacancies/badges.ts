@@ -125,9 +125,9 @@ export const BADGE_GROUPS: BadgeGroup[] = [
   },
 ];
 
-// Не больше 4 на вакансию — с отметкой «Подходит студентам» включительно, иначе карточка
+// Не больше 10 на вакансию — с отметкой «Подходит студентам» включительно, иначе карточка
 // превращается в набор значков.
-export const MAX_BADGES_PER_VACANCY = 4;
+export const MAX_BADGES_PER_VACANCY = 10;
 
 // Сколько бейджей будет показано: выбранные плюс students_ok по флагу studentFriendly.
 export function shownBadgeCount(keys: string[] | null | undefined, studentFriendly = false): number {

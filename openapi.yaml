@@ -633,7 +633,7 @@ paths:
                       - { key: meals_3, emoji: 🍲, label: 3-разовое питание }
                     status: published
                     createdAt: '2026-10-17T09:00:00.000Z'
-                    employer: { displayName: Иван, trusted: true, confirmedHires: 7 }
+                    employer: { displayName: Кафе «Прибой», companyName: Кафе «Прибой», trusted: true, confirmedHires: 7 }
                     myApplication: null
                     canApply: true
                     applyUnavailableReason: null
@@ -783,6 +783,7 @@ paths:
               example:
                 id: 7
                 displayName: Иван
+                companyName: Кафе «Прибой»
                 applicationContact: '@ivan_max'
                 hasBotChat: true
                 employerTrust: { trusted: false, confirmedHires: 3, threshold: 5 }
@@ -794,9 +795,11 @@ paths:
                 $ref: '#/components/schemas/Error'
     patch:
       summary: >
-        Изменить сохранённый контакт для предзаполнения формы отклика. Принимает только
-        application_contact; любые другие поля (id, maxUserId, chatId, role…) — 400. Контакты уже
-        отправленных откликов не меняются; POST /api/applications всегда берёт contact из тела.
+        Изменить сохранённый контакт для предзаполнения формы отклика и/или название компании.
+        Принимает только application_contact и company_name (хотя бы одно); любые другие поля
+        (id, maxUserId, chatId, role…) — 400. Контакты уже отправленных откликов не меняются;
+        POST /api/applications всегда берёт contact из тела. Название компании сразу видно во всех
+        вакансиях работодателя (employer.displayName) и в приглашениях бригады.
       operationId: updateMe
       requestBody:
         required: true
@@ -804,8 +807,8 @@ paths:
           application/json:
             schema:
               type: object
-              required: [application_contact]
               additionalProperties: false
+              minProperties: 1
               properties:
                 application_contact:
                   type: string
@@ -813,8 +816,17 @@ paths:
                   minLength: 1
                   maxLength: 200
                   description: trim, 1–200 символов; null очищает сохранённый контакт
+                company_name:
+                  type: string
+                  nullable: true
+                  maxLength: 120
+                  description: >
+                    Название компании для карточек вакансий: одна строка, пробелы схлопываются, нужна
+                    хотя бы одна буква или цифра. null или пустая строка — сбросить, в вакансиях снова
+                    видно имя из MAX.
             example:
               application_contact: '@ivan_max'
+              company_name: Кафе «Прибой»
       responses:
         '200':
           description: Обновлённый профиль
@@ -1044,7 +1056,7 @@ paths:
                   groups:
                     type: array
                     items: { $ref: '#/components/schemas/BadgeGroup' }
-                  maxPerVacancy: { type: integer, example: 4 }
+                  maxPerVacancy: { type: integer, example: 10 }
 
   /api/applications/{id}/timeline:
     get:
@@ -1730,11 +1742,11 @@ components:
           description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
         badges:
           type: array
-          maxItems: 4
+          maxItems: 10
           items: { type: string }
           description: >
             Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются. Всего на
-            вакансии не больше 4 бейджей, включая «Подходит студентам» при student_friendly = true.
+            вакансии не больше 10 бейджей, включая «Подходит студентам» при student_friendly = true.
           example: [housing_free, meals_3, tickets_paid]
 
     VacancyPatchInput:
@@ -1780,11 +1792,11 @@ components:
           description: Подходит студентам (строка в карточке, фильтр каталога, студенческие каналы)
         badges:
           type: array
-          maxItems: 4
+          maxItems: 10
           items: { type: string }
           description: >
             Ключи бейджей из GET /api/badges; неизвестный ключ — 400, повторы убираются. Всего на
-            вакансии не больше 4 бейджей, включая «Подходит студентам» при student_friendly = true.
+            вакансии не больше 10 бейджей, включая «Подходит студентам» при student_friendly = true.
           example: [housing_free, meals_3, tickets_paid]
 
     Application:
@@ -1902,10 +1914,17 @@ components:
 
     EmployerPublic:
       type: object
-      required: [displayName, trusted, confirmedHires]
-      description: Публичные сведения о работодателе. Отдельного поля «компания» нет — это имя пользователя в MAX.
+      required: [displayName, companyName, trusted, confirmedHires]
+      description: Публичные сведения о работодателе.
       properties:
-        displayName: { type: string, nullable: true }
+        displayName:
+          type: string
+          nullable: true
+          description: Что показывать в карточке — название компании, а если оно не задано, имя пользователя в MAX.
+        companyName:
+          type: string
+          nullable: true
+          description: Название компании из профиля (PATCH /api/me company_name); null — не задано.
         trusted:
           type: boolean
           description: >
@@ -2027,14 +2046,18 @@ components:
           description: Условия работы
           contactInfo: '+7 999 000-00-00'
           status: closed
-          employer: { displayName: Иван, trusted: true, confirmedHires: 7 }
+          employer: { displayName: Кафе «Прибой», companyName: Кафе «Прибой», trusted: true, confirmedHires: 7 }
 
     Profile:
       type: object
-      required: [id, displayName, applicationContact, hasBotChat, employerTrust]
+      required: [id, displayName, companyName, applicationContact, hasBotChat, employerTrust]
       properties:
         id: { type: integer }
-        displayName: { type: string, nullable: true }
+        displayName: { type: string, nullable: true, description: Имя пользователя в MAX }
+        companyName:
+          type: string
+          nullable: true
+          description: Название компании для карточек вакансий; null — в вакансиях видно displayName
         applicationContact:
           type: string
           nullable: true

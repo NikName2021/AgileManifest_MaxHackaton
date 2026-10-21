@@ -47,10 +47,10 @@ describe('справочник бейджей', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.maxPerVacancy).toBe(MAX_BADGES_PER_VACANCY);
-    expect(body.groups.map((g: { key: string }) => g.key)).toEqual(['housing', 'food', 'travel', 'pay', 'terms', 'audience', 'schedule', 'place']);
+    expect(body.groups.map((g: { key: string }) => g.key)).toEqual(['housing', 'food', 'travel', 'pay', 'terms', 'benefits', 'audience', 'schedule', 'place']);
     expect(body.groups[0].items[0]).toEqual({ key: 'housing_free', emoji: '🏠', label: 'Жильё бесплатно' });
     expect(new Set(BADGE_KEYS).size).toBe(BADGE_KEYS.length);
-    expect(BADGE_KEYS.length).toBeGreaterThanOrEqual(45);
+    expect(BADGE_KEYS.length).toBeGreaterThanOrEqual(100);
     for (const g of BADGE_GROUPS) for (const b of g.items) expect(b.emoji.length).toBeGreaterThan(0);
   });
 });

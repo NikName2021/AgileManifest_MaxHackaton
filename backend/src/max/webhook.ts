@@ -60,13 +60,16 @@ function extractContactFromMessage(update: any): string | undefined {
 // и не зависит от кодирования спецсимволов в start=.
 const LINK_SOURCES: Record<string, ApplicationSource> = { qr: 'qr', sub: 'subscription', ch: 'channel' };
 
-function parseDeepLinkApplyPayload(payload: unknown): { vacancyId: number; source: ApplicationSource } | undefined {
+// apply_<id>_ch<channelId> — пост канала партнёра: номер канала нужен для статистики канала.
+function parseDeepLinkApplyPayload(payload: unknown): { vacancyId: number; source: ApplicationSource; channelId?: number } | undefined {
     if (typeof payload !== 'string') return undefined;
-    const match = /^apply_(\d+)(?:_([a-z]+))?$/.exec(payload);
+    const match = /^apply_(\d+)(?:_([a-z]+)(\d{1,10})?)?$/.exec(payload);
     if (!match) return undefined;
     const vacancyId = Number(match[1]);
     if (!Number.isFinite(vacancyId)) return undefined;
-    return { vacancyId, source: (match[2] && LINK_SOURCES[match[2]]) || 'link' };
+    const source = (match[2] && LINK_SOURCES[match[2]]) || 'link';
+    const channelId = source === 'channel' && match[3] ? Number(match[3]) : undefined;
+    return { vacancyId, source, ...(channelId && channelId <= 2147483647 ? { channelId } : {}) };
 }
 
 export function registerMaxWebhook(app: FastifyInstance) {
@@ -142,7 +145,7 @@ export function registerMaxWebhook(app: FastifyInstance) {
 
           const deepLink = parseDeepLinkApplyPayload(update.payload);
           if (deepLink) {
-            await handleApplyClick(chatId, String(senderId), deepLink.vacancyId, deepLink.source);
+            await handleApplyClick(chatId, String(senderId), deepLink.vacancyId, deepLink.source, deepLink.channelId);
           } else {
             await maxApi.sendMessage(
               chatId,

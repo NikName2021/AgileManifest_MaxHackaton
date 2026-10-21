@@ -9,7 +9,7 @@ import { app } from '../src/server.js';
 import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { setBotUsername } from '../src/max/botInfo.js';
-import { notifyPartnerChannels } from '../src/channels/service.js';
+import { digestMoment, notifyPartnerChannels, sendChannelDigestsOnce } from '../src/channels/service.js';
 import { createUser, maxApiMock, resetDb, sendMessageMock, sentTo, webhookHeaders, type TestUser } from './helpers.js';
 
 beforeAll(async () => {
@@ -64,7 +64,12 @@ describe('каналы партнёров', () => {
     expect(sentTo('chat-U').at(-1)?.[1]).toContain('«Студотряды КубГУ»');
 
     const list = (await app.inject({ method: 'GET', url: '/api/partner-channels', headers: U.auth })).json();
-    expect(list.items).toEqual([{ id: channel.id, title: 'Студотряды КубГУ', isChannel: true, active: false, region: null, studentOnly: false, removed: false, createdAt: expect.any(String) }]);
+    expect(list.items).toEqual([{
+      id: channel.id, title: 'Студотряды КубГУ', isChannel: true, active: false, region: null, studentOnly: false,
+      categories: [], schedule: null, salaryFrom: null, trustedOnly: false, badges: [], mode: 'instant', digestHour: 10,
+      removed: false, createdAt: expect.any(String),
+      stats: { vacanciesPosted: 0, applications: 0, hired: 0, lastPostedAt: null },
+    }]);
     expect((await app.inject({ method: 'GET', url: '/api/partner-channels', headers: A.auth })).json().items).toEqual([]);
 
     const updated = await patch(U, channel.id, { active: true, region_code: 'Краснодар', student_only: true });
@@ -86,8 +91,9 @@ describe('каналы партнёров', () => {
     const id = await publish({ region_code: 'Сочи', student_friendly: true });
     await vi.waitFor(() => expect(sentTo('-100')).toHaveLength(1));
     const [, text, buttons] = sentTo('-100')[0];
-    expect(text).toContain(`start=apply_${id}_ch`);
-    expect(buttons).toEqual([[{ type: 'link', text: 'Откликнуться', url: `https://max.ru/season_test_bot?start=apply_${id}_ch` }]]);
+    const channel100 = await channelId('-100');
+    expect(text).toContain(`start=apply_${id}_ch${channel100}`);
+    expect(buttons).toEqual([[{ type: 'link', text: 'Откликнуться', url: `https://max.ru/season_test_bot?start=apply_${id}_ch${channel100}` }]]);
     expect(sentTo('-200')).toHaveLength(0);
     expect(sentTo('-300')).toHaveLength(0);
 
@@ -125,5 +131,88 @@ describe('каналы партнёров', () => {
     });
     expect(sentTo('-100')).toHaveLength(0);
     expect((await db.user.findUniqueOrThrow({ where: { id: U.user.id } })).chatId).toBe('chat-U');
+  });
+});
+
+describe('фильтры, дайджест и статистика канала', () => {
+  it('фильтры: сферы, график, зарплата, только надёжные, бейджи', async () => {
+    await addBot('-100', U);
+    const id100 = await channelId('-100');
+    const res = await patch(U, id100, {
+      active: true, categories: ['кафе', 'Гостиницы и туризм'], schedule: 'seasonal', salary_from: 50000, badges: ['housing_free'],
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({
+      categories: ['Общепит', 'Гостиницы и туризм'], schedule: 'seasonal', salaryFrom: 50000, trustedOnly: false,
+      badges: [{ key: 'housing_free', emoji: '🏠', label: 'Жильё бесплатно' }], mode: 'instant',
+    });
+    expect((await patch(U, id100, { categories: ['Обшепит'] })).json().error.fields).toHaveProperty('categories');
+    expect((await patch(U, id100, { digest_hour: 24 })).statusCode).toBe(400);
+
+    sendMessageMock.mockClear();
+    const base = { category: 'Общепит', schedule: 'seasonal', salary_max: 60000, badges: ['housing_free'] };
+    const ok = await publish(base);
+    const wrongCategory = await publish({ ...base, category: 'Склад и логистика' });
+    const wrongSchedule = await publish({ ...base, schedule: 'temporary' });
+    const lowSalary = await publish({ ...base, salary_max: 40000 });
+    const noBadge = await publish({ ...base, badges: [] });
+    await settleBroadcasts();
+    for (const id of [ok, wrongCategory, wrongSchedule, lowSalary, noBadge]) await notifyPartnerChannels(id);
+    expect(sentTo('-100').map((c) => String(c[1]))).toEqual([expect.stringContaining(`apply_${ok}_ch${id100}`)]);
+
+    // Только надёжные: у A нет подтверждённых выходов — его вакансии не проходят.
+    await patch(U, id100, { trusted_only: true, categories: [], schedule: null, salary_from: null, badges: [] });
+    sendMessageMock.mockClear();
+    await notifyPartnerChannels(await publish({ title: 'Ещё одна' }));
+    expect(sentTo('-100')).toHaveLength(0);
+  });
+
+  it('дайджест: раз в день одним постом в выбранный час, без повторов', async () => {
+    await addBot('-100', U);
+    const id100 = await channelId('-100');
+    await patch(U, id100, { active: true, mode: 'digest', digest_hour: 9 });
+    sendMessageMock.mockClear();
+    const first = await publish({ title: 'Бариста', salary_min: 45000, salary_max: 45000, region_code: 'Сочи', schedule: 'seasonal' });
+    const second = await publish({ title: 'Официант' });
+    await settleBroadcasts();
+    // В режиме дайджеста вакансии сразу не публикуются.
+    expect(sentTo('-100')).toHaveLength(0);
+
+    const now = new Date();
+    const moment = digestMoment(new Date(now.getTime() + 24 * 3600 * 1000), 9);
+    expect(await sendChannelDigestsOnce(new Date(moment.getTime() - 60_000))).toBe(0);
+    expect(await sendChannelDigestsOnce(new Date(moment.getTime() + 60_000))).toBe(1);
+    const [[, text, buttons]] = sentTo('-100');
+    expect(buttons).toBeUndefined();
+    expect(text).toContain('**Новые вакансии за сутки**');
+    expect(text).toContain('**Бариста** — 45 000 ₽');
+    expect(text).toContain('Сочи · Сезонная работа');
+    expect(text).toContain(`[Откликнуться](https://max.ru/season_test_bot?start=apply_${first}_ch${id100})`);
+    expect(text).toContain(`apply_${second}_ch${id100}`);
+    // Повторный прогон в тот же день и на следующий — без новых вакансий поста нет.
+    expect(await sendChannelDigestsOnce(new Date(moment.getTime() + 120_000))).toBe(0);
+    expect(await sendChannelDigestsOnce(new Date(moment.getTime() + 24 * 3600 * 1000 + 60_000))).toBe(0);
+    expect(sentTo('-100')).toHaveLength(1);
+    expect((await app.inject({ method: 'GET', url: '/api/partner-channels', headers: U.auth })).json().items[0].stats).toMatchObject({ vacanciesPosted: 2 });
+  });
+
+  it('статистика: отклики по ссылке из поста засчитываются каналу', async () => {
+    await addBot('-100', U);
+    const id100 = await channelId('-100');
+    await patch(U, id100, { active: true });
+    const id = await publish({});
+    await settleBroadcasts();
+    const B = await createUser('B');
+    await webhook({ update_type: 'bot_started', chat_id: 'chat-B', user: { user_id: 'max-B' }, payload: `apply_${id}_ch${id100}` });
+    await webhook({ update_type: 'message_created', message: { recipient: { chat_id: 'chat-B' }, sender: { user_id: 'max-B' }, body: { text: '+7 900 111-22-33' } } });
+    expect(await db.application.findFirstOrThrow()).toMatchObject({ source: 'channel', partnerChannelId: id100 });
+    // Номер несуществующего канала в ссылке не засчитывается.
+    const C = await createUser('C');
+    await webhook({ update_type: 'bot_started', chat_id: 'chat-C', user: { user_id: 'max-C' }, payload: `apply_${id}_ch999999` });
+    await webhook({ update_type: 'message_created', message: { recipient: { chat_id: 'chat-C' }, sender: { user_id: 'max-C' }, body: { text: '+7 900 111-22-44' } } });
+    expect((await db.application.findFirstOrThrow({ where: { candidateUserId: C.user.id } })).partnerChannelId).toBeNull();
+
+    const stats = (await app.inject({ method: 'GET', url: '/api/partner-channels', headers: U.auth })).json().items[0].stats;
+    expect(stats).toEqual({ vacanciesPosted: 1, applications: 1, hired: 0, lastPostedAt: expect.any(String) });
   });
 });

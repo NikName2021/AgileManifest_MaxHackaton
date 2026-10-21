@@ -1,4 +1,5 @@
 import { escapeMarkdown } from '../markdown.js';
+import { NO_CATEGORY, resolveCategory } from '../categories/service.js';
 import { OWNER_KEY, type DialogFlow } from './types.js';
 import { normalizeRegion } from '../regions/dictionary.js';
 import { employerTrust } from '../employers/trust.js';
@@ -114,6 +115,16 @@ export const vacancyFlow: DialogFlow = {
     name: 'new_vacancy',
     steps: [
         { key: 'title', prompt: 'Какая должность? Например: «Сборщик урожая» или «Официант на лето».', parse: textAnswer(200) },
+        {
+            key: 'category',
+            prompt: 'В какой сфере работа? Выберите кнопкой или напишите своими словами — например, «кафе» или «теплица».',
+            buttons: [
+                [{ text: 'Сельское хозяйство', value: 'Сельское хозяйство' }, { text: 'Общепит', value: 'Общепит' }],
+                [{ text: 'Гостиницы и туризм', value: 'Гостиницы и туризм' }, { text: 'Торговля', value: 'Торговля' }],
+                [{ text: 'Склад и логистика', value: 'Склад и логистика' }, { text: 'Строительство', value: 'Строительство' }],
+            ],
+            parse: textAnswer(100),
+        },
         { key: 'region', prompt: 'В каком регионе или городе нужен человек?', parse: textAnswer(100) },
         {
             key: 'schedule',
@@ -154,7 +165,9 @@ export const vacancyFlow: DialogFlow = {
                 title: data.title,
                 regionCode: data.region,
                 regionSubject: normalizeRegion(data.region),
-                category: 'general',      // TODO: добавить шаг выбора категории, когда появится справочник
+                // Сессии, начатые до появления шага, — без сферы. Синоним («кафе») и явная опечатка
+                // заменяются на существующую сферу, иначе сфера заводится новой.
+                category: data.category ? await resolveCategory(data.category, { fixTypos: true }) : NO_CATEGORY,
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,

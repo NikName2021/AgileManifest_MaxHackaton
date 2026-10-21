@@ -697,7 +697,8 @@ describe('14. текстовая ссылка в карточке', () => {
     const [chatId, text, buttons] = sendMessageMock.mock.calls[0];
     const url = `https://max.ru/${BOT}?start=apply_${v.id}`;
     expect(chatId).toBe('chat-A');
-    expect(text).toContain(`Откликнуться:\n[https://max\\.ru/season\\_test\\_bot?start\\=apply\\_${v.id}](${url})`);
+    expect(text).toContain(`[Ссылка для отклика](${url})`);
+    expect(text).not.toContain('Откликнуться:');
     expect(text).not.toMatch(/<botUsername>|<vacancyId>/);
     expect(text.length).toBeLessThanOrEqual(MAX_CARD_TEXT_LIMIT);
     // Кнопки исходного сообщения сохраняются.

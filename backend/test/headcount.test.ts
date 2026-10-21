@@ -53,7 +53,7 @@ describe('набор бригады (headcount)', () => {
   it('карточка и каталог показывают, сколько мест осталось', async () => {
     const id = await vacancy(3);
     const card = sendMessageMock.mock.calls.find((c) => c[0] === 'chat-A' && String(c[1]).includes('Сбор'));
-    expect(card?.[1]).toContain('Нужно человек: 3');
+    expect(card?.[1]).toContain('Набор: 3 человека');
 
     const first = await apply(workers[0], id);
     await setStatus(first, 'hired');

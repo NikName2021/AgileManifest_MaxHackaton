@@ -88,6 +88,8 @@ model Application {
   candidateChatId          String?            @map("candidate_chat_id")
   // card | link | qr | subscription | channel | miniapp | team; null — отклики до появления поля.
   source                   String?
+  // Канал партнёра, из поста которого пришёл отклик (source = channel) — статистика канала.
+  partnerChannelId         Int?               @map("partner_channel_id")
   // Последний перевод в hired — для списка «Моя бригада».
   hiredAt                  DateTime?          @map("hired_at")
   // Выход на смену: когда, где и подтвердил ли кандидат (pending | confirmed | declined).
@@ -104,6 +106,7 @@ model Application {
   @@unique([vacancyId, candidateUserId])
   // GET /api/me/applications
   @@index([candidateUserId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([partnerChannelId])
   @@map("applications")
 }
 
@@ -120,10 +123,11 @@ model BenchmarkCache {
 }
 
 model PendingApplication {
-  chatId    String   @id @map("chat_id")
-  vacancyId Int      @map("vacancy_id")
-  source    String?
-  createdAt DateTime @default(now()) @map("created_at")
+  chatId           String   @id @map("chat_id")
+  vacancyId        Int      @map("vacancy_id")
+  source           String?
+  partnerChannelId Int?     @map("partner_channel_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   @@map("pending_applications")
 }
@@ -203,6 +207,17 @@ model PartnerChannel {
   active        Boolean   @default(false)
   regionSubject String?   @map("region_subject")
   studentOnly   Boolean   @default(false) @map("student_only")
+  // Фильтры публикации; пустой массив и null — «любое значение».
+  categories    String[]  @default([])
+  schedule      String?
+  salaryFrom    Int?      @map("salary_from")
+  trustedOnly   Boolean   @default(false) @map("trusted_only")
+  // Вакансия должна иметь все перечисленные бейджи.
+  badges        String[]  @default([])
+  // instant — каждая вакансия сразу; digest — раз в день одним постом в digestHour (МСК).
+  mode          String    @default("instant")
+  digestHour    Int       @default(10) @map("digest_hour")
+  lastDigestAt  DateTime? @map("last_digest_at")
   createdAt     DateTime  @default(now()) @map("created_at")
   // Бота удалили из чата — публикации прекращаются.
   removedAt     DateTime? @map("removed_at")
@@ -230,4 +245,16 @@ model ApplicationEvent {
 
   @@index([applicationId, createdAt])
   @@map("application_events")
+}
+
+// Сферы деятельности, которые добавили сами работодатели. Встроенные сферы с синонимами — в коде
+// (categories/catalog.ts); здесь только новые, чтобы предлагать их другим при вводе.
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String
+  // Нормализованное название (регистр, ё/е, знаки) — одна сфера не заводится дважды.
+  normKey   String   @unique @map("norm_key")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("categories")
 }

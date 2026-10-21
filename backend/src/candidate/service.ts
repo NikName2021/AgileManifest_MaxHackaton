@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { employerTrustMap, type EmployerTrust } from '../employers/trust.js';
 import { loadTimelines } from '../application/timeline.js';
 import { resolveBadges, type BadgeDef } from '../vacancies/badges.js';
+import { findCategory } from '../categories/service.js';
 
 // Кабинет работника. Только явные DTO: chatId, maxUserId и служебные поля доставки наружу не уходят.
 // Доступ — по userId из сессии; режим «работник/работодатель» выбирает интерфейс, а не права.
@@ -144,8 +145,9 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   const regionCode = nonEmpty(params.region_code);
   // Значение из /api/jobs/filters: код субъекта или исходный текст нераспознанного региона.
   if (regionCode) conditions.push(Prisma.sql`(v.region_subject = ${regionCode} OR v.region_code = ${regionCode})`);
+  // «кафе» или «общепит» в фильтре — та же сфера, что «Общепит».
   const category = nonEmpty(params.category);
-  if (category) conditions.push(Prisma.sql`v.category = ${category}`);
+  if (category) conditions.push(Prisma.sql`v.category = ${(await findCategory(category))?.name ?? category}`);
   if (params.schedule) conditions.push(Prisma.sql`v.schedule = ${params.schedule}`);
   if (params.student_friendly !== undefined) conditions.push(Prisma.sql`v.student_friendly = ${params.student_friendly}`);
   if (params.badges?.length) conditions.push(Prisma.sql`v.badges @> ${params.badges}::text[]`);

@@ -27,7 +27,7 @@ export async function resetDb() {
   const { settleBroadcasts } = await import('../src/vacancies/broadcast.js');
   await settleBroadcasts();
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE application_events, channel_deliveries, partner_channels, subscription_deliveries, job_subscriptions, team_invites, team_marks, applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
+    'TRUNCATE TABLE categories, application_events, channel_deliveries, partner_channels, subscription_deliveries, job_subscriptions, team_invites, team_marks, applications, pending_applications, dialog_sessions, benchmark_cache, vacancies, users RESTART IDENTITY CASCADE'
   );
 }
 

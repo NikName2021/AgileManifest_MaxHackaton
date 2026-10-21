@@ -267,6 +267,21 @@ export const updateMeSchema = z
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: 'at least one field is required' });
 
+// Автодополнение: q — то, что человек уже ввёл.
+export const suggestQuerySchema = z.object({
+  q: text('q', { min: 1, max: 100, meaningful: false }),
+  limit: queryInt(1, 20).default('8'),
+});
+
+// exclude — уже выбранные бейджи через запятую, их не предлагаем.
+export const badgeSuggestQuerySchema = suggestQuerySchema.extend({
+  exclude: z
+    .string()
+    .max(1000)
+    .transform((v) => v.split(',').map((k) => k.trim()).filter(Boolean))
+    .optional(),
+});
+
 export const benchmarkQuerySchema = z.object({
   region_code: text('region_code', { min: 1, max: 100 }),
   category: text('category', { min: 1, max: 200 }),
@@ -291,11 +306,26 @@ export const createSubscriptionSchema = z
   })
   .strict();
 
+// Сколько сфер можно выбрать в фильтре канала.
+export const CHANNEL_MAX_CATEGORIES = 10;
+
 export const updateChannelSchema = z
   .object({
     active: z.boolean().optional(),
     region_code: text('region_code', { min: 1, max: 100 }).nullable().optional(),
     student_only: z.boolean().optional(),
+    // Пустой массив — любая сфера; каждая сфера должна существовать (GET /api/categories).
+    categories: z.array(text('categories', { min: 1, max: 100 })).max(CHANNEL_MAX_CATEGORIES).optional(),
+    schedule: SCHEDULE_ENUM.nullable().optional(),
+    salary_from: salary.nullable().optional(),
+    trusted_only: z.boolean().optional(),
+    badges: z
+      .array(z.enum(BADGE_KEYS, { errorMap: () => ({ message: 'unknown badge, see GET /api/badges' }) }))
+      .max(MAX_BADGES_PER_VACANCY)
+      .transform((keys) => [...new Set(keys)])
+      .optional(),
+    mode: z.enum(['instant', 'digest']).optional(),
+    digest_hour: z.number().int('must be an integer').min(0).max(23).optional(),
   })
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: 'at least one field is required' });

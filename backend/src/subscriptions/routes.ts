@@ -3,6 +3,7 @@ import { requireAuth } from '../auth/middleware.js';
 import { sendError, zodFieldErrors } from '../errors.js';
 import { createSubscriptionSchema, idParamSchema } from '../validation.js';
 import { normalizeRegion } from '../regions/dictionary.js';
+import { findCategory } from '../categories/service.js';
 import { createSubscription, deleteSubscription, listSubscriptions, SUBSCRIPTIONS_PER_USER } from './service.js';
 
 export function registerSubscriptionRoutes(app: FastifyInstance) {
@@ -20,9 +21,16 @@ export function registerSubscriptionRoutes(app: FastifyInstance) {
     if (body.region_code && !regionSubject) {
       return sendError(reply, 400, 'validation_error', 'unknown region', { region_code: ['region is not recognised, use a code from GET /api/regions'] });
     }
+    // Сфера — только существующая: с опечаткой подписка молча не получала бы ничего.
+    const category = body.category ? await findCategory(body.category) : null;
+    if (body.category && !category) {
+      return sendError(reply, 400, 'validation_error', 'unknown category', {
+        category: ['category not found, pick one from GET /api/categories or GET /api/categories/suggest'],
+      });
+    }
     const result = await createSubscription(request.sessionUserId!, {
       regionSubject,
-      category: body.category ?? null,
+      category: category?.name ?? null,
       schedule: body.schedule ?? null,
       salaryFrom: body.salary_from ?? null,
       studentOnly: body.student_only ?? false,

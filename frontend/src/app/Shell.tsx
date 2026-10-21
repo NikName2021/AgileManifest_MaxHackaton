@@ -17,7 +17,6 @@ import { useSession } from '../features/session/context'
 import { bindBackButton } from '../shared/max/bridge'
 import { useCabinet } from '../features/cabinet/context'
 import { Brand } from '../shared/ui/Brand'
-import { MaxLogo } from '../shared/ui/MaxLogo'
 import { Button } from '@maxhub/max-ui'
 import { useTheme } from '../features/appearance/context'
 
@@ -181,9 +180,6 @@ export function Shell() {
               >
                 <LogOut size={20} aria-hidden="true" />
               </Button>
-              <span className="header-max-logo">
-                <MaxLogo />
-              </span>
             </div>
           </div>
         </header>

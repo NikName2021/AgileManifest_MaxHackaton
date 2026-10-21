@@ -17,6 +17,7 @@ import { useSession } from '../features/session/context'
 import { bindBackButton } from '../shared/max/bridge'
 import { useCabinet } from '../features/cabinet/context'
 import { Brand } from '../shared/ui/Brand'
+import { ProfileIdentity } from '../shared/ui/ProfileIdentity'
 import { Button } from '@maxhub/max-ui'
 import { useTheme } from '../features/appearance/context'
 
@@ -124,12 +125,15 @@ export function Shell() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          {!worker && (
-            <Link className="sidebar-help" to={partner ? '/channels' : '/guide'}>
+          {!worker && !partner && (
+            <Link className="sidebar-help" to="/guide">
               <CircleHelp size={18} aria-hidden="true" />
-              {partner ? 'Подключение каналов' : 'Как работает Сезон'}
+              Как работает Сезон
             </Link>
           )}
+          <div className="sidebar-account">
+            <ProfileIdentity />
+          </div>
           <Button
             variant="secondary"
             iconBefore={<LogOut size={18} aria-hidden="true" />}
@@ -138,7 +142,6 @@ export function Shell() {
           >
             Выйти
           </Button>
-          <p className="sidebar-note">Работа и люди в MAX</p>
         </div>
       </aside>
       <div className="workspace">

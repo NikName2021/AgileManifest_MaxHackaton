@@ -25,7 +25,9 @@ export function JobsPage() {
   )
   const resource = useResource(load, key),
     filters = useResource(candidate.filters, 'job-filters')
+  const profile = useResource(candidate.profile, 'worker-profile')
   useRefreshOnReturn(resource.refresh)
+  useRefreshOnReturn(profile.refresh)
   const { result } = resource
   const search = useCallback((next: URLSearchParams) => setParams(next), [setParams])
   return (
@@ -111,15 +113,17 @@ export function JobsPage() {
               <Link to="/my-applications">Мои отклики</Link>
             </Button>
           </section>
-          <section className="contact-tip">
-            <h3>Ваш контакт под рукой</h3>
-            <p>
-              Сохраните контакт один раз. Перед отправкой каждого отклика вы сможете его изменить.
-            </p>
-            <Link to="/profile">
-              <ArrowRight size={18} /> Перейти в профиль
-            </Link>
-          </section>
+          {profile.result.state === 'ready' && !profile.result.data.applicationContact?.trim() && (
+            <section className="contact-tip">
+              <h3>Ваш контакт под рукой</h3>
+              <p>
+                Сохраните контакт один раз. Перед отправкой каждого отклика вы сможете его изменить.
+              </p>
+              <Link to="/profile">
+                <ArrowRight size={18} /> Перейти в профиль
+              </Link>
+            </section>
+          )}
         </aside>
       </div>
     </>

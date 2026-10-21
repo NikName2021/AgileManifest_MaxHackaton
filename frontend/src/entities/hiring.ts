@@ -1,4 +1,5 @@
 import type { Shift } from '../features/shifts/model'
+import type { VacancyBadge } from '../features/badges/api'
 // The backend identifies users by numeric IDs and authorizes resources by ownership.
 export type VacancyStatus = 'draft' | 'published' | 'closed'
 export type ApplicationStatus = 'new' | 'contacted' | 'invited' | 'hired' | 'rejected'
@@ -7,6 +8,7 @@ export interface User {
   display_name: string
 }
 export interface Vacancy {
+  badges?: VacancyBadge[]
   headcount?: number | null
   studentFriendly?: boolean
   applyUrl?: string | null

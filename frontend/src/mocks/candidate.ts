@@ -1,5 +1,7 @@
 import type { CandidateRepository, Job, MyApplication, Profile } from '../features/candidate/api'
 import { ApiError } from '../shared/api/client'
+import { previewBadgeCatalog } from './badges'
+import { timelineKeys } from '../features/timeline/model'
 
 // Synthetic development-only examples, never used as a fallback for a failed live API.
 export function createPreviewCandidate(): CandidateRepository {
@@ -18,6 +20,9 @@ export function createPreviewCandidate(): CandidateRepository {
       category: 'Сельское хозяйство',
       schedule: 'seasonal',
       studentFriendly: true,
+      badges: previewBadgeCatalog.groups
+        .flatMap((g) => g.items)
+        .filter((b) => ['housing_free', 'meals_3', 'tickets_paid', 'students_ok'].includes(b.key)),
       salaryMin: 50000,
       salaryMax: 70000,
       description:
@@ -77,10 +82,7 @@ export function createPreviewCandidate(): CandidateRepository {
     async jobs(query) {
       const rows = jobs.filter(
         (j) =>
-          (!query.q ||
-            `${j.title} ${j.description}`
-              .toLocaleLowerCase('ru')
-              .includes(query.q.toLocaleLowerCase('ru'))) &&
+          (!query.q || j.title.toLocaleLowerCase('ru').includes(query.q.toLocaleLowerCase('ru'))) &&
           (!query.region_code || j.regionCode === query.region_code) &&
           (!query.category || j.category === query.category) &&
           (!query.schedule || j.schedule === query.schedule) &&
@@ -134,6 +136,25 @@ export function createPreviewCandidate(): CandidateRepository {
       applications.unshift({
         ...ref,
         contact,
+        timeline: {
+          current: 'applied',
+          outcome: null,
+          steps: timelineKeys.map((key, index) => ({
+            key,
+            emoji: ['📨', '👀', '📞', '✉️', '✅', '🎉'][index],
+            label: [
+              'Отклик отправлен',
+              'Работодатель посмотрел',
+              'На связи',
+              'Приглашение',
+              'Выход подтверждён',
+              'Нанят',
+            ][index],
+            hint: index === 0 ? 'Работодатель получил ваш контакт' : 'Демонстрационный этап',
+            state: index === 0 ? 'current' : 'upcoming',
+            reachedAt: index === 0 ? now : null,
+          })),
+        },
         vacancy: { ...job, contactInfo: 'Демонстрационный контакт работодателя' },
       })
       return { ...ref, vacancyId: id, contact, notified: false }

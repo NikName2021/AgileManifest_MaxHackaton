@@ -1,5 +1,6 @@
 import { escapeMarkdown } from '../markdown.js';
 import { getBotUsername } from '../max/botInfo.js';
+import { badgesLine, resolveBadges } from './badges.js';
 
 // Лимит MAX на текст сообщения — считается по итоговому тексту после экранирования.
 export const MAX_CARD_TEXT_LIMIT = 4000;
@@ -15,11 +16,17 @@ export interface VacancyCardFields {
   // Сколько человек нужно; null — не указано.
   headcount?: number | null;
   studentFriendly?: boolean;
+  // Ключи бейджей (vacancies/badges.ts).
+  badges?: string[];
   // Отметка «Надёжный работодатель» (employers/trust.ts) на момент сборки карточки.
   trustedEmployer?: boolean;
 }
 
 // 0 — реальная сумма, поэтому сравнение с null, а не truthy-проверка.
+function escapeOptional(text: string | undefined): string | undefined {
+  return text === undefined ? undefined : escapeMarkdown(text);
+}
+
 export const TRUSTED_LINE = '✓ Надёжный работодатель';
 
 export function formatSalary(min: number | null, max: number | null): string {
@@ -75,11 +82,12 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
   return [
     `**${escapeMarkdown(vacancy.title)}**`,
     vacancy.trustedEmployer ? TRUSTED_LINE : undefined,
-    `Регион: ${escapeMarkdown(vacancy.regionCode)}`,
+    vacancy.regionCode ? `Регион: ${escapeMarkdown(vacancy.regionCode)}` : undefined,
     `График: ${escapeMarkdown(scheduleLabel(vacancy.schedule))}`,
     `Зарплата: ${salaryText}`,
     vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : undefined,
-    vacancy.studentFriendly ? 'Подходит студентам' : undefined,
+    // «Подходит студентам» входит в строку бейджей (resolveBadges добавляет его по флагу).
+    escapeOptional(badgesLine(resolveBadges(vacancy.badges, vacancy.studentFriendly))),
     vacancy.description ? escapeMarkdown(vacancy.description) : undefined,
     vacancy.contactInfo ? `Контакт: ${escapeMarkdown(vacancy.contactInfo)}` : undefined,
     applyUrl ? applyLinkBlock(applyUrl) : undefined,

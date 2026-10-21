@@ -1,6 +1,7 @@
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
 import { RegionPicker } from '../features/regions/RegionPicker'
+import { BadgePicker } from '../features/badges/BadgePicker'
 import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
@@ -291,17 +292,19 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                 placeholder: 'Задачи, график, период оплаты, требования и что вы предлагаете…',
                 hint: 'Будущему сотруднику важно представить свой рабочий день.',
               })}
-              <label className="student-check">
-                <input
-                  type="checkbox"
-                  checked={values.student_friendly === 'yes'}
-                  onChange={(e) => change('student_friendly', e.target.checked ? 'yes' : '')}
-                />
-                Подходит студентам
-              </label>
-              <p className="field-hint">
-                Например, без опыта, с гибким графиком или на каникулы. Уточните условия в описании.
-              </p>
+              <BadgePicker
+                value={values.badges}
+                studentFriendly={values.student_friendly === 'yes'}
+                error={errors.badges}
+                onChange={(keys, student) => {
+                  setValues((previous) => ({
+                    ...previous,
+                    badges: keys.join(','),
+                    student_friendly: student ? 'yes' : '',
+                  }))
+                  setErrors((previous) => ({ ...previous, badges: undefined }))
+                }}
+              />
             </section>
             <section className="form-section">
               <h2>

@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import type { Vacancy } from '@prisma/client';
 import { formatSalary, scheduleLabel } from './cardText.js';
+import { resolveBadges } from './badges.js';
 
 function escapeXml(text: string): string {
   return text.replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!);
@@ -47,6 +48,11 @@ export async function renderPosterSvg(vacancy: Vacancy, url: string): Promise<st
     vacancy.regionCode ? `Где: ${vacancy.regionCode}` : null,
     vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : null,
   ].filter((l): l is string => l !== null).flatMap((l) => wrap(l, 38, 2));
+  // Бейджи (не больше 4) — по два в строке, чтобы плакат оставался читаемым.
+  const badges = resolveBadges(vacancy.badges, vacancy.studentFriendly).slice(0, 4);
+  for (let i = 0; i < badges.length; i += 2) {
+    details.push(badges.slice(i, i + 2).map((b) => `${b.emoji} ${b.label}`).join('   '));
+  }
 
   let y = 32;
   const parts: string[] = [];

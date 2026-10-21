@@ -6,11 +6,18 @@ import { draftDecisionButtons } from './preview.js';
 import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.js';
 import { db } from '../db.js';
 import { SCHEDULE_ENUM } from '../validation.js';
+import { hasForbiddenChars, isMeaningful, normalizeMultiLine, normalizeSingleLine, SALARY_MAX } from '../text.js';
 
-function notEmpty(raw: string) {
-    const value = raw.trim();
-    if (!value) return { ok: false as const, error: 'Пустой ответ не подходит, напишите ещё раз.' };
-    return { ok: true as const, value };
+// Те же правила, что у REST (validation.ts): длина, хотя бы одна буква или цифра, без невидимых символов.
+function textAnswer(max: number, multiline = false) {
+    return (raw: string) => {
+        const value = multiline ? normalizeMultiLine(raw) : normalizeSingleLine(raw);
+        if (!value) return { ok: false as const, error: 'Пустой ответ не подходит, напишите ещё раз.' };
+        if (hasForbiddenChars(value)) return { ok: false as const, error: 'В ответе есть невидимые или служебные символы — напишите обычным текстом.' };
+        if (!isMeaningful(value)) return { ok: false as const, error: 'Напишите словами — в ответе нет ни букв, ни цифр.' };
+        if (value.length > max) return { ok: false as const, error: `Слишком длинно — уложитесь в ${max} символов.` };
+        return { ok: true as const, value };
+    };
 }
 
 function parseSalary(raw: string) {
@@ -25,6 +32,9 @@ function parseSalary(raw: string) {
         return { ok: false as const, error: 'Не понял вилку зарплаты. Напишите, например, "40000-60000" или "не знаю".' };
     }
     const nums = numbers.map(Number);
+    if (nums.some((n) => n > SALARY_MAX)) {
+        return { ok: false as const, error: `Похоже на лишние нули — сумма должна быть не больше ${SALARY_MAX.toLocaleString('ru-RU')} ₽.` };
+    }
     return { ok: true as const, value: { min: Math.min(...nums), max: Math.max(...nums) } };
 }
 
@@ -91,8 +101,8 @@ function fitRequirementsToCardLimit(fields: {
 export const vacancyFlow: DialogFlow = {
     name: 'new_vacancy',
     steps: [
-        { key: 'title', prompt: 'Какая должность? Например: «Сборщик урожая» или «Официант на лето».', parse: notEmpty },
-        { key: 'region', prompt: 'В каком регионе или городе нужен человек?', parse: notEmpty },
+        { key: 'title', prompt: 'Какая должность? Например: «Сборщик урожая» или «Официант на лето».', parse: textAnswer(200) },
+        { key: 'region', prompt: 'В каком регионе или городе нужен человек?', parse: textAnswer(100) },
         {
             key: 'schedule',
             prompt: 'Какой график работы?',
@@ -103,8 +113,8 @@ export const vacancyFlow: DialogFlow = {
             parse: parseSchedule,
         },
         { key: 'salary', prompt: 'Какая вилка зарплаты? Например «40000-60000», или напишите «не знаю» — подскажу ориентир по рынку.', parse: parseSalary },
-        { key: 'requirements', prompt: 'Кратко — какие требования к кандидату? Если неважно, напишите «нет».', parse: notEmpty },
-        { key: 'contact', prompt: 'Контакт для связи с откликнувшимися: телефон или юзернейм в MAX.', parse: notEmpty },
+        { key: 'requirements', prompt: 'Кратко — какие требования к кандидату? Если неважно, напишите «нет».', parse: textAnswer(4000, true) },
+        { key: 'contact', prompt: 'Контакт для связи с откликнувшимися: телефон или юзернейм в MAX.', parse: textAnswer(300) },
     ],
 
     async onComplete(chatId, data) {

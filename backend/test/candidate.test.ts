@@ -121,6 +121,7 @@ describe('1. каталог: видимость опубликованных ч�
       headcount: null,
       spotsLeft: null,
       studentFriendly: false,
+      badges: [],
       status: 'published',
       createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
       employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
@@ -464,6 +465,7 @@ describe('8–9. история откликов кандидата', () => {
       startAt: null,
       shiftNote: null,
       attendance: null,
+      timeline: expect.objectContaining({ current: 'applied' }),
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
       vacancy: {
@@ -478,6 +480,7 @@ describe('8–9. история откликов кандидата', () => {
         description: null,
         headcount: null,
         studentFriendly: false,
+        badges: [],
         contactInfo: '+7 999 111-22-33',
         status: 'published',
         employer: { displayName: 'A', trusted: false, confirmedHires: 0 },
@@ -606,16 +609,18 @@ describe('12. авторизация', () => {
     }
   });
 
-  it('присланные клиентом candidate_user_id/role/status игнорируются', async () => {
+  it('присланные клиентом candidate_user_id/role/status отклоняются, кандидат — только из сессии', async () => {
     const v = await publishedVacancy(A);
     const res = await app.inject({
       method: 'POST',
       url: '/api/applications',
       headers: B.auth,
-      payload: { vacancy_id: v.id, contact: '@b', candidate_user_id: C.user.id, candidate_id: C.user.id, role: 'employer', status: 'hired' },
+      payload: { vacancy_id: v.id, contact: '@b', candidate_user_id: C.user.id, role: 'employer', status: 'hired' },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ candidateUserId: B.user.id, status: 'new' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.fields).toMatchObject({ candidate_user_id: ['unknown field'], role: ['unknown field'], status: ['unknown field'] });
+    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: v.id, contact: '@b' } });
+    expect(ok.json()).toMatchObject({ candidateUserId: B.user.id, status: 'new' });
     expect((await get(C, '/api/me/applications')).json().total).toBe(0);
     expect((await get(B, '/api/me/applications?candidate_id=' + C.user.id)).json().total).toBe(1);
   });

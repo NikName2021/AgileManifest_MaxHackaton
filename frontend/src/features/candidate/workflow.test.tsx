@@ -189,7 +189,9 @@ describe('cabinet selection and candidate flows', () => {
     expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     worker()
-    expect(await screen.findByRole('heading', { name: 'Найдите свою работу' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: /Найди работу за\sпару\sкликов/ }),
+    ).toBeInTheDocument()
     await act(() => router.navigate('/my-applications'))
     expect(await screen.findByRole('heading', { name: 'Мои отклики' })).toBeInTheDocument()
     const application = await screen.findByRole('article')
@@ -274,11 +276,13 @@ describe('cabinet selection and candidate flows', () => {
       jobs = vi.spyOn(session.candidate, 'jobs')
     const { router } = start(session, '/jobs?offset=20')
     worker()
-    fireEvent.change(await screen.findByLabelText('Должность или слова из описания'), {
+    fireEvent.change(await screen.findByLabelText('Поиск по названию вакансии'), {
       target: { value: 'повар' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Найти вакансии' }))
-    expect(await screen.findByText('Повар в загородный отель')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Найти вакансии' })).not.toBeInTheDocument()
+    expect(
+      await screen.findByText('Повар в загородный отель', {}, { timeout: 2000 }),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Помощник на сбор урожая')).not.toBeInTheDocument()
     expect(jobs.mock.calls.at(-1)?.[0]).toMatchObject({ q: 'повар', offset: 0 })
     expect(router.state.location.search).not.toContain('offset')

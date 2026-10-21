@@ -256,7 +256,8 @@ html:has(dialog[open]) {
 :root[data-app-theme='dark'] .employer-name > svg {
   color: #86c9a7;
 }
-.job-employer > .employer-badge {
+.job-employer > .employer-badge,
+.history-card > .employer-badge {
   margin: 0;
   padding: 0;
 }

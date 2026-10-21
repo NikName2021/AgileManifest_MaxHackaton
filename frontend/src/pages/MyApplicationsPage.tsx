@@ -6,7 +6,6 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useSession } from '../features/session/context'
 import { applicationLabels } from '../entities/hiring'
 import { isApplicationStatus, statuses } from '../features/applications/api'
-import { Contact } from '../features/applications/CandidateContacts'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
@@ -38,7 +37,7 @@ export function MyApplicationsPage() {
         <div>
           <span className="eyebrow">КАБИНЕТ РАБОТНИКА</span>
           <h1>Мои отклики</h1>
-          <p>Ответы работодателей и контакты по вакансиям, на которые вы откликнулись.</p>
+          <p>Ответы работодателей и условия вакансий, на которые вы откликнулись.</p>
         </div>
       </div>
       <div className="candidate-input candidate-status-filter">
@@ -100,19 +99,10 @@ export function MyApplicationsPage() {
                       </p>
                     )}
                     <details className="candidate-application-details">
-                      <summary>Условия и контакты</summary>
+                      <summary>Условия и ваш отклик</summary>
                       <div className="vacancy-description">
                         {application.vacancy.description || 'Описание не добавлено.'}
                       </div>
-                      <h3>Контакт работодателя</h3>
-                      {application.vacancy.contactInfo ? (
-                        <Contact value={application.vacancy.contactInfo} />
-                      ) : (
-                        <p>
-                          Работодатель не указал контакт. Он может связаться с вами по вашему
-                          отклику.
-                        </p>
-                      )}
                       <h3>Вы отправили</h3>
                       <p className="candidate-contact-value">
                         {application.contact || 'Контакт не был указан'}

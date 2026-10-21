@@ -40,8 +40,8 @@ beforeEach(async () => {
   const created = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'Сбор черешни' } });
   vacancyId = created.json().id;
   await app.inject({ method: 'POST', url: `/api/vacancies/${vacancyId}/publish`, headers: A.auth });
-  appB = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: vacancyId, contact: '+7' } })).json().id;
-  await app.inject({ method: 'POST', url: '/api/applications', headers: C.auth, payload: { vacancy_id: vacancyId, contact: '+7' } });
+  appB = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: vacancyId, contact: '+7 900 111-22-33' } })).json().id;
+  await app.inject({ method: 'POST', url: '/api/applications', headers: C.auth, payload: { vacancy_id: vacancyId, contact: '+7 900 111-22-33' } });
   await app.inject({ method: 'PATCH', url: `/api/applications/${appB}`, headers: A.auth, payload: { status: 'invited' } });
   sendMessageMock.mockClear();
 });
@@ -144,7 +144,7 @@ describe('выход на смену', () => {
 
   it('кандидат без чата с ботом — назначение сохраняется, notified=false', async () => {
     const D = await createUser('D', { chatId: '', dialogChatId: null });
-    const appD = (await app.inject({ method: 'POST', url: '/api/applications', headers: D.auth, payload: { vacancy_id: vacancyId, contact: '+7' } })).json().id;
+    const appD = (await app.inject({ method: 'POST', url: '/api/applications', headers: D.auth, payload: { vacancy_id: vacancyId, contact: '+7 900 111-22-33' } })).json().id;
     await app.inject({ method: 'PATCH', url: `/api/applications/${appD}`, headers: A.auth, payload: { status: 'hired' } });
     const res = await setShift(A, appD, { start_at: inHours(30).toISOString() });
     expect(res.json()).toMatchObject({ attendance: 'pending', notified: false });

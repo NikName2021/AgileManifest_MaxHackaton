@@ -57,7 +57,7 @@ async function publishedVacancy(owner: TestUser, body: VacancyBody = {}) {
   return res.json() as { id: number; status: string };
 }
 
-function apply(user: TestUser, vacancyId: number, contact: unknown = '+7 900 000-00-00') {
+function apply(user: TestUser, vacancyId: number, contact: unknown = '+7 900 000-00-01') {
   return app.inject({ method: 'POST', url: '/api/applications', headers: user.auth, payload: { vacancy_id: vacancyId, contact } });
 }
 
@@ -307,7 +307,8 @@ describe('4. отклик кандидата', () => {
       expect(res.statusCode, JSON.stringify(payload)).toBe(400);
       expect(res.json().error).toMatchObject({ code: 'validation_error', fields: { contact: expect.any(Array) } });
     }
-    expect((await apply(B, v.id, 'x'.repeat(200))).statusCode).toBe(201);
+    expect((await apply(B, v.id, 'x'.repeat(200))).statusCode).toBe(400);
+    expect((await apply(B, v.id, '@' + 'b'.repeat(31))).statusCode).toBe(201);
   });
 
   it('draft/closed -> 409 vacancy_unavailable, нет вакансии -> 404 not_found', async () => {
@@ -332,7 +333,7 @@ describe('5. повторные и параллельные отклики, REST
     const v = await publishedVacancy(A);
     expect((await apply(B, v.id)).statusCode).toBe(201);
     sendMessageMock.mockClear();
-    const again = await apply(B, v.id, 'другой контакт');
+    const again = await apply(B, v.id, '@other_contact');
     expect(again.statusCode).toBe(409);
     expect(again.json().error.code).toBe('already_applied');
     expect(sentTo('chat-A')).toHaveLength(0);
@@ -451,7 +452,7 @@ describe('7. гонка закрытия вакансии и отклика', ()
 });
 
 describe('8–9. история откликов кандидата', () => {
-  it('B видит свой отклик с контактом работодателя, C — нет; статус от A виден B; закрытие не удаляет историю', async () => {
+  it('B видит свой отклик, контакт работодателя — только после приглашения; C — чужого не видит; статус от A виден B; закрытие не удаляет историю', async () => {
     const v = await publishedVacancy(A, { contact_info: '+7 999 111-22-33', salary_min: 50000, salary_max: 70000 });
     const created = (await apply(B, v.id, '+7 900 000-00-01')).json();
     await apply(C, v.id, '+7 900 000-00-02');
@@ -481,7 +482,8 @@ describe('8–9. история откликов кандидата', () => {
         headcount: null,
         studentFriendly: false,
         badges: [],
-        contactInfo: '+7 999 111-22-33',
+        // Контакт работодателя закрыт, пока он не пригласил кандидата.
+        contactInfo: null,
         status: 'published',
         employer: { displayName: 'A', companyName: null, trusted: false, confirmedHires: 0 },
       },
@@ -503,7 +505,8 @@ describe('8–9. история откликов кандидата', () => {
     const invite = await app.inject({ method: 'PATCH', url: `/api/applications/${created.id}`, headers: A.auth, payload: { status: 'invited' } });
     expect(invite.json()).toMatchObject({ status: 'invited', notified: true });
     expect(sentTo('chat-B')).toHaveLength(1);
-    expect((await get(B, '/api/me/applications')).json().items[0].status).toBe('invited');
+    expect(sentTo('chat-B')[0][1]).toContain('Контакт работодателя: \\+7 999 111\\-22\\-33');
+    expect((await get(B, '/api/me/applications')).json().items[0]).toMatchObject({ status: 'invited', vacancy: { contactInfo: '+7 999 111-22-33' } });
 
     await app.inject({ method: 'POST', url: `/api/vacancies/${v.id}/close`, headers: A.auth });
     const afterClose = (await get(B, '/api/me/applications?status=invited')).json();
@@ -615,11 +618,11 @@ describe('12. авторизация', () => {
       method: 'POST',
       url: '/api/applications',
       headers: B.auth,
-      payload: { vacancy_id: v.id, contact: '@b', candidate_user_id: C.user.id, role: 'employer', status: 'hired' },
+      payload: { vacancy_id: v.id, contact: '@cand_b', candidate_user_id: C.user.id, role: 'employer', status: 'hired' },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.fields).toMatchObject({ candidate_user_id: ['unknown field'], role: ['unknown field'], status: ['unknown field'] });
-    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: v.id, contact: '@b' } });
+    const ok = await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: v.id, contact: '@cand_b' } });
     expect(ok.json()).toMatchObject({ candidateUserId: B.user.id, status: 'new' });
     expect((await get(C, '/api/me/applications')).json().total).toBe(0);
     expect((await get(B, '/api/me/applications?candidate_id=' + C.user.id)).json().total).toBe(1);
@@ -629,14 +632,14 @@ describe('12. авторизация', () => {
 describe('13. профиль', () => {
   it('GET/PATCH /api/me: только свой профиль, контакт не переписывает старые отклики', async () => {
     const v = await publishedVacancy(A);
-    await apply(B, v.id, 'старый контакт');
+    await apply(B, v.id, '@old_contact');
 
     expect((await get(B, '/api/me')).json()).toEqual({ id: B.user.id, displayName: 'B', companyName: null, applicationContact: null, hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
 
     const patched = await app.inject({ method: 'PATCH', url: '/api/me', headers: B.auth, payload: { application_contact: '  @new_contact  ' } });
     expect(patched.statusCode).toBe(200);
     expect(patched.json()).toEqual({ id: B.user.id, displayName: 'B', companyName: null, applicationContact: '@new_contact', hasBotChat: true, employerTrust: { trusted: false, confirmedHires: 0, threshold: 5 } });
-    expect((await get(B, '/api/me/applications')).json().items[0].contact).toBe('старый контакт');
+    expect((await get(B, '/api/me/applications')).json().items[0].contact).toBe('@old_contact');
     expect((await get(C, '/api/me')).json()).toMatchObject({ id: C.user.id, applicationContact: null });
     // Номер из MAX (phone) не трогается.
     expect((await db.user.findUniqueOrThrow({ where: { id: B.user.id } })).phone).toBeNull();
@@ -646,7 +649,7 @@ describe('13. профиль', () => {
   });
 
   it('PATCH /api/me отклоняет лишние поля и некорректный контакт', async () => {
-    for (const payload of [{}, { application_contact: '' }, { application_contact: 'x'.repeat(201) }, { application_contact: '@b', id: 99 }, { application_contact: '@b', maxUserId: 'x' }, { application_contact: '@b', chatId: 'x' }]) {
+    for (const payload of [{}, { application_contact: '' }, { application_contact: 'x'.repeat(201) }, { application_contact: '@cand_b', id: 99 }, { application_contact: '@cand_b', maxUserId: 'x' }, { application_contact: '@cand_b', chatId: 'x' }]) {
       const res = await app.inject({ method: 'PATCH', url: '/api/me', headers: B.auth, payload });
       expect(res.statusCode, JSON.stringify(payload)).toBe(400);
       expect(res.json().error.code).toBe('validation_error');
@@ -657,7 +660,7 @@ describe('13. профиль', () => {
 
   it('название компании видно в каталоге, карточке, истории откликов и приглашении бригады вместо имени', async () => {
     const v = await publishedVacancy(A);
-    await apply(B, v.id, '@b');
+    await apply(B, v.id, '@cand_b');
 
     const patched = await app.inject({ method: 'PATCH', url: '/api/me', headers: A.auth, payload: { company_name: '  Кафе   «Прибой»  ' } });
     expect(patched.statusCode).toBe(200);

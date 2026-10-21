@@ -1,3 +1,4 @@
+import { escapeMarkdown } from '../markdown.js';
 import { OWNER_KEY, type DialogFlow } from './types.js';
 import { normalizeRegion } from '../regions/dictionary.js';
 import { employerTrust } from '../employers/trust.js';
@@ -7,8 +8,10 @@ import { getBenchmark, formatBenchmarkText } from '../trudvsem/benchmarkService.
 import { db } from '../db.js';
 import { SCHEDULE_ENUM } from '../validation.js';
 import { hasForbiddenChars, isMeaningful, normalizeMultiLine, normalizeSingleLine, SALARY_MAX } from '../text.js';
+import { CONTACT_FORMAT_HINT, contactLikeErrorRu, findContactLike, MAX_CONTACTS_PER_FIELD, normalizeContactList } from '../moderation.js';
 
-// Те же правила, что у REST (validation.ts): длина, хотя бы одна буква или цифра, без невидимых символов.
+// Те же правила, что у REST (validation.ts): длина, хотя бы одна буква или цифра, без невидимых
+// символов, без ссылок и контактов (модерация, moderation.ts).
 function textAnswer(max: number, multiline = false) {
     return (raw: string) => {
         const value = multiline ? normalizeMultiLine(raw) : normalizeSingleLine(raw);
@@ -16,8 +19,20 @@ function textAnswer(max: number, multiline = false) {
         if (hasForbiddenChars(value)) return { ok: false as const, error: 'В ответе есть невидимые или служебные символы — напишите обычным текстом.' };
         if (!isMeaningful(value)) return { ok: false as const, error: 'Напишите словами — в ответе нет ни букв, ни цифр.' };
         if (value.length > max) return { ok: false as const, error: `Слишком длинно — уложитесь в ${max} символов.` };
+        const contactLike = findContactLike(value);
+        if (contactLike) return { ok: false as const, error: contactLikeErrorRu(contactLike) };
         return { ok: true as const, value };
     };
+}
+
+function contactAnswer(raw: string) {
+    const value = normalizeSingleLine(raw);
+    if (value.length > 300) return { ok: false as const, error: 'Слишком длинно — уложитесь в 300 символов.' };
+    const contacts = hasForbiddenChars(value) ? null : normalizeContactList(value);
+    if (!contacts) {
+        return { ok: false as const, error: `Не похоже на контакт. Напишите ${escapeMarkdown(CONTACT_FORMAT_HINT)} — до ${MAX_CONTACTS_PER_FIELD} через запятую.` };
+    }
+    return { ok: true as const, value: contacts };
 }
 
 function parseSalary(raw: string) {
@@ -65,7 +80,6 @@ function fitRequirementsToCardLimit(fields: {
     salaryMin: number | null;
     salaryMax: number | null;
     requirements: string;
-    contactInfo: string;
 }): { requirements: string; truncated: boolean } {
     // Длина считается с резервом под ссылку «Откликнуться» (ID вакансии ещё неизвестен).
     const fullLength = vacancyCardTextLength({
@@ -75,7 +89,6 @@ function fitRequirementsToCardLimit(fields: {
         salaryMin: fields.salaryMin,
         salaryMax: fields.salaryMax,
         description: fields.requirements,
-        contactInfo: fields.contactInfo,
     });
     if (fullLength <= MAX_CARD_TEXT_LIMIT) {
         return { requirements: fields.requirements, truncated: false };
@@ -90,7 +103,6 @@ function fitRequirementsToCardLimit(fields: {
             salaryMin: fields.salaryMin,
             salaryMax: fields.salaryMax,
             description: requirements,
-            contactInfo: fields.contactInfo,
         });
         if (candidateLength <= MAX_CARD_TEXT_LIMIT) break;
         requirements = requirements.slice(0, Math.max(0, requirements.length - 100));
@@ -114,7 +126,7 @@ export const vacancyFlow: DialogFlow = {
         },
         { key: 'salary', prompt: 'Какая вилка зарплаты? Например «40000-60000», или напишите «не знаю» — подскажу ориентир по рынку.', parse: parseSalary },
         { key: 'requirements', prompt: 'Кратко — какие требования к кандидату? Если неважно, напишите «нет».', parse: textAnswer(4000, true) },
-        { key: 'contact', prompt: 'Контакт для связи с откликнувшимися: телефон или юзернейм в MAX.', parse: textAnswer(300) },
+        { key: 'contact', prompt: 'Контакт для связи: телефон, @ник или ссылка на MAX. Его увидят только кандидаты, которых вы пригласите.', parse: contactAnswer },
     ],
 
     async onComplete(chatId, data) {
@@ -134,7 +146,6 @@ export const vacancyFlow: DialogFlow = {
             salaryMin: data.salary?.min ?? null,
             salaryMax: data.salary?.max ?? null,
             requirements: data.requirements,
-            contactInfo: data.contact,
         });
 
         const vacancy = await db.vacancy.create({

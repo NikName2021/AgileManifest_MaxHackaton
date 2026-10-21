@@ -38,13 +38,15 @@ export function JobOverview({ job }: { job: PublicVacancy }) {
         </div>
       </section>
       <section className="job-description-section employer-details" aria-label="Работодатель">
-        <h2>Работодатель</h2>
+        <div className="employer-details-heading">
+          <h2>Работодатель</h2>
+          {hires !== undefined && (
+            <span className="employer-hiring-badge" aria-label={`Подтверждённые наймы: ${hires}`}>
+              {hires} {hireWord}
+            </span>
+          )}
+        </div>
         <EmployerHeading employer={job.employer} />
-        {hires !== undefined && (
-          <span className="employer-hiring-badge" aria-label={`Подтверждённые наймы: ${hires}`}>
-            {hires} {hireWord}
-          </span>
-        )}
       </section>
     </>
   )

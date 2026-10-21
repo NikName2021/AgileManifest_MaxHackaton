@@ -406,10 +406,20 @@ html:has(dialog[open]) {
 .employer-details .job-employer {
   margin: 0;
 }
+.employer-details-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.employer-details .employer-details-heading h2 {
+  margin: 0;
+}
 .employer-hiring-badge {
   display: inline-flex;
   align-items: center;
-  margin-top: 12px;
+  flex-shrink: 0;
   padding: 4px 10px;
   border-radius: 999px;
   background: rgb(0 191 255 / 12%);

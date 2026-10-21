@@ -111,26 +111,44 @@ describe('подсказки бейджей', () => {
 });
 
 describe('сферы деятельности', () => {
-  it('синоним заменяется на название сферы, новая сфера сохраняется и предлагается другим', async () => {
-    expect((await createVacancy({ category: 'кафе' })).category).toBe('Общепит');
-    expect((await createVacancy({ category: 'общепит' })).category).toBe('Общепит');
-    const own = await publish({ category: 'Пчеловодство' });
-    expect(own.category).toBe('Пчеловодство');
-    expect((await createVacancy({ category: 'пчеловодство' })).category).toBe('Пчеловодство');
-    expect(await db.category.count()).toBe(1);
+  it('синоним, опечатка и фраза относятся к сфере справочника; нераспознанное — «Другое» с исходным текстом', async () => {
+    const saved = async (category: string) => {
+      const v = await createVacancy({ category });
+      return { category: v.category, categoryDetail: v.categoryDetail };
+    };
+    expect(await saved('кафе')).toEqual({ category: 'Общепит', categoryDetail: null });
+    expect(await saved('общепит')).toEqual({ category: 'Общепит', categoryDetail: null });
+    expect(await saved('кейтринг')).toEqual({ category: 'Общепит', categoryDetail: null });
+    expect(await saved('Сфера общественного питания')).toEqual({ category: 'Общепит', categoryDetail: null });
+    expect(await saved('работа в теплице')).toEqual({ category: 'Сельское хозяйство', categoryDetail: null });
+    expect(await saved('Ремонт  обуви')).toEqual({ category: 'Другое', categoryDetail: 'Ремонт обуви' });
+    expect(await saved('ремонт обуви')).toEqual({ category: 'Другое', categoryDetail: 'ремонт обуви' });
+    // Новых сфер не появляется, нераспознанное копится в журнале для пополнения синонимов.
+    expect(await db.categoryMiss.findMany({ select: { text: true, uses: true } })).toEqual([{ text: 'Ремонт обуви', uses: 2 }]);
 
-    const suggest = async (q: string) => (await get(`/api/categories/suggest?q=${encodeURIComponent(q)}`)).json().items;
-    expect((await suggest('пчел'))[0]).toEqual({ name: 'Пчеловодство', emoji: null, builtIn: false, vacancies: 1, match: 'similar' });
-    expect((await suggest('Обшепит'))[0]).toMatchObject({ name: 'Общепит', match: 'similar' });
-    expect((await suggest('кафе'))[0]).toMatchObject({ name: 'Общепит', emoji: '🍽️', builtIn: true, match: 'synonym' });
-    expect((await suggest('Общепит'))[0]).toMatchObject({ name: 'Общепит', match: 'exact' });
-
-    const list = (await get('/api/categories')).json().items;
-    expect(list[0]).toEqual({ name: 'Пчеловодство', emoji: null, builtIn: false, vacancies: 1 });
-    expect(list.filter((c: { builtIn: boolean }) => c.builtIn).length).toBeGreaterThanOrEqual(15);
+    const job = await publish({ category: 'Ремонт обуви' });
+    expect((await get(`/api/jobs/${job.id}`, B)).json()).toMatchObject({ category: 'Другое', categoryDetail: 'Ремонт обуви' });
   });
 
-  it('фильтр каталога и подписка понимают синонимы; неизвестная сфера в подписке — 400', async () => {
+  it('GET /api/categories — справочник с «Другое» последней; suggest показывает, к чему отнесётся текст', async () => {
+    await publish({ category: 'Общепит' });
+    const list = (await get('/api/categories')).json().items;
+    expect(list.length).toBeGreaterThanOrEqual(17);
+    expect(list.at(-1)).toEqual({ name: 'Другое', emoji: '📌', vacancies: 0 });
+    expect(list.find((c: { name: string }) => c.name === 'Общепит')).toEqual({ name: 'Общепит', emoji: '🍽️', vacancies: 1 });
+
+    const suggest = async (q: string) => (await get(`/api/categories/suggest?q=${encodeURIComponent(q)}`)).json();
+    expect(await suggest('кейтринг')).toMatchObject({
+      resolved: { name: 'Общепит', match: 'typo', detail: null },
+      items: [{ name: 'Общепит', emoji: '🍽️', vacancies: 1, match: 'typo' }],
+    });
+    expect((await suggest('каф')).items[0]).toMatchObject({ name: 'Общепит', match: 'similar' });
+    expect((await suggest('кафе')).items[0]).toMatchObject({ name: 'Общепит', match: 'synonym' });
+    expect((await suggest('Общепит')).items[0]).toMatchObject({ name: 'Общепит', match: 'exact' });
+    expect((await suggest('ремонт обуви')).resolved).toEqual({ name: 'Другое', match: 'other', detail: 'ремонт обуви' });
+  });
+
+  it('фильтр каталога и подписка понимают синонимы; нераспознанная сфера в подписке — 400, «Другое» — можно', async () => {
     const v = await publish({ category: 'Общепит' });
     expect((await get('/api/jobs?category=кафе', B)).json().items.map((j: { id: number }) => j.id)).toEqual([v.id]);
 
@@ -138,12 +156,13 @@ describe('сферы деятельности', () => {
     const created = await subscribe('ресторан');
     expect(created.statusCode, created.body).toBe(201);
     expect(created.json().category).toBe('Общепит');
-    const typo = await subscribe('Обшепит');
-    expect(typo.statusCode).toBe(400);
-    expect(typo.json().error.fields).toHaveProperty('category');
+    const unknown = await subscribe('Ремонт обуви');
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json().error.fields).toHaveProperty('category');
+    expect((await subscribe('Другое')).json().category).toBe('Другое');
   });
 
-  it('бот спрашивает сферу и исправляет явную опечатку', async () => {
+  it('бот спрашивает сферу и относит опечатку к сфере справочника', async () => {
     const message = (text: string) =>
       app.inject({
         method: 'POST',
@@ -155,6 +174,6 @@ describe('сферы деятельности', () => {
     await message('Повар');
     expect(sentTo('chat-A').at(-1)?.[1]).toContain('В какой сфере');
     for (const answer of ['Обшепит', 'Сочи', 'seasonal', '40000-60000', 'нет', '@chef_hr']) await message(answer);
-    expect(await db.vacancy.findFirstOrThrow()).toMatchObject({ title: 'Повар', category: 'Общепит' });
+    expect(await db.vacancy.findFirstOrThrow()).toMatchObject({ title: 'Повар', category: 'Общепит', categoryDetail: null });
   });
 });

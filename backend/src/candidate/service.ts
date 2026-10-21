@@ -25,6 +25,8 @@ export interface JobDto {
   regionCode: string;
   subject: RegionDto | null;
   category: string;
+  // Что написал работодатель, если сфера не распознана и вакансия в «Другое».
+  categoryDetail: string | null;
   schedule: string;
   salaryMin: number | null;
   salaryMax: number | null;
@@ -50,6 +52,8 @@ interface JobRow {
   regionCode: string;
   regionSubject: string | null;
   category: string;
+  // Что написал работодатель, если сфера не распознана и вакансия в «Другое».
+  categoryDetail: string | null;
   schedule: string;
   salaryMin: number | null;
   salaryMax: number | null;
@@ -74,6 +78,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     regionCode: row.regionCode,
     subject: regionDto(row.regionSubject),
     category: row.category,
+    categoryDetail: row.categoryDetail,
     schedule: row.schedule,
     salaryMin: row.salaryMin,
     salaryMax: row.salaryMax,
@@ -102,7 +107,7 @@ async function findMyApplications(viewerUserId: number, vacancyIds: number[]): P
 }
 
 const JOB_COLUMNS = Prisma.sql`
-  v.id, v.title, v.region_code AS "regionCode", v.region_subject AS "regionSubject", v.category, v.schedule,
+  v.id, v.title, v.region_code AS "regionCode", v.region_subject AS "regionSubject", v.category, v.category_detail AS "categoryDetail", v.schedule,
   v.salary_min AS "salaryMin", v.salary_max AS "salaryMax", v.description, v.headcount, v.student_friendly AS "studentFriendly", v.badges, v.status,
   (SELECT COUNT(*)::int FROM applications a WHERE a.vacancy_id = v.id AND a.status = 'hired') AS "hiredCount",
   v.created_at AS "createdAt", v.employer_user_id AS "employerUserId",
@@ -147,7 +152,7 @@ export async function listJobs(viewerUserId: number, params: ListJobsParams) {
   if (regionCode) conditions.push(Prisma.sql`(v.region_subject = ${regionCode} OR v.region_code = ${regionCode})`);
   // «кафе» или «общепит» в фильтре — та же сфера, что «Общепит».
   const category = nonEmpty(params.category);
-  if (category) conditions.push(Prisma.sql`v.category = ${(await findCategory(category))?.name ?? category}`);
+  if (category) conditions.push(Prisma.sql`v.category = ${findCategory(category) ?? category}`);
   if (params.schedule) conditions.push(Prisma.sql`v.schedule = ${params.schedule}`);
   if (params.student_friendly !== undefined) conditions.push(Prisma.sql`v.student_friendly = ${params.student_friendly}`);
   if (params.badges?.length) conditions.push(Prisma.sql`v.badges @> ${params.badges}::text[]`);
@@ -264,6 +269,7 @@ export async function listMyApplications(
             regionCode: true,
             regionSubject: true,
             category: true,
+            categoryDetail: true,
             schedule: true,
             salaryMin: true,
             salaryMax: true,

@@ -29,17 +29,17 @@ export function registerChannelRoutes(app: FastifyInstance) {
         return sendError(reply, 400, 'validation_error', 'unknown region', { region_code: ['region is not recognised, use a code from GET /api/regions'] });
       }
     }
-    // Сферы — только существующие: синоним («кафе») заменяется на название, опечатка — 400.
+    // Сферы — только из справочника: синоним («кафе») заменяется на название, нераспознанное — 400.
     let categories: string[] | undefined;
     if (body.categories !== undefined) {
-      const found = await Promise.all(body.categories.map((c) => findCategory(c)));
+      const found = body.categories.map((c) => findCategory(c));
       const unknown = body.categories.filter((_, i) => !found[i]);
       if (unknown.length > 0) {
         return sendError(reply, 400, 'validation_error', 'unknown category', {
           categories: [`unknown categories: ${unknown.join(', ')}; pick from GET /api/categories or GET /api/categories/suggest`],
         });
       }
-      categories = [...new Set(found.map((f) => f!.name))];
+      categories = [...new Set(found.map((f) => f!))];
     }
     const patch: ChannelPatch = {
       ...(body.active !== undefined ? { active: body.active } : {}),

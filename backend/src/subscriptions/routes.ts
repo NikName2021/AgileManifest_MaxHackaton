@@ -22,7 +22,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance) {
       return sendError(reply, 400, 'validation_error', 'unknown region', { region_code: ['region is not recognised, use a code from GET /api/regions'] });
     }
     // Сфера — только существующая: с опечаткой подписка молча не получала бы ничего.
-    const category = body.category ? await findCategory(body.category) : null;
+    const category = body.category ? findCategory(body.category) : null;
     if (body.category && !category) {
       return sendError(reply, 400, 'validation_error', 'unknown category', {
         category: ['category not found, pick one from GET /api/categories or GET /api/categories/suggest'],
@@ -30,7 +30,7 @@ export function registerSubscriptionRoutes(app: FastifyInstance) {
     }
     const result = await createSubscription(request.sessionUserId!, {
       regionSubject,
-      category: category?.name ?? null,
+      category,
       schedule: body.schedule ?? null,
       salaryFrom: body.salary_from ?? null,
       studentOnly: body.student_only ?? false,

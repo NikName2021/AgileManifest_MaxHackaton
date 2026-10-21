@@ -41,6 +41,8 @@ model Vacancy {
   // Код субъекта РФ из справочника (regions/dictionary.ts), распознанный по regionCode; null — не распознан.
   regionSubject   String?   @map("region_subject")
   category        String
+  // Что написал работодатель, если сфера не распознана и вакансия отнесена к «Другое».
+  categoryDetail  String?   @map("category_detail")
   schedule        String
   salaryMin       Int?      @map("salary_min")
   salaryMax       Int?      @map("salary_max")
@@ -247,14 +249,16 @@ model ApplicationEvent {
   @@map("application_events")
 }
 
-// Сферы деятельности, которые добавили сами работодатели. Встроенные сферы с синонимами — в коде
-// (categories/catalog.ts); здесь только новые, чтобы предлагать их другим при вводе.
-model Category {
+// Сферы, которые работодатели написали своими словами и которые не распознались (вакансия ушла в
+// «Другое»). Команда смотрит этот список и добавляет слова в синонимы встроенных сфер.
+model CategoryMiss {
   id        Int      @id @default(autoincrement())
-  name      String
-  // Нормализованное название (регистр, ё/е, знаки) — одна сфера не заводится дважды.
+  text      String
+  // Нормализованный текст (регистр, ё/е, знаки) — одно и то же слово считается один раз.
   normKey   String   @unique @map("norm_key")
+  uses      Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("categories")
+  @@map("category_misses")
 }

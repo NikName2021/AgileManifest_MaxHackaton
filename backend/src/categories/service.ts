@@ -1,71 +1,117 @@
 import { db } from '../db.js';
 import { normalizeForSearch, rankEntries, withinOneEdit } from '../suggest.js';
-import { BUILT_IN_CATEGORIES, type BuiltInCategory } from './catalog.js';
+import { BUILT_IN_CATEGORIES, OTHER_CATEGORY, type BuiltInCategory } from './catalog.js';
 
 // Вакансии, созданные без сферы (старый диалог бота, REST без category).
 export const NO_CATEGORY = 'general';
 
 export interface CategoryDto {
   name: string;
-  emoji: string | null;
-  builtIn: boolean;
+  emoji: string;
   // Сколько опубликованных вакансий в этой сфере сейчас.
   vacancies: number;
 }
 
-// exact — введено ровно название; synonym — синоним встроенной сферы (при сохранении заменится
-// автоматически); similar — просто похоже, frontend предлагает заменить.
-export type CategoryMatch = 'exact' | 'synonym' | 'similar';
+// Как введённый текст отнесён к сфере:
+// exact — ровно название; synonym — синоним («кафе»); typo — опечатка в одну букву («кейтринг»);
+// phrase — фраза, в которой есть название или синоним («сфера общественного питания»);
+// other — не распознано, будет «Другое».
+export type CategoryMatch = 'exact' | 'synonym' | 'typo' | 'phrase' | 'other';
+
+export interface ResolvedCategory {
+  name: string;
+  match: CategoryMatch;
+  // Для «Другое» — что написал работодатель (сохраняется в category_detail).
+  detail: string | null;
+}
 
 export interface CategorySuggestion extends CategoryDto {
-  match: CategoryMatch;
+  // similar — просто похоже по началу слова; frontend предлагает «Заменить на «…»?».
+  match: Exclude<CategoryMatch, 'other'> | 'similar';
 }
 
-const BUILT_IN_BY_KEY = new Map<string, BuiltInCategory>();
-for (const category of BUILT_IN_CATEGORIES) {
-  BUILT_IN_BY_KEY.set(normalizeForSearch(category.name), category);
-}
-for (const category of BUILT_IN_CATEGORIES) {
-  for (const synonym of category.synonyms) {
-    const key = normalizeForSearch(synonym);
-    if (!BUILT_IN_BY_KEY.has(key)) BUILT_IN_BY_KEY.set(key, category);
-  }
+const ALL: BuiltInCategory[] = [...BUILT_IN_CATEGORIES, { ...OTHER_CATEGORY, synonyms: ['другое', 'прочее', 'иное'] }];
+const BY_NAME = new Map(ALL.map((c) => [c.name, c]));
+
+// Каждое название и синоним — нормализованный «термин» со словами для поиска по фразе.
+const TERMS = ALL.flatMap((category) =>
+  [category.name, ...category.synonyms].map((term, index) => {
+    const key = normalizeForSearch(term);
+    return { category, key, words: key.split(' '), isName: index === 0 };
+  })
+);
+const BY_KEY = new Map<string, (typeof TERMS)[number]>();
+for (const term of TERMS) if (!BY_KEY.has(term.key)) BY_KEY.set(term.key, term);
+
+// Слова совпадают с точностью до окончания: «общественного» ~ «общественное», «питания» ~ «питание».
+function sameWord(a: string, b: string): boolean {
+  if (a === b) return true;
+  const shorter = Math.min(a.length, b.length);
+  if (shorter < 5) return false;
+  const stem = Math.max(5, shorter - 2);
+  return a.slice(0, stem) === b.slice(0, stem);
 }
 
-// Существующая сфера: встроенная (по названию или синониму) или добавленная работодателями раньше.
-export async function findCategory(text: string): Promise<{ name: string; match: 'exact' | 'synonym' } | null> {
+export function isCategoryName(name: string): boolean {
+  return BY_NAME.has(name);
+}
+
+// Отнести текст к сфере справочника. Никогда не создаёт новых сфер: нераспознанное — «Другое».
+export function matchCategory(text: string): ResolvedCategory {
   const key = normalizeForSearch(text);
-  if (!key) return null;
-  const builtIn = BUILT_IN_BY_KEY.get(key);
-  if (builtIn) return { name: builtIn.name, match: normalizeForSearch(builtIn.name) === key ? 'exact' : 'synonym' };
-  const custom = await db.category.findUnique({ where: { normKey: key } });
-  return custom ? { name: custom.name, match: 'exact' } : null;
+  const detail = text.trim().replace(/\s+/g, ' ');
+  if (!key) return { name: OTHER_CATEGORY.name, match: 'other', detail: null };
+
+  const exact = BY_KEY.get(key);
+  if (exact) {
+    const isOther = exact.category.name === OTHER_CATEGORY.name;
+    return { name: exact.category.name, match: exact.isName || isOther ? 'exact' : 'synonym', detail: null };
+  }
+
+  // Опечатка в одну букву во всём названии или синониме: «кейтринг» → «кейтеринг» → «Общепит».
+  if (key.length >= 5) {
+    const typo = TERMS.find((t) => t.key.length >= 5 && withinOneEdit(key, t.key));
+    if (typo) return { name: typo.category.name, match: 'typo', detail: null };
+  }
+
+  // Фраза: все слова какого-то названия или синонима есть в тексте. Если подходят разные сферы,
+  // берём ту, где совпало больше слов; ничья — не угадываем.
+  const words = key.split(' ');
+  const scores = new Map<string, number>();
+  for (const term of TERMS) {
+    if (term.category.name === OTHER_CATEGORY.name) continue;
+    if (term.words.every((w) => words.some((x) => sameWord(w, x)))) {
+      scores.set(term.category.name, Math.max(scores.get(term.category.name) ?? 0, term.words.length));
+    }
+  }
+  const ranked = [...scores].sort((a, b) => b[1] - a[1]);
+  if (ranked.length > 0 && (ranked.length === 1 || ranked[0][1] > ranked[1][1])) {
+    return { name: ranked[0][0], match: 'phrase', detail: null };
+  }
+
+  return { name: OTHER_CATEGORY.name, match: 'other', detail };
 }
 
-// Опечатка в одну букву во всём названии или синониме встроенной сферы: «Обшепит» → «Общепит».
-function builtInTypoMatch(text: string): string | null {
-  const key = normalizeForSearch(text);
-  if (key.length < 5) return null;
-  for (const [candidate, category] of BUILT_IN_BY_KEY) {
-    if (withinOneEdit(key, candidate)) return category.name;
+// Сфера для сохранения в вакансии. Нераспознанный текст записывается в журнал промахов — по нему
+// команда добавляет синонимы, а вакансия получает «Другое» и исходный текст в category_detail.
+export async function resolveCategory(text: string): Promise<{ category: string; categoryDetail: string | null }> {
+  const resolved = matchCategory(text);
+  if (resolved.match === 'other' && resolved.detail) {
+    const normKey = normalizeForSearch(resolved.detail);
+    await db.categoryMiss.upsert({
+      where: { normKey },
+      update: { uses: { increment: 1 } },
+      create: { text: resolved.detail, normKey },
+    });
   }
-  return null;
+  return { category: resolved.name, categoryDetail: resolved.detail };
 }
 
-// Сфера для сохранения в вакансии. Существующая — её точное название (синоним заменяется на
-// название); новая — заводится, чтобы её предлагали другим. fixTypos — для диалога бота, где
-// переспросить «вы имели в виду…» нельзя: явная опечатка во встроенной сфере исправляется сама.
-export async function resolveCategory(text: string, { fixTypos = false } = {}): Promise<string> {
-  const found = await findCategory(text);
-  if (found) return found.name;
-  if (fixTypos) {
-    const typo = builtInTypoMatch(text);
-    if (typo) return typo;
-  }
-  const name = text.trim();
-  const normKey = normalizeForSearch(name);
-  await db.category.upsert({ where: { normKey }, update: {}, create: { name, normKey } });
-  return name;
+// Сфера для фильтра подписки или канала: только распознанная. null — текст не похож ни на одну
+// сферу (подписка с ним молча не получала бы ничего). «Другое» можно выбрать явно.
+export function findCategory(text: string): string | null {
+  const resolved = matchCategory(text);
+  return resolved.match === 'other' ? null : resolved.name;
 }
 
 async function publishedCounts(): Promise<Map<string, number>> {
@@ -73,33 +119,44 @@ async function publishedCounts(): Promise<Map<string, number>> {
   return new Map(rows.map((r) => [r.category, r._count._all]));
 }
 
-// Встроенные сферы и добавленные работодателями (без повторов встроенных), популярные — первыми.
-async function allCategories(): Promise<CategoryDto[]> {
-  const [custom, counts] = await Promise.all([db.category.findMany({ orderBy: { id: 'asc' } }), publishedCounts()]);
-  const items: CategoryDto[] = [
-    ...BUILT_IN_CATEGORIES.map((c) => ({ name: c.name, emoji: c.emoji, builtIn: true, vacancies: counts.get(c.name) ?? 0 })),
-    ...custom
-      .filter((c) => !BUILT_IN_BY_KEY.has(c.normKey))
-      .map((c) => ({ name: c.name, emoji: null, builtIn: false, vacancies: counts.get(c.name) ?? 0 })),
-  ];
-  // Стабильная сортировка: при равном числе вакансий встроенные идут в порядке справочника.
-  return items.sort((a, b) => b.vacancies - a.vacancies);
-}
-
-// Список для выбора: все встроенные и те добавленные, в которых сейчас есть вакансии.
+// Весь справочник в его порядке, «Другое» — последним; число опубликованных вакансий в каждой.
 export async function listCategories(): Promise<CategoryDto[]> {
-  return (await allCategories()).filter((c) => c.builtIn || c.vacancies > 0);
+  const counts = await publishedCounts();
+  return ALL.map((c) => ({ name: c.name, emoji: c.emoji, vacancies: counts.get(c.name) ?? 0 }));
 }
 
-const SYNONYMS = new Map(BUILT_IN_CATEGORIES.map((c) => [c.name, c.synonyms]));
+// Автодополнение: «каф» → «Общепит», «обшепит» → «Общепит». Синонимы ищутся по началу слова.
+export async function suggestCategories(query: string, limit: number): Promise<{ resolved: ResolvedCategory; items: CategorySuggestion[] }> {
+  const counts = await publishedCounts();
+  const resolved = matchCategory(query);
+  const ranked = rankEntries(query, ALL, (c) => ({ label: c.name, synonyms: c.synonyms }), limit).map(({ item }) => item);
+  // Распознанная сфера (опечатка, фраза) — первой, даже если поиск по началу слова её не нашёл.
+  if (resolved.match !== 'other') {
+    const index = ranked.findIndex((c) => c.name === resolved.name);
+    if (index !== 0) {
+      if (index > 0) ranked.splice(index, 1);
+      ranked.unshift(BY_NAME.get(resolved.name)!);
+    }
+  }
+  const items = ranked.slice(0, limit).map((c) => ({
+    name: c.name,
+    emoji: c.emoji,
+    vacancies: counts.get(c.name) ?? 0,
+    match: c.name === resolved.name && resolved.match !== 'other' ? resolved.match : ('similar' as const),
+  }));
+  return { resolved, items };
+}
 
-// Автодополнение: «каф» → «Общепит» (синоним «кафе»), «обшепит» → «Общепит» (опечатка).
-export async function suggestCategories(query: string, limit: number): Promise<CategorySuggestion[]> {
-  const key = normalizeForSearch(query);
-  const ranked = rankEntries(query, await allCategories(), (c) => ({ label: c.name, synonyms: SYNONYMS.get(c.name) }), limit);
-  return ranked.map(({ item }) => {
-    const exact = normalizeForSearch(item.name) === key;
-    const synonym = !exact && (SYNONYMS.get(item.name) ?? []).some((s) => normalizeForSearch(s) === key);
-    return { ...item, match: exact ? 'exact' : synonym ? 'synonym' : 'similar' };
+// Сферы вакансий, созданных до справочника: распознанные — к названию, остальные — в «Другое» с
+// исходным текстом. Идемпотентно: трогает только сферы не из справочника.
+export async function backfillCategories(): Promise<number> {
+  const rows = await db.vacancy.findMany({
+    where: { category: { notIn: [...BY_NAME.keys(), NO_CATEGORY] } },
+    select: { id: true, category: true },
   });
+  for (const row of rows) {
+    const { category, categoryDetail } = await resolveCategory(row.category);
+    await db.vacancy.update({ where: { id: row.id }, data: { category, categoryDetail } });
+  }
+  return rows.length;
 }

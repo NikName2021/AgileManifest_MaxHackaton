@@ -42,7 +42,7 @@ import {
   badgeSuggestQuerySchema,
   suggestQuerySchema,
 } from './validation.js';
-import { listCategories, NO_CATEGORY, resolveCategory, suggestCategories } from './categories/service.js';
+import { backfillCategories, listCategories, NO_CATEGORY, resolveCategory, suggestCategories } from './categories/service.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 // Экспорт для интеграционных тестов (app.inject без порта и без MAX).
@@ -142,7 +142,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       title: body.title,
       regionCode: body.region_code ?? '',
       regionSubject: normalizeRegion(body.region_code),
-      category: body.category ? await resolveCategory(body.category) : NO_CATEGORY,
+      ...(body.category ? await resolveCategory(body.category) : { category: NO_CATEGORY, categoryDetail: null }),
       schedule: body.schedule ?? 'temporary',
       salaryMin: body.salary_min ?? null,
       salaryMax: body.salary_max ?? null,
@@ -218,7 +218,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
       title: merged.title,
       regionCode: merged.region_code,
       regionSubject: normalizeRegion(merged.region_code),
-      ...(body.category !== undefined ? { category: await resolveCategory(body.category) } : {}),
+      ...(body.category !== undefined ? await resolveCategory(body.category) : {}),
       schedule: merged.schedule,
       salaryMin: merged.salary_min,
       salaryMax: merged.salary_max,
@@ -479,17 +479,17 @@ app.get('/api/badges/suggest', async (request, reply) => {
   return { items: suggestBadges(parsed.data.q, parsed.data.limit, parsed.data.exclude) };
 });
 
-// Сферы деятельности: встроенные и добавленные работодателями, в которых есть вакансии.
+// Справочник сфер деятельности; «Другое» — последней.
 app.get('/api/categories', async () => ({ items: await listCategories() }));
 
-// Автодополнение сферы: «кафе» → «Общепит», «обшепит» → «Общепит». match подсказывает frontend,
-// предлагать ли замену.
+// Автодополнение сферы: «кафе» → «Общепит», «кейтринг» → «Общепит». resolved — к какой сфере текст
+// будет отнесён при сохранении (other — «Другое»), items — варианты для выбора.
 app.get('/api/categories/suggest', async (request, reply) => {
   const parsed = suggestQuerySchema.safeParse(request.query);
   if (!parsed.success) {
     return sendError(reply, 400, 'validation_error', 'invalid query', zodFieldErrors(parsed.error.flatten()));
   }
-  return { items: await suggestCategories(parsed.data.q, parsed.data.limit) };
+  return suggestCategories(parsed.data.q, parsed.data.limit);
 });
 
 // Справочник субъектов РФ для выбора региона в мини-приложении.
@@ -582,6 +582,9 @@ async function start() {
   backfillRegionSubjects()
     .then((n) => n > 0 && app.log.info({ updated: n }, 'region_subject backfilled'))
     .catch((err) => app.log.error(err, 'region_subject backfill failed'));
+  backfillCategories()
+    .then((n) => n > 0 && app.log.info({ updated: n }, 'vacancy categories backfilled'))
+    .catch((err) => app.log.error(err, 'category backfill failed'));
   startStaleVacancyReminders();
   startShiftReminders();
   startChannelDigests();

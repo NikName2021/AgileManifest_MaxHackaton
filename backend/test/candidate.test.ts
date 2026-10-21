@@ -44,7 +44,7 @@ async function createVacancy(owner: TestUser, body: VacancyBody = {}) {
     method: 'POST',
     url: '/api/vacancies',
     headers: owner.auth,
-    payload: { title: 'Сборщик урожая', region_code: '23', category: 'agriculture', schedule: 'seasonal', ...body },
+    payload: { title: 'Сборщик урожая', region_code: '23', category: 'Сельское хозяйство', schedule: 'seasonal', ...body },
   });
   expect(res.statusCode).toBe(201);
   return res.json() as { id: number };
@@ -113,7 +113,8 @@ describe('1. каталог: видимость опубликованных ч�
       title: 'Сборщик урожая',
       regionCode: '23',
       subject: { code: '23', name: 'Краснодарский край' },
-      category: 'agriculture',
+      category: 'Сельское хозяйство',
+      categoryDetail: null,
       schedule: 'seasonal',
       salaryMin: null,
       salaryMax: null,
@@ -177,11 +178,11 @@ describe('3. фильтры, пагинация, сортировка', () => {
   async function seed() {
     // Разные createdAt, чтобы порядок newest был детерминирован; id растут в том же порядке.
     const specs: [string, VacancyBody][] = [
-      ['v_none', { region_code: '23', category: 'agriculture', schedule: 'seasonal' }],
-      ['v_zero', { salary_min: 0, salary_max: 0, region_code: '23', category: 'cafe', schedule: 'temporary' }],
-      ['v_min_only', { salary_min: 50000, region_code: '16', category: 'cafe', schedule: 'seasonal' }],
-      ['v_max_only', { salary_max: 40000, region_code: '16', category: 'agriculture', schedule: 'permanent' }],
-      ['v_range', { salary_min: 30000, salary_max: 70000, region_code: '23', category: 'agriculture', schedule: 'seasonal', description: 'Сбор ЯБЛОК в саду' }],
+      ['v_none', { region_code: '23', category: 'Сельское хозяйство', schedule: 'seasonal' }],
+      ['v_zero', { salary_min: 0, salary_max: 0, region_code: '23', category: 'Общепит', schedule: 'temporary' }],
+      ['v_min_only', { salary_min: 50000, region_code: '16', category: 'Общепит', schedule: 'seasonal' }],
+      ['v_max_only', { salary_max: 40000, region_code: '16', category: 'Сельское хозяйство', schedule: 'permanent' }],
+      ['v_range', { salary_min: 30000, salary_max: 70000, region_code: '23', category: 'Сельское хозяйство', schedule: 'seasonal', description: 'Сбор ЯБЛОК в саду' }],
     ];
     const ids: Record<string, number> = {};
     let t = Date.parse('2026-10-01T00:00:00Z');
@@ -234,17 +235,17 @@ describe('3. фильтры, пагинация, сортировка', () => {
     expect(await titles('?q=%25')).toEqual([]); // % экранируется, а не работает как wildcard
     expect((await get(B, '/api/jobs?q=%20%20')).json().total).toBe(5);
     expect(await titles('?region_code=16')).toEqual(['v_max_only', 'v_min_only']);
-    expect(await titles('?category=cafe&schedule=seasonal')).toEqual(['v_min_only']);
+    expect(await titles('?category=кафе&schedule=seasonal')).toEqual(['v_min_only']);
   });
 
   it('GET /api/jobs/filters — значения реально доступных чужих вакансий', async () => {
     await seed();
-    await createVacancy(A, { region_code: '99', category: 'draft-only' }); // черновик не учитывается
-    const own = await publishedVacancy(B, { region_code: '77', category: 'own-only' }); // своя не учитывается
+    await createVacancy(A, { region_code: '99', category: 'Торговля' }); // черновик не учитывается
+    const own = await publishedVacancy(B, { region_code: '77', category: 'Охрана' }); // своя не учитывается
     expect(own.id).toBeGreaterThan(0);
     expect((await get(B, '/api/jobs/filters')).json()).toEqual({
       regions: [{ value: '23', label: 'Краснодарский край' }, { value: '16', label: 'Республика Татарстан' }],
-      categories: [{ value: 'agriculture', label: 'agriculture' }, { value: 'cafe', label: 'cafe' }],
+      categories: [{ value: 'Общепит', label: 'Общепит' }, { value: 'Сельское хозяйство', label: 'Сельское хозяйство' }],
     });
   });
 
@@ -474,7 +475,8 @@ describe('8–9. история откликов кандидата', () => {
         title: 'Сборщик урожая',
         regionCode: '23',
         subject: { code: '23', name: 'Краснодарский край' },
-        category: 'agriculture',
+        category: 'Сельское хозяйство',
+        categoryDetail: null,
         schedule: 'seasonal',
         salaryMin: 50000,
         salaryMax: 70000,

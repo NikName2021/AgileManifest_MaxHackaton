@@ -146,7 +146,7 @@ describe('фильтры, дайджест и статистика канала'
       categories: ['Общепит', 'Гостиницы и туризм'], schedule: 'seasonal', salaryFrom: 50000, trustedOnly: false,
       badges: [{ key: 'housing_free', emoji: '🏠', label: 'Жильё бесплатно' }], mode: 'instant',
     });
-    expect((await patch(U, id100, { categories: ['Обшепит'] })).json().error.fields).toHaveProperty('categories');
+    expect((await patch(U, id100, { categories: ['Ремонт обуви'] })).json().error.fields).toHaveProperty('categories');
     expect((await patch(U, id100, { digest_hour: 24 })).statusCode).toBe(400);
 
     sendMessageMock.mockClear();

@@ -1094,8 +1094,8 @@ paths:
   /api/categories:
     get:
       summary: >
-        Сферы деятельности для выбора: все встроенные (с эмодзи) и добавленные работодателями, в
-        которых сейчас есть опубликованные вакансии. Популярные — первыми.
+        Справочник сфер деятельности (закрытый список, его ведёт команда) в порядке справочника,
+        «Другое» — последней, с числом опубликованных вакансий в каждой.
       operationId: listCategories
       security: []
       responses:
@@ -1114,10 +1114,12 @@ paths:
   /api/categories/suggest:
     get:
       summary: >
-        Автодополнение сферы: «каф» → «Общепит» (синоним «кафе»), «обшепит» → «Общепит» (опечатка),
-        «пчел» → «Пчеловодство» (сфера, которую добавил другой работодатель). match подсказывает, что
-        показать: exact — введено ровно название; synonym — при сохранении заменится само; similar —
-        предложить «Заменить на «…»?».
+        Автодополнение сферы и предпросмотр того, к какой сфере текст будет отнесён при сохранении.
+        resolved — результат сопоставления: exact (ровно название), synonym («кафе» → «Общепит»),
+        typo (опечатка в одну букву: «кейтринг» → «Общепит»), phrase (фраза с названием или синонимом:
+        «сфера общественного питания» → «Общепит») или other — не распознано, вакансия попадёт в
+        «Другое», а текст сохранится в categoryDetail. items — варианты для выбора; у распознанной
+        сферы match как в resolved, у остальных similar (похоже по началу слова).
       operationId: suggestCategories
       security: []
       parameters:
@@ -1130,14 +1132,22 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [resolved, items]
                 properties:
+                  resolved:
+                    type: object
+                    required: [name, match, detail]
+                    properties:
+                      name: { type: string, description: 'Сфера, которая будет сохранена' }
+                      match: { type: string, enum: [exact, synonym, typo, phrase, other] }
+                      detail: { type: string, nullable: true, description: 'Для other — исходный текст (уйдёт в categoryDetail)' }
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/CategorySuggestion' }
               example:
+                resolved: { name: Общепит, match: typo, detail: null }
                 items:
-                  - { name: Общепит, emoji: 🍽️, builtIn: true, vacancies: 5, match: similar }
+                  - { name: Общепит, emoji: 🍽️, vacancies: 5, match: typo }
         '400':
           description: Нет q или limit вне 1–20
           content:
@@ -1451,9 +1461,9 @@ paths:
                   type: string
                   nullable: true
                   description: >
-                    Существующая сфера (GET /api/categories) или её синоним; сохраняется название сферы.
-                    Неизвестная сфера (например, с опечаткой) — 400 с полем category: иначе подписка
-                    молча не получала бы ничего. null — любая сфера.
+                    Сфера из справочника (GET /api/categories); синоним, опечатка и фраза приводятся к
+                    названию. Нераспознанный текст — 400 с полем category: иначе подписка молча не
+                    получала бы ничего. «Другое» можно выбрать явно. null — любая сфера.
                 schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null] }
                 salary_from: { type: integer, nullable: true, minimum: 0 }
                 student_only: { type: boolean }
@@ -1574,8 +1584,8 @@ paths:
                   maxItems: 10
                   items: { type: string, maxLength: 100 }
                   description: >
-                    Сферы (GET /api/categories) или их синонимы; пустой массив — любая сфера. Неизвестная
-                    сфера — 400 с полем categories.
+                    Сферы из справочника (GET /api/categories) или их синонимы; пустой массив — любая
+                    сфера. Нераспознанная — 400 с полем categories.
                 schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null], description: null — любой график }
                 salary_from: { type: integer, nullable: true, minimum: 0, maximum: 10000000, description: 'Зарплата от (по salary_max, иначе salary_min); null — любая' }
                 trusted_only: { type: boolean, description: Только вакансии работодателей с отметкой «Надёжный работодатель» }
@@ -1755,6 +1765,10 @@ components:
           type: string
         category:
           type: string
+        categoryDetail:
+          type: string
+          nullable: true
+          description: Что написал работодатель, если сфера не распознана (category = «Другое»)
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -1844,9 +1858,10 @@ components:
           type: string
           maxLength: 100
           description: >
-            Сфера деятельности. Синоним встроенной сферы («кафе», «теплица») и другой регистр
-            сохраняются как её название («Общепит», «Сельское хозяйство»); новая сфера сохраняется как
-            написана и дальше предлагается другим (GET /api/categories/suggest). Без category — general.
+            Сфера деятельности своими словами или из GET /api/categories. Сохраняется название сферы
+            справочника: синоним («кафе»), опечатка («кейтринг») и фраза («сфера общественного
+            питания») → «Общепит». Нераспознанное — «Другое», исходный текст — в categoryDetail.
+            Предпросмотр — GET /api/categories/suggest (resolved). Без category — general.
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -1903,9 +1918,10 @@ components:
           type: string
           maxLength: 100
           description: >
-            Сфера деятельности. Синоним встроенной сферы («кафе», «теплица») и другой регистр
-            сохраняются как её название («Общепит», «Сельское хозяйство»); новая сфера сохраняется как
-            написана и дальше предлагается другим (GET /api/categories/suggest). Без category — general.
+            Сфера деятельности своими словами или из GET /api/categories. Сохраняется название сферы
+            справочника: синоним («кафе»), опечатка («кейтринг») и фраза («сфера общественного
+            питания») → «Общепит». Нераспознанное — «Другое», исходный текст — в categoryDetail.
+            Предпросмотр — GET /api/categories/suggest (resolved). Без category — general.
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -2103,6 +2119,7 @@ components:
             - { type: object, nullable: true, enum: [null] }
           description: Распознанный субъект РФ
         category: { type: string }
+        categoryDetail: { type: string, nullable: true, description: 'Для category = «Другое» — что написал работодатель' }
         schedule: { type: string, enum: [seasonal, temporary, permanent] }
         salaryMin: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
         salaryMax: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
@@ -2163,6 +2180,7 @@ components:
               type: array
               items: { $ref: '#/components/schemas/Badge' }
             category: { type: string }
+            categoryDetail: { type: string, nullable: true }
             schedule: { type: string, enum: [seasonal, temporary, permanent] }
             salaryMin: { type: integer, nullable: true }
             salaryMax: { type: integer, nullable: true }
@@ -2303,11 +2321,10 @@ components:
 
     Category:
       type: object
-      required: [name, emoji, builtIn, vacancies]
+      required: [name, emoji, vacancies]
       properties:
         name: { type: string, example: Общепит, description: 'Это значение передаётся в category вакансии, подписки и канала' }
-        emoji: { type: string, nullable: true, example: 🍽️, description: 'null — у сфер, добавленных работодателями' }
-        builtIn: { type: boolean }
+        emoji: { type: string, example: 🍽️ }
         vacancies: { type: integer, description: Опубликованных вакансий в сфере сейчас }
 
     CategorySuggestion:
@@ -2316,7 +2333,7 @@ components:
         - type: object
           required: [match]
           properties:
-            match: { type: string, enum: [exact, synonym, similar] }
+            match: { type: string, enum: [exact, synonym, typo, phrase, similar] }
 
     BadgeGroup:
       type: object

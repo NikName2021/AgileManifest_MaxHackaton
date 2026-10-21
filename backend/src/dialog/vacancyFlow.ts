@@ -165,9 +165,9 @@ export const vacancyFlow: DialogFlow = {
                 title: data.title,
                 regionCode: data.region,
                 regionSubject: normalizeRegion(data.region),
-                // Сессии, начатые до появления шага, — без сферы. Синоним («кафе») и явная опечатка
-                // заменяются на существующую сферу, иначе сфера заводится новой.
-                category: data.category ? await resolveCategory(data.category, { fixTypos: true }) : NO_CATEGORY,
+                // Сессии, начатые до появления шага, — без сферы. Синоним, опечатка и фраза относятся к
+                // сфере справочника, нераспознанное — «Другое» с исходным текстом.
+                ...(data.category ? await resolveCategory(data.category) : { category: NO_CATEGORY, categoryDetail: null }),
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,

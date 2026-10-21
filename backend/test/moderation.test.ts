@@ -142,7 +142,7 @@ describe('модерация в боте', () => {
 
   it('диалог вакансии: ссылка в требованиях и мусор вместо контакта переспрашиваются', async () => {
     await message(A, '/новая_вакансия');
-    for (const answer of ['Бариста', 'Сочи', 'seasonal', '40000-60000']) await message(A, answer);
+    for (const answer of ['Бариста', 'кофейня', 'Сочи', 'seasonal', '40000-60000']) await message(A, answer);
     await message(A, 'Пишите в t.me/coffee');
     expect(lastReply(A)).toContain('Уберите ссылку');
     await message(A, 'Опыт не нужен');
@@ -150,7 +150,7 @@ describe('модерация в боте', () => {
     expect(lastReply(A)).toContain('Не похоже на контакт');
     await message(A, '89001234567, @coffee_hr');
     const vacancy = await db.vacancy.findFirstOrThrow({ where: { employerUserId: A.user.id } });
-    expect(vacancy).toMatchObject({ description: 'Опыт не нужен', contactInfo: '+7 900 123-45-67, @coffee_hr' });
+    expect(vacancy).toMatchObject({ category: 'Общепит', description: 'Опыт не нужен', contactInfo: '+7 900 123-45-67, @coffee_hr' });
   });
 
   it('отклик через бота: мусор вместо контакта переспрашивается', async () => {

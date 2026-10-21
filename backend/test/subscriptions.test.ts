@@ -159,14 +159,14 @@ describe('рассылка при публикации', () => {
 
 describe('подписка из бота', () => {
   it('«Присылать похожие» после отклика и /отписаться', async () => {
-    const id = await publish({ region_code: 'Краснодар', category: 'agro' });
+    const id = await publish({ region_code: 'Краснодар', category: 'Сельское хозяйство' });
     await press(B, `apply:${id}`);
     await message(B, '+7 900 000-00-00');
     const confirmation = sentTo('chat-B').at(-1)!;
     expect(confirmation[2]).toEqual([[{ type: 'callback', text: 'Присылать похожие вакансии', payload: `subscribe_like:${id}` }]]);
 
     await press(B, `subscribe_like:${id}`);
-    expect(await db.jobSubscription.findFirst({ where: { userId: B.user.id } })).toMatchObject({ regionSubject: '23', category: 'agro' });
+    expect(await db.jobSubscription.findFirst({ where: { userId: B.user.id } })).toMatchObject({ regionSubject: '23', category: 'Сельское хозяйство' });
     expect(sentTo('chat-B').at(-1)?.[1]).toContain('Краснодарский край');
 
     await press(B, `subscribe_like:${id}`);

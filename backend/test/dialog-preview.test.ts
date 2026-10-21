@@ -54,7 +54,7 @@ function press(user: TestUser, chatId: string, payload: string) {
 
 async function completeDialog(user: TestUser, chatId: string, requirements = 'опыт не нужен') {
   await message(user, chatId, '/новая_вакансия');
-  for (const answer of ['Сборщик черешни', 'Краснодар', 'seasonal', '3000-4000', requirements, '+7 900 000-00-00']) {
+  for (const answer of ['Сборщик черешни', 'сбор урожая', 'Краснодар', 'seasonal', '3000-4000', requirements, '+7 900 000-00-01']) {
     await message(user, chatId, answer);
   }
   return db.vacancy.findFirstOrThrow({ where: { employerUserId: user.user.id }, orderBy: { id: 'desc' } });

@@ -561,7 +561,7 @@ paths:
           schema: { type: string, maxLength: 100 }
         - name: category
           in: query
-          description: Точное совпадение с category
+          description: Сфера; синоним («кафе») понимается как сфера («Общепит»)
           schema: { type: string, maxLength: 100 }
         - name: schedule
           in: query
@@ -1058,6 +1058,102 @@ paths:
                     items: { $ref: '#/components/schemas/BadgeGroup' }
                   maxPerVacancy: { type: integer, example: 10 }
 
+  /api/badges/suggest:
+    get:
+      summary: >
+        Автодополнение бейджей: по началу слова, без учёта регистра и ё/е, с падежами («жилья»),
+        опечаткой в одну букву («обшежитие») и синонимами («кормят» → питание). Лучшие совпадения первыми.
+      operationId: suggestBadges
+      security: []
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 100 }, description: Что человек уже ввёл }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 8 } }
+        - { name: exclude, in: query, schema: { type: string }, description: 'Уже выбранные ключи через запятую — их не предлагать' }
+      responses:
+        '200':
+          description: Подсказки
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/BadgeSuggestion' }
+              example:
+                items:
+                  - { key: housing_free, emoji: 🏠, label: Жильё бесплатно, group: { key: housing, label: Жильё и быт } }
+                  - { key: housing_provided, emoji: 🏡, label: Жильё предоставляется, group: { key: housing, label: Жильё и быт } }
+        '400':
+          description: Нет q или limit вне 1–20
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/categories:
+    get:
+      summary: >
+        Справочник сфер деятельности (закрытый список, его ведёт команда) в порядке справочника,
+        «Другое» — последней, с числом опубликованных вакансий в каждой.
+      operationId: listCategories
+      security: []
+      responses:
+        '200':
+          description: Сферы
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+
+  /api/categories/suggest:
+    get:
+      summary: >
+        Автодополнение сферы и предпросмотр того, к какой сфере текст будет отнесён при сохранении.
+        resolved — результат сопоставления: exact (ровно название), synonym («кафе» → «Общепит»),
+        typo (опечатка в одну букву: «кейтринг» → «Общепит»), phrase (фраза с названием или синонимом:
+        «сфера общественного питания» → «Общепит») или other — не распознано, вакансия попадёт в
+        «Другое», а текст сохранится в categoryDetail. items — варианты для выбора; у распознанной
+        сферы match как в resolved, у остальных similar (похоже по началу слова).
+      operationId: suggestCategories
+      security: []
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 20, default: 8 } }
+      responses:
+        '200':
+          description: Подсказки
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [resolved, items]
+                properties:
+                  resolved:
+                    type: object
+                    required: [name, match, detail]
+                    properties:
+                      name: { type: string, description: 'Сфера, которая будет сохранена' }
+                      match: { type: string, enum: [exact, synonym, typo, phrase, other] }
+                      detail: { type: string, nullable: true, description: 'Для other — исходный текст (уйдёт в categoryDetail)' }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/CategorySuggestion' }
+              example:
+                resolved: { name: Общепит, match: typo, detail: null }
+                items:
+                  - { name: Общепит, emoji: 🍽️, vacancies: 5, match: typo }
+        '400':
+          description: Нет q или limit вне 1–20
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/applications/{id}/timeline:
     get:
       summary: Дорожная карта отклика — видят кандидат и работодатель вакансии
@@ -1361,7 +1457,13 @@ paths:
               additionalProperties: false
               properties:
                 region_code: { type: string, nullable: true, description: 'Код субъекта или текст («Кубань»); нераспознанный — 400' }
-                category: { type: string, nullable: true }
+                category:
+                  type: string
+                  nullable: true
+                  description: >
+                    Сфера из справочника (GET /api/categories); синоним, опечатка и фраза приводятся к
+                    названию. Нераспознанный текст — 400 с полем category: иначе подписка молча не
+                    получала бы ничего. «Другое» можно выбрать явно. null — любая сфера.
                 schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null] }
                 salary_from: { type: integer, nullable: true, minimum: 0 }
                 student_only: { type: boolean }
@@ -1453,8 +1555,12 @@ paths:
   /api/partner-channels/{id}:
     patch:
       summary: >
-        Настроить канал: включить публикацию, регион, только студенческие вакансии. Подходящие
-        вакансии публикуются туда при публикации, один раз, с кнопкой-ссылкой «Откликнуться».
+        Настроить канал: публикация, фильтры (регион, студенческие, сферы, график, зарплата,
+        только надёжные работодатели, обязательные бейджи) и режим. instant — каждая подходящая
+        вакансия публикуется сразу, один раз, с кнопкой-ссылкой «Откликнуться»; digest — раз в день в
+        digest_hour по Москве одним постом «Новые вакансии за сутки» (до 10 вакансий со ссылками; нет
+        новых — поста нет). Ссылки в постах содержат номер канала (apply_<id>_ch<channelId>) — отклики
+        по ним считаются в stats канала.
       operationId: updatePartnerChannel
       parameters:
         - name: id
@@ -1473,6 +1579,33 @@ paths:
                 active: { type: boolean }
                 region_code: { type: string, nullable: true }
                 student_only: { type: boolean }
+                categories:
+                  type: array
+                  maxItems: 10
+                  items: { type: string, maxLength: 100 }
+                  description: >
+                    Сферы из справочника (GET /api/categories) или их синонимы; пустой массив — любая
+                    сфера. Нераспознанная — 400 с полем categories.
+                schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null], description: null — любой график }
+                salary_from: { type: integer, nullable: true, minimum: 0, maximum: 10000000, description: 'Зарплата от (по salary_max, иначе salary_min); null — любая' }
+                trusted_only: { type: boolean, description: Только вакансии работодателей с отметкой «Надёжный работодатель» }
+                badges:
+                  type: array
+                  maxItems: 10
+                  items: { type: string }
+                  description: Ключи из GET /api/badges; вакансия должна иметь все. Пустой массив — без условия
+                mode: { type: string, enum: [instant, digest] }
+                digest_hour: { type: integer, minimum: 0, maximum: 23, description: 'Час дайджеста по Москве (по умолчанию 10)' }
+            example:
+              active: true
+              region_code: '23'
+              categories: [Общепит, Гостиницы и туризм]
+              schedule: seasonal
+              salary_from: 50000
+              trusted_only: true
+              badges: [housing_free]
+              mode: digest
+              digest_hour: 9
       responses:
         '200':
           description: Обновлено
@@ -1632,6 +1765,10 @@ components:
           type: string
         category:
           type: string
+        categoryDetail:
+          type: string
+          nullable: true
+          description: Что написал работодатель, если сфера не распознана (category = «Другое»)
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -1719,6 +1856,12 @@ components:
           type: string
         category:
           type: string
+          maxLength: 100
+          description: >
+            Сфера деятельности своими словами или из GET /api/categories. Сохраняется название сферы
+            справочника: синоним («кафе»), опечатка («кейтринг») и фраза («сфера общественного
+            питания») → «Общепит». Нераспознанное — «Другое», исходный текст — в categoryDetail.
+            Предпросмотр — GET /api/categories/suggest (resolved). Без category — general.
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -1773,6 +1916,12 @@ components:
           type: string
         category:
           type: string
+          maxLength: 100
+          description: >
+            Сфера деятельности своими словами или из GET /api/categories. Сохраняется название сферы
+            справочника: синоним («кафе»), опечатка («кейтринг») и фраза («сфера общественного
+            питания») → «Общепит». Нераспознанное — «Другое», исходный текст — в categoryDetail.
+            Предпросмотр — GET /api/categories/suggest (resolved). Без category — general.
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -1970,6 +2119,7 @@ components:
             - { type: object, nullable: true, enum: [null] }
           description: Распознанный субъект РФ
         category: { type: string }
+        categoryDetail: { type: string, nullable: true, description: 'Для category = «Другое» — что написал работодатель' }
         schedule: { type: string, enum: [seasonal, temporary, permanent] }
         salaryMin: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
         salaryMax: { type: integer, nullable: true, description: '₽; период не хранится (по смыслу — в месяц)' }
@@ -2030,6 +2180,7 @@ components:
               type: array
               items: { $ref: '#/components/schemas/Badge' }
             category: { type: string }
+            categoryDetail: { type: string, nullable: true }
             schedule: { type: string, enum: [seasonal, temporary, permanent] }
             salaryMin: { type: integer, nullable: true }
             salaryMax: { type: integer, nullable: true }
@@ -2155,6 +2306,35 @@ components:
         emoji: { type: string, example: 🏠 }
         label: { type: string, example: Жильё бесплатно }
 
+    BadgeSuggestion:
+      allOf:
+        - $ref: '#/components/schemas/Badge'
+        - type: object
+          required: [group]
+          properties:
+            group:
+              type: object
+              required: [key, label]
+              properties:
+                key: { type: string, example: housing }
+                label: { type: string, example: Жильё и быт }
+
+    Category:
+      type: object
+      required: [name, emoji, vacancies]
+      properties:
+        name: { type: string, example: Общепит, description: 'Это значение передаётся в category вакансии, подписки и канала' }
+        emoji: { type: string, example: 🍽️ }
+        vacancies: { type: integer, description: Опубликованных вакансий в сфере сейчас }
+
+    CategorySuggestion:
+      allOf:
+        - $ref: '#/components/schemas/Category'
+        - type: object
+          required: [match]
+          properties:
+            match: { type: string, enum: [exact, synonym, typo, phrase, similar] }
+
     BadgeGroup:
       type: object
       required: [key, label, emoji, items]
@@ -2249,7 +2429,7 @@ components:
 
     PartnerChannel:
       type: object
-      required: [id, title, isChannel, active, region, studentOnly, removed, createdAt]
+      required: [id, title, isChannel, active, region, studentOnly, categories, schedule, salaryFrom, trustedOnly, badges, mode, digestHour, removed, createdAt, stats]
       properties:
         id: { type: integer }
         title: { type: string, nullable: true }
@@ -2261,8 +2441,23 @@ components:
             - { type: object, nullable: true, enum: [null] }
           description: null — вакансии из всех регионов
         studentOnly: { type: boolean, description: Только вакансии с отметкой «подходит студентам» }
+        categories: { type: array, items: { type: string }, description: Сферы; пустой массив — любая }
+        schedule: { type: string, nullable: true, enum: [seasonal, temporary, permanent, null] }
+        salaryFrom: { type: integer, nullable: true }
+        trustedOnly: { type: boolean }
+        badges: { type: array, items: { $ref: '#/components/schemas/Badge' }, description: Обязательные бейджи }
+        mode: { type: string, enum: [instant, digest] }
+        digestHour: { type: integer, description: Час дайджеста по Москве }
         removed: { type: boolean, description: 'Бота удалили из чата — публикация невозможна, пока его не добавят снова' }
         createdAt: { type: string, format: date-time }
+        stats:
+          type: object
+          required: [vacanciesPosted, applications, hired, lastPostedAt]
+          properties:
+            vacanciesPosted: { type: integer, description: Сколько вакансий бот опубликовал в канале (сразу или в дайджестах) }
+            applications: { type: integer, description: Сколько откликов пришло по ссылкам из постов этого канала }
+            hired: { type: integer, description: Сколько из них сейчас в статусе «Нанят» }
+            lastPostedAt: { type: string, format: date-time, nullable: true }
 
     FilterOption:
       type: object

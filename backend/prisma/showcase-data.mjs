@@ -54,28 +54,28 @@ export const VACANCIES = [
   // Отель «Морской бриз»
   {
     key: 'breeze_barista', employer: 'breeze', ageDays: 2,
-    title: 'Старший бариста курорта', region: 'Сочи, Приморье', category: 'Гостиницы',
+    title: 'Старший бариста курорта', region: 'Сочи, Приморье', category: 'Гостиницы и туризм',
     schedule: 'seasonal', salaryMin: 63000, salaryMax: 80000, headcount: 4,
     description: 'Кофейня у бассейна отеля. Оплата 4 200 ₽ за смену плюс чаевые. Опыт работы с эспрессо-машиной от полугода.',
     contact: '@demo_morskoy_briz_hr', badges: ['housing_provided', 'tips', 'bar', 'by_sea'],
   },
   {
     key: 'breeze_maid', employer: 'breeze', ageDays: 4,
-    title: 'Горничная', region: 'Сочи, Адлер', category: 'Гостиницы',
+    title: 'Горничная', region: 'Сочи, Адлер', category: 'Гостиницы и туризм',
     schedule: 'seasonal', salaryMin: 55000, salaryMax: 65000, headcount: 6,
     description: 'Уборка номеров по стандартам отеля, 15 номеров в смену. Спецодежда и питание.',
     contact: '@demo_morskoy_briz_hr', badges: ['housing_free', 'meals_3', 'workwear', 'by_sea'],
   },
   {
     key: 'breeze_animator', employer: 'breeze', ageDays: 5,
-    title: 'Аниматор детского клуба', region: 'Сочи', category: 'Гостиницы',
+    title: 'Аниматор детского клуба', region: 'Сочи', category: 'Гостиницы и туризм',
     schedule: 'seasonal', salaryMin: 50000, salaryMax: 60000, headcount: 3,
     description: 'Игры и мастер-классы для детей 4–12 лет, вечерние шоу. Подойдёт студентам педагогических и творческих вузов.',
     contact: '@demo_morskoy_briz_hr', badges: ['housing_free', 'no_experience', 'by_sea'], studentFriendly: true,
   },
   {
     key: 'breeze_reception', employer: 'breeze', ageDays: 9,
-    title: 'Администратор ресепшн', region: 'Сочи', category: 'Гостиницы',
+    title: 'Администратор ресепшн', region: 'Сочи', category: 'Гостиницы и туризм',
     schedule: 'temporary', salaryMin: 70000, salaryMax: 85000, headcount: 1,
     description: 'Заселение гостей, работа в системе бронирования. Английский на разговорном уровне.',
     contact: '@demo_morskoy_briz_hr', badges: ['official_contract', 'shifts', 'training'],
@@ -105,21 +105,21 @@ export const VACANCIES = [
   // База отдыха «Сосновый берег»
   {
     key: 'pines_sup', employer: 'pines', ageDays: 3,
-    title: 'Инструктор по сапбордингу', region: 'Республика Карелия, Сортавала', category: 'Туризм и отдых',
+    title: 'Инструктор по сапбордингу', region: 'Республика Карелия, Сортавала', category: 'Гостиницы и туризм',
     schedule: 'seasonal', salaryMin: 60000, salaryMax: 80000, headcount: 2,
     description: 'Прокат и групповые прогулки на сапах по Ладоге. Нужен сертификат инструктора или опыт.',
     contact: '@demo_sosnovy_bereg', badges: ['housing_free', 'meals_3', 'outdoor', 'whole_season'],
   },
   {
     key: 'pines_cook', employer: 'pines', ageDays: 8,
-    title: 'Повар-универсал', region: 'Карелия', category: 'Туризм и отдых',
+    title: 'Повар-универсал', region: 'Карелия', category: 'Гостиницы и туризм',
     schedule: 'seasonal', salaryMin: 75000, salaryMax: 90000, headcount: 1,
     description: 'Завтраки и ужины для гостей базы до 40 человек, заготовки.',
     contact: '@demo_sosnovy_bereg', badges: ['housing_free', 'kitchen', 'countryside'],
   },
   {
     key: 'pines_handyman', employer: 'pines', ageDays: 12,
-    title: 'Разнорабочий', region: 'Карелия', category: 'Туризм и отдых',
+    title: 'Разнорабочий', region: 'Карелия', category: 'Гостиницы и туризм',
     schedule: 'temporary', salaryMin: 50000, salaryMax: 60000, headcount: 3,
     description: 'Мелкий ремонт домиков, уход за территорией, колка дров.',
     contact: '@demo_sosnovy_bereg', badges: ['housing_free', 'pay_daily', 'tools'],

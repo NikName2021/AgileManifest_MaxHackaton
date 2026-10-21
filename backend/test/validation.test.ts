@@ -172,12 +172,14 @@ describe('диалог бота', () => {
     await message('!!!');
     expect(lastReply()).toContain('нет ни букв, ни цифр');
     await message('Повар');
+    expect(lastReply()).toContain('сфере');
+    await message('Общепит');
     expect(lastReply()).toContain('регионе');
   });
 
   it('огромная зарплата не роняет создание вакансии', async () => {
     await message('/новая_вакансия');
-    for (const answer of ['Повар', 'Сочи', 'seasonal']) await message(answer);
+    for (const answer of ['Повар', 'Общепит', 'Сочи', 'seasonal']) await message(answer);
     await message('40000-99999999999');
     expect(lastReply()).toContain('лишние нули');
     await message('40000-60000');

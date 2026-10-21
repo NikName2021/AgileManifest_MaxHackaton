@@ -74,7 +74,8 @@ describe('QR-объявление', () => {
     expect(svg).toContain('&amp;');
     expect(svg).toContain('&lt;срочно&gt;');
     expect(svg).not.toContain('<срочно>');
-    for (const text of ['3000–4000 ₽', 'сезонная', 'Динской район', 'Нужно человек: 12', `start=apply_${id}_qr`]) expect(svg).toContain(text);
+    expect(svg).toMatch(/3\s000–4\s000 ₽/);
+    for (const text of [ 'сезонная', 'Динской район', 'Нужно человек: 12', `start=apply_${id}_qr`]) expect(svg).toContain(text);
 
     // В плакате тот же QR, что строит библиотека для этой ссылки.
     const expectedQr = await QRCode.toString(`https://max.ru/season_test_bot?start=apply_${id}_qr`, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });

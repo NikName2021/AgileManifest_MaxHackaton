@@ -5,7 +5,6 @@ import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import type { PartnerChannel } from '../features/partners/api'
-import { config } from '../shared/config'
 import '../features/partners/partners.css'
 
 function ChannelEditor({ channel }: { channel: PartnerChannel }) {
@@ -111,11 +110,6 @@ export function PartnerChannelsPage() {
           включает рассылку.
         </p>
         <div className="partner-actions">
-          {config.botUrl && (
-            <a className="text-link" href={config.botUrl} target="_blank" rel="noreferrer">
-              Открыть бота MAX
-            </a>
-          )}
           <Button variant="secondary" onClick={reload}>
             Проверить подключение каналов
           </Button>

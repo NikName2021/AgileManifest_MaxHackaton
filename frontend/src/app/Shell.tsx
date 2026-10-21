@@ -131,6 +131,9 @@ export function Shell() {
               Как работает Сезон
             </Link>
           )}
+          <div className="sidebar-account">
+            <ProfileIdentity />
+          </div>
           <Button
             variant="secondary"
             iconBefore={<LogOut size={18} aria-hidden="true" />}
@@ -139,9 +142,6 @@ export function Shell() {
           >
             Выйти
           </Button>
-          <div className="sidebar-account">
-            <ProfileIdentity />
-          </div>
         </div>
       </aside>
       <div className="workspace">

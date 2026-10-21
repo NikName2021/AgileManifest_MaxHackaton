@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: app
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: frontend
+
+  template:
+    metadata:
+      labels:
+        app: frontend
+
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: test-schedule-semenov-02.hpc-client-003.local
+
+      imagePullSecrets:
+        - name: my-private-registry
+
+      containers:
+        - name: frontend
+          image: 0f0c1e4e-honest-aquila.registry.twcstorage.ru/scheduler-project/smart-scheduler-frontend:latest
+
+          ports:
+            - containerPort: 80
+
+          env:
+            - name: TZ
+              value: "Europe/Moscow"
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

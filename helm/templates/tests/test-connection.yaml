@@ -1,0 +1,33 @@
+{{- if .Values.tests.enabled }}
+{{- range $component := list "frontend" "backend" }}
+{{- $ctx := dict "root" $ "component" $component }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "helm.componentName" $ctx }}-test
+  labels:
+    {{- include "helm.labels" $ctx | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  activeDeadlineSeconds: 60
+  containers:
+    - name: wget
+      image: {{ $.Values.tests.image | quote }}
+      command: ["wget"]
+      args:
+        - "-T"
+        - "10"
+        - "-qO-"
+        {{- if eq $component "frontend" }}
+        # Проверяет также проксирование frontend -> backend и доступность БД.
+        - {{ printf "http://%s:%v/health" (include "helm.componentName" $ctx) $.Values.frontend.service.port | quote }}
+        {{- else }}
+        - {{ printf "http://%s:%v/health" (include "helm.componentName" $ctx) $.Values.backend.service.port | quote }}
+        {{- end }}
+{{- end }}
+{{- end }}

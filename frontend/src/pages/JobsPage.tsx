@@ -50,7 +50,7 @@ export function JobsPage() {
         </div>
       )}
       <div className="catalog-layout">
-        <div>
+        <div aria-busy={result.state === 'loading'}>
           {error ? (
             <p role="alert" className="vacancy-notice is-error">
               {error}
@@ -62,7 +62,7 @@ export function JobsPage() {
                 failed={!!resource.refreshError}
                 retry={resource.refresh}
               />
-              {result.state === 'loading' && <Loading />}
+              {result.state === 'loading' && <Loading label="Ищем вакансии…" />}
               {result.state === 'error' && (
                 <CandidateError error={result.error} retry={resource.reload} />
               )}

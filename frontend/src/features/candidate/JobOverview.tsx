@@ -29,6 +29,16 @@ export function JobOverview({ job }: { job: PublicVacancy }) {
           {job.description || 'Работодатель пока не добавил описание.'}
         </div>
       </section>
+      <section className="job-description-section employer-details" aria-label="Работодатель">
+        <h2>Работодатель</h2>
+        <EmployerHeading employer={job.employer} />
+        {job.employer.confirmedHires !== undefined && (
+          <dl className="employer-hiring-stat">
+            <dt>Подтверждённые наймы</dt>
+            <dd>{job.employer.confirmedHires}</dd>
+          </dl>
+        )}
+      </section>
     </>
   )
 }

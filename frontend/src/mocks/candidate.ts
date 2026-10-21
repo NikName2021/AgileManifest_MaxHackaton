@@ -5,6 +5,12 @@ import { timelineKeys } from '../features/timeline/model'
 
 // Synthetic development-only examples, never used as a fallback for a failed live API.
 export function createPreviewCandidate(): CandidateRepository {
+  // Keep synthetic preview dates useful for checking today/yesterday/older publication labels.
+  const daysAgo = (days: number) => {
+    const date = new Date()
+    date.setDate(date.getDate() - days)
+    return date.toISOString()
+  }
   let profile: Profile = {
     id: 1,
     displayName: 'Демо-кабинет',
@@ -28,7 +34,7 @@ export function createPreviewCandidate(): CandidateRepository {
       description:
         'Демонстрационная вакансия. Сбор и сортировка урожая, работа в команде. Обучение на месте. Условия проживания и график обсуждаются с работодателем.',
       status: 'published',
-      createdAt: '2026-10-19T08:00:00Z',
+      createdAt: daysAgo(0),
       employer: { displayName: 'Демо: фермерское хозяйство', confirmedHires: 5 },
       headcount: 15,
       spotsLeft: 3,
@@ -47,7 +53,7 @@ export function createPreviewCandidate(): CandidateRepository {
       description:
         'Демонстрационная вакансия. Приготовление завтраков и обедов. Нужен опыт работы на кухне. Питание на смене.',
       status: 'published',
-      createdAt: '2026-10-18T08:00:00Z',
+      createdAt: daysAgo(1),
       employer: { displayName: 'Демо: загородный отель' },
       myApplication: null,
       canApply: true,
@@ -64,7 +70,7 @@ export function createPreviewCandidate(): CandidateRepository {
       description:
         'Демонстрационная вакансия. Работа с покупателями и выкладка товара. Оплата по договорённости.',
       status: 'published',
-      createdAt: '2026-10-17T08:00:00Z',
+      createdAt: daysAgo(4),
       employer: { displayName: 'Демо: магазин' },
       myApplication: null,
       canApply: true,

@@ -140,7 +140,6 @@ export function Shell() {
           >
             Выйти
           </Button>
-          <MaxLogo />
           <p className="sidebar-note">Работа и люди в MAX</p>
         </div>
       </aside>
@@ -182,6 +181,9 @@ export function Shell() {
               >
                 <LogOut size={20} aria-hidden="true" />
               </Button>
+              <span className="header-max-logo">
+                <MaxLogo />
+              </span>
             </div>
           </div>
         </header>

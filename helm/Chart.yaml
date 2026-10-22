@@ -2,5 +2,5 @@ apiVersion: v2
 name: helm
 description: Max Hackaton Agile Manifest
 type: application
-version: 0.2.0
+version: 0.4.0
 appVersion: "0.1.0"

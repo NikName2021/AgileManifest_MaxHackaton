@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 env:
   NODE_VERSION: '22'
@@ -257,7 +257,7 @@ jobs:
       - backend-checks
       - frontend-checks
       - openapi
-      - frontend-checks
+      - compose-smoke-test
 
     steps:
       - name: Check out the repo
@@ -275,7 +275,7 @@ jobs:
           context: ./backend
           push: true
           platforms: linux/amd64
-          cache-from: type=registry,ref=${{ secrets.DOCKER_DOMEN }}/scheduler-project/smart-scheduler-backend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_DOMEN }}/agile-manifest-project/backend:latest
           cache-to: type=inline
           tags: |
             ${{ secrets.DOCKER_DOMEN }}/agile-manifest-project/backend:latest    
@@ -293,7 +293,7 @@ jobs:
       - backend-checks
       - frontend-checks
       - openapi
-      - frontend-checks
+      - compose-smoke-test
 
     steps:
       - name: Check out the repo
@@ -312,9 +312,39 @@ jobs:
           context: ./frontend
           push: true
           platforms: linux/amd64
-          cache-from: type=registry,ref=${{ secrets.DOCKER_DOMEN }}/scheduler-project/smart-scheduler-frontend:latest
+          cache-from: type=registry,ref=${{ secrets.DOCKER_DOMEN }}/agile-manifest-project/frontend:latest
           cache-to: type=inline
           tags: |
-            ${{ secrets.DOCKER_DOMEN }}/scheduler-project/smart-scheduler-frontend:latest    
-            ${{ secrets.DOCKER_DOMEN }}/scheduler-project/smart-scheduler-frontend:${{ github.sha }}
+            ${{ secrets.DOCKER_DOMEN }}/agile-manifest-project/frontend:latest    
+            ${{ secrets.DOCKER_DOMEN }}/agile-manifest-project/frontend:${{ github.sha }}
+            
 
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helm
+    needs:
+      - docker-image-frontend-build
+      - docker-image-backend-build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: 'v4.3.0'
+      - name: Configure Kubeconfig
+        uses: azure/k8s-set-context@v5
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+      - name: Deploy the Helm chart
+        run: |
+         helm upgrade agile-project . \
+          --namespace app \
+          --set-string backend.image.tag=${{ github.sha }} \
+          --set-string frontend.image.tag=${{ github.sha }} \
+          --rollback-on-failure
+          --timeout 10m\
+          --description "backend=${{ github.sha }} frontend=${{ github.sha }}"

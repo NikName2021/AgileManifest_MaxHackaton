@@ -12,13 +12,11 @@ frontend:
   replicaCount: 1
   image:
     repository: agile-manifest-project/frontend
-    tag: latest
+    tag: 2026-10-21
     pullPolicy: Always
   service:
     type: ClusterIP
-    port: 80
-  nodeSelector:
-    kubernetes.io/hostname: test-schedule-semenov-02.hpc-client-003.local
+    port: 5000
   resources:
     requests:
       cpu: 100m
@@ -33,7 +31,7 @@ backend:
   replicaCount: 1
   image:
     repository: agile-manifest-project/backend
-    tag: latest
+    tag: 2026-10-21
     pullPolicy: Always
   service:
     type: ClusterIP
@@ -44,11 +42,9 @@ backend:
     TZ: Europe/Moscow
     NODE_ENV: production
     MAX_API_BASE_URL: https://platform-api2.max.ru
-    PUBLIC_BASE_URL: "https://5696077-bs94300.twc1.net/"
+    PUBLIC_BASE_URL: "https://5696077-bs94300.twc1.net"
     FRONTEND_ORIGIN: ""
     TRUSTED_EMPLOYER_MIN_HIRES: "5"
-  nodeSelector:
-    kubernetes.io/hostname: test-schedule-semenov-02.hpc-client-003.local
   resources:
     requests:
       cpu: 250m
@@ -57,10 +53,24 @@ backend:
       cpu: "1"
       memory: 1Gi
 
-# Внешний доступ настраивается в существующем Ingress отдельно от chart.
-# Направьте его на frontend Service, порт frontend.service.port.
-# Nginx во frontend сам проксирует API и вебхук в backend.
-
-tests:
+ingress:
   enabled: true
-  image: busybox:1.37.0
+  className: traefik
+  host: 5696077-bs94300.twc1.net
+  annotations:
+    # TLS завершается на внешнем Nginx; в Traefik запрос приходит по HTTP.
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+
+  paths:
+    - path: /api
+      pathType: Prefix
+      component: backend
+    - path: /webhook/max
+      pathType: Exact
+      component: backend
+    - path: /health
+      pathType: Exact
+      component: backend
+    - path: /
+      pathType: Prefix
+      component: frontend

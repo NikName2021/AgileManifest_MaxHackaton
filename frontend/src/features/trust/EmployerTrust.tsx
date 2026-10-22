@@ -21,7 +21,7 @@ export function EmployerBadge({ confirmedHires }: { confirmedHires?: number }) {
 }
 export function EmployerTrustProgress() {
   const { candidate } = useSession()
-  const { result, refresh, reload } = useResource(candidate.profile, 'employer-trust')
+  const { result, refresh, reload } = useResource(candidate.profile, 'account:profile')
   useRefreshOnReturn(refresh)
   return (
     <section className="settings-panel">

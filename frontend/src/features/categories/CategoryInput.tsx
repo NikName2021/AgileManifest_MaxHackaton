@@ -28,7 +28,7 @@ export function CategoryInput({
       query ? suggestCategories(query, mode === 'preview', signal) : Promise.resolve(null),
     [query, mode],
   )
-  const suggestions = useResource(load, query)
+  const suggestions = useResource(load, `category-suggestions:${query}`)
   const directory = catalog.result.state === 'ready' ? catalog.result.data : []
   const response =
     query === value.trim() && suggestions.result.state === 'ready' ? suggestions.result.data : null

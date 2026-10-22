@@ -3,7 +3,7 @@ import { Button } from '@maxhub/max-ui'
 import { Input } from '../shared/ui/Input'
 import { ProfileIdentity } from '../shared/ui/ProfileIdentity'
 import { Toast } from '../shared/ui/Toast'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import { fieldError } from '../shared/api/fieldError'
@@ -18,7 +18,7 @@ const options = [
 ] as const
 export function SettingsPage() {
   const { candidate, mode } = useSession()
-  const profile = useResource(candidate.profile, 'employer-profile')
+  const profile = useResource(candidate.profile, 'account:profile')
   useRefreshOnReturn(profile.refresh)
   const [notice, setNotice] = useState('')
   return (
@@ -61,12 +61,14 @@ export function SettingsPage() {
 
 function CompanyEditor({ initial, onSaved }: { initial: string; onSaved: () => void }) {
   const { candidate } = useSession()
+  const invalidate = useInvalidateResources()
   const [name, setName] = useState(initial)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>()
   return (
     <form
       className="settings-panel company-form"
+      data-refresh-lock={busy || name !== initial}
       onSubmit={async (e) => {
         e.preventDefault()
         if (busy || !candidate.saveCompany) return
@@ -74,6 +76,7 @@ function CompanyEditor({ initial, onSaved }: { initial: string; onSaved: () => v
         setError(undefined)
         try {
           const actual = await candidate.saveCompany(name)
+          invalidate()
           setName(actual.companyName ?? '')
           onSaved()
         } catch (e) {

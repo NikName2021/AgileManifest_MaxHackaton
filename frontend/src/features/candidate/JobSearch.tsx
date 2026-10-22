@@ -12,10 +12,14 @@ import type { JobFilters } from './api'
 export function JobSearch({
   params,
   filters,
+  regionsReady = true,
+  categoriesReady = true,
   onSearch,
 }: {
   params: URLSearchParams
   filters?: JobFilters
+  regionsReady?: boolean
+  categoriesReady?: boolean
   onSearch: (next: URLSearchParams) => void
 }) {
   const urlQuery = params.get('q') ?? ''
@@ -103,6 +107,7 @@ export function JobSearch({
           </Button>
           <Select
             label="Регион"
+            disabled={!regionsReady}
             className="compact-filter"
             iconBefore={<MapPin size={16} />}
             value={params.get('region_code') ?? ''}
@@ -141,6 +146,7 @@ export function JobSearch({
               Сфера деятельности
               <Select
                 label="Сфера деятельности"
+                disabled={!categoriesReady}
                 name="category"
                 defaultValue={params.get('category') ?? ''}
               >

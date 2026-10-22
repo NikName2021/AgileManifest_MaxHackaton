@@ -1,9 +1,6 @@
-import { useCallback } from 'react'
 import { Button } from '@maxhub/max-ui'
 import { Select } from './Select'
-import { getRegions } from '../api/regions'
-import { useResource } from '../api/useResource'
-import { useSession } from '../../features/session/context'
+import { useRegions } from '../api/useRegions'
 
 export function RegionSelect({
   value,
@@ -14,9 +11,7 @@ export function RegionSelect({
   onChange: (value: string) => void
   disabled?: boolean
 }) {
-  const { mode } = useSession()
-  const load = useCallback((signal: AbortSignal) => getRegions(mode === 'preview', signal), [mode])
-  const { result, reload } = useResource(load, 'directory')
+  const { result, reload } = useRegions()
   return (
     <div className="candidate-input">
       <label>

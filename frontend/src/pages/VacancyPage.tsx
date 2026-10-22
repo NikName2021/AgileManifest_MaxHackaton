@@ -16,7 +16,7 @@ import {
   VacancyPreview,
   VacancyStatusBadge,
 } from '../features/vacancies/VacancyUi'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { config } from '../shared/config'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import { NotFoundPage } from './NotFoundPage'
@@ -31,8 +31,9 @@ export function VacancyPage() {
 }
 function VacancyDetails({ id }: { id: number }) {
   const { vacancies, applications, mode } = useSession()
+  const invalidate = useInvalidateResources()
   const load = useCallback((signal: AbortSignal) => vacancies.get(id, signal), [id, vacancies])
-  const { result, reload, replace } = useResource(load, String(id))
+  const { result, reload, replace } = useResource(load, `employer:vacancy:${id}`)
   const [confirm, setConfirm] = useState<'publish' | 'resend' | 'close' | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<unknown>()
@@ -45,7 +46,7 @@ function VacancyDetails({ id }: { id: number }) {
     (signal: AbortSignal) => loadVacancyHiringSummary(applications, id, signal),
     [applications, id],
   )
-  const stats = useResource(loadStats, String(id))
+  const stats = useResource(loadStats, `employer:vacancy-stats:${id}`)
   const lock = useRef(false),
     mounted = useRef(true)
   const blocker = useBlocker(() => lock.current)
@@ -122,6 +123,7 @@ function VacancyDetails({ id }: { id: number }) {
       }
       attemptedWrite = true
       const updated = await vacancies[action === 'resend' ? 'publish' : action](id)
+      invalidate()
       if (mounted.current) {
         replace(updated)
         setNotice(

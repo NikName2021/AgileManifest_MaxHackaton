@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
   BriefcaseBusiness,
-  CircleHelp,
   Handshake,
-  Menu,
   Settings2,
   UsersRound,
   LogOut,
@@ -22,8 +20,8 @@ import { ProfileIdentity } from '../shared/ui/ProfileIdentity'
 import { Button } from '@maxhub/max-ui'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
-import { Modal } from '../shared/ui/Modal'
 import { useTheme } from '../features/appearance/context'
+import { PullToRefresh } from '../shared/ui/PullToRefresh'
 
 const employerNavigation = [
   { to: '/vacancies', label: 'Мои вакансии', icon: BriefcaseBusiness },
@@ -41,7 +39,6 @@ const titles: Record<string, string> = {
 }
 export function Shell() {
   const { bridge, applications } = useSession()
-  const [menuOpen, setMenuOpen] = useState(false)
   const { cabinet, switchCabinet } = useCabinet()
   const { preference, setPreference } = useTheme()
   const dark =
@@ -67,7 +64,7 @@ export function Shell() {
         : Promise.resolve(0),
     [applications, cabinet],
   )
-  const count = useResource(loadCount, cabinet)
+  const count = useResource(loadCount, `navigation:new-applications:${cabinet}`)
   useRefreshOnReturn(count.refresh)
   useEffect(() => {
     window.addEventListener('season:applications-changed', count.refresh)
@@ -126,40 +123,42 @@ export function Shell() {
       void navigate(backTo, { state: { catalogSearch } })
     })
   }, [bridge, navigate, pathname, title, backTo, home, catalogSearch])
+  const accountActions = (
+    <div className="sidebar-account-actions">
+      <Button
+        variant="secondary"
+        iconBefore={<LogOut size={18} />}
+        onClick={switchCabinet}
+        className="sidebar-exit"
+      >
+        Выйти
+      </Button>
+      <Button
+        variant="secondary"
+        className="icon-button theme-toggle"
+        aria-label={dark ? 'Включить светлую тему' : 'Включить тёмную тему'}
+        onClick={() => setPreference(dark ? 'light' : 'dark')}
+      >
+        {dark ? <Sun size={20} /> : <Moon size={20} />}
+      </Button>
+    </div>
+  )
   const account = (
     <div className="sidebar-bottom">
-      {!worker && !partner && (
-        <Link className="sidebar-help" to="/guide" onClick={() => setMenuOpen(false)}>
-          <CircleHelp size={18} />
-          Как работает Сезон
+      {partner ? (
+        <div className="sidebar-account">
+          <ProfileIdentity subtitle="Партнёр" />
+        </div>
+      ) : (
+        <Link
+          className={`sidebar-account${pathname === (worker ? '/profile' : '/settings') ? ' active' : ''}`}
+          to={worker ? '/profile' : '/settings'}
+          aria-label="Открыть профиль"
+        >
+          <ProfileIdentity subtitle={worker ? 'Работник' : 'Работодатель'} />
         </Link>
       )}
-      <Button
-        variant="ghost"
-        className="sidebar-account"
-        onClick={switchCabinet}
-        aria-label="Сменить роль"
-      >
-        <ProfileIdentity subtitle={partner ? 'Партнёр' : worker ? 'Работник' : 'Работодатель'} />
-      </Button>
-      <div className="sidebar-account-actions">
-        <Button
-          variant="secondary"
-          iconBefore={<LogOut size={18} />}
-          onClick={switchCabinet}
-          className="sidebar-exit"
-        >
-          Выйти
-        </Button>
-        <Button
-          variant="secondary"
-          className="icon-button theme-toggle"
-          aria-label={dark ? 'Включить светлую тему' : 'Включить тёмную тему'}
-          onClick={() => setPreference(dark ? 'light' : 'dark')}
-        >
-          {dark ? <Sun size={20} /> : <Moon size={20} />}
-        </Button>
-      </div>
+      {accountActions}
     </div>
   )
   return (
@@ -172,23 +171,34 @@ export function Shell() {
           <Brand />
         </Link>
         <nav aria-label="Основная навигация" className="sidebar-nav">
-          {navigation.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-            >
-              <Icon size={19} aria-hidden="true" />
-              <span>{label}</span>
-              {badge(to)}
-            </NavLink>
-          ))}
+          {navigation
+            .filter(({ to }) => !['/profile', '/settings'].includes(to))
+            .map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+              >
+                <Icon size={19} aria-hidden="true" />
+                <span>{label}</span>
+                {badge(to)}
+              </NavLink>
+            ))}
         </nav>
         {account}
       </aside>
       <div className="workspace">
-        <main id="main-content" className="main-content" ref={main} tabIndex={-1}>
+        <main
+          id="main-content"
+          className={`main-content${['/profile', '/settings', '/subscriptions'].includes(pathname) ? ' narrow-page' : ''}`}
+          ref={main}
+          tabIndex={-1}
+        >
+          <div className="page-tools">
+            <PullToRefresh key={pathname + search} target={main} />
+            <div className="mobile-account-actions">{accountActions}</div>
+          </div>
           {(inVacancy || (inJob && !applying)) && (
             <Link className="back-link" to={backTo}>
               <ArrowLeft size={16} />
@@ -201,22 +211,9 @@ export function Shell() {
                     : 'К черновику'}
             </Link>
           )}
-          <Button
-            variant="ghost"
-            className="mobile-account-trigger icon-button"
-            aria-label="Меню аккаунта"
-            onClick={() => setMenuOpen(true)}
-          >
-            <Menu size={21} />
-          </Button>
           <Outlet />
         </main>
       </div>
-      {menuOpen && (
-        <Modal title="Аккаунт" onClose={() => setMenuOpen(false)}>
-          {account}
-        </Modal>
-      )}
       <nav className="mobile-nav" aria-label="Нижняя навигация">
         {navigation.map(({ to, label, icon: Icon }) => (
           <NavLink

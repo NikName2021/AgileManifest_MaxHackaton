@@ -21,7 +21,7 @@ import {
 } from '../features/vacancies/model'
 import { VacancyFailure, VacancyLoading } from '../features/vacancies/VacancyUi'
 import { ApiError } from '../shared/api/client'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import { NotFoundPage } from './NotFoundPage'
 
@@ -34,7 +34,7 @@ export function VacancyFormPage({ copy = false }: { copy?: boolean }) {
 function ExistingVacancy({ id, copy }: { id: number; copy: boolean }) {
   const { vacancies } = useSession()
   const load = useCallback((signal: AbortSignal) => vacancies.get(id, signal), [id, vacancies])
-  const { result, reload } = useResource(load, String(id))
+  const { result, reload } = useResource(load, `employer:vacancy:${id}`)
   if (result.state === 'loading') return <VacancyLoading />
   if (result.state === 'error') return <VacancyFailure error={result.error} retry={reload} />
   if (!copy && result.data.status !== 'draft')
@@ -55,6 +55,7 @@ function ExistingVacancy({ id, copy }: { id: number; copy: boolean }) {
 }
 function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacancy }) {
   const { vacancies } = useSession()
+  const invalidate = useInvalidateResources()
   const navigate = useNavigate()
   const returnId = vacancy?.id ?? source?.id
   // Copy only editable fields; identity, publication and applications belong to the source.
@@ -116,6 +117,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
       const result = vacancy
         ? await vacancies.update(vacancy.id, checked.input)
         : await vacancies.create(checked.input)
+      invalidate()
       if (!mounted.current) return
       saved.current = true
       if (blocker.state === 'blocked') blocker.reset()
@@ -199,6 +201,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
       <div className="vacancy-editor-layout">
         <form
           className="vacancy-form"
+          data-refresh-lock={dirty || busy}
           onSubmit={(event) => void submit(event)}
           noValidate
           ref={form}

@@ -10,6 +10,8 @@ import { CandidateError, Loading, Pagination } from '../features/candidate/ui'
 import { jobQuery } from '../features/candidate/query'
 import { JobSearch } from '../features/candidate/JobSearch'
 import { JobCard } from '../features/candidate/JobCard'
+import { useRegions } from '../shared/api/useRegions'
+import { useCategories } from '../features/categories/useCategories'
 
 export function JobsPage() {
   const { candidate } = useSession()
@@ -23,9 +25,10 @@ export function JobsPage() {
         : candidate.jobs(query, signal),
     [candidate, query, error],
   )
-  const resource = useResource(load, key),
-    filters = useResource(candidate.filters, 'job-filters')
-  const profile = useResource(candidate.profile, 'worker-profile')
+  const resource = useResource(load, `worker:jobs:${key}`)
+  const regions = useRegions()
+  const categories = useCategories()
+  const profile = useResource(candidate.profile, 'account:profile')
   useRefreshOnReturn(resource.refresh)
   useRefreshOnReturn(profile.refresh)
   const { result } = resource
@@ -40,16 +43,40 @@ export function JobsPage() {
       </div>
       <JobSearch
         params={params}
-        filters={filters.result.state === 'ready' ? filters.result.data : undefined}
+        filters={{
+          regions:
+            regions.result.state === 'ready'
+              ? regions.result.data.map((r) => ({ value: r.code, label: r.name }))
+              : [],
+          categories:
+            categories.result.state === 'ready'
+              ? categories.result.data.map((c) => ({ value: c.name, label: c.name }))
+              : [],
+        }}
+        regionsReady={regions.result.state === 'ready'}
+        categoriesReady={categories.result.state === 'ready'}
         onSearch={search}
       />
-      {filters.result.state === 'error' && (
+      {regions.result.state === 'loading' && (
+        <p className="field-hint" role="status">
+          Загружаем регионы…
+        </p>
+      )}
+      {regions.result.state === 'error' && (
         <div className="vacancy-notice">
-          <p>Не удалось загрузить список регионов и сфер. Поиск по словам доступен.</p>
-          <Button variant="secondary" onClick={filters.reload}>
-            Загрузить фильтры
+          <p>Не удалось загрузить регионы. Поиск по словам доступен.</p>
+          <Button variant="secondary" onClick={regions.reload}>
+            Загрузить регионы
           </Button>
         </div>
+      )}
+      {categories.result.state === 'error' && (
+        <CandidateError error={categories.result.error} retry={categories.reload} />
+      )}
+      {result.state === 'ready' && !error && (
+        <p className="candidate-result-count" role="status">
+          Найдено вакансий: {result.data.total}
+        </p>
       )}
       <div className="catalog-layout">
         <div aria-busy={result.state === 'loading'}>
@@ -70,9 +97,6 @@ export function JobsPage() {
               )}
               {result.state === 'ready' && (
                 <>
-                  <p className="candidate-result-count" role="status">
-                    Найдено вакансий: {result.data.total}
-                  </p>
                   <div className="job-list">
                     {result.data.items.map((job) => (
                       <JobCard key={job.id} job={job} search={key} />

@@ -6,11 +6,18 @@ import { useCabinet } from '../features/cabinet/context'
 import type { Profile } from '../features/candidate/api'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import { ProfileIdentity } from '../shared/ui/ProfileIdentity'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { AppearanceSettings } from './SettingsPage'
 
-function ProfileForm({ profile }: { profile: Profile }) {
+function ProfileForm({
+  profile,
+  onSaved,
+}: {
+  profile: Profile
+  onSaved: (profile: Profile) => void
+}) {
   const { candidate } = useSession()
+  const invalidate = useInvalidateResources()
   const [contact, setContact] = useState(profile.applicationContact ?? '')
   const [saved, setSaved] = useState(profile.applicationContact ?? '')
   const [busy, setBusy] = useState(false),
@@ -30,6 +37,8 @@ function ProfileForm({ profile }: { profile: Profile }) {
     setMessage('')
     try {
       const result = await candidate.saveContact(contact.trim() || null)
+      invalidate()
+      onSaved(result)
       setContact(result.applicationContact ?? '')
       setSaved(result.applicationContact ?? '')
       setMessage(result.applicationContact ? 'Контакт сохранён.' : 'Сохранённый контакт удалён.')
@@ -43,6 +52,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
   return (
     <form
       className="settings-panel candidate-profile-form"
+      data-refresh-lock={busy || contact.trim() !== saved}
       onSubmit={(event) => void submit(event)}
     >
       <h2>Контакт для откликов</h2>
@@ -83,7 +93,7 @@ function ProfileForm({ profile }: { profile: Profile }) {
 export function WorkerProfilePage() {
   const { candidate } = useSession(),
     { switchCabinet } = useCabinet()
-  const resource = useResource(candidate.profile, 'worker-profile'),
+  const resource = useResource(candidate.profile, 'account:profile'),
     { result } = resource
   return (
     <>
@@ -98,10 +108,7 @@ export function WorkerProfilePage() {
       {result.state === 'error' && <CandidateError error={result.error} retry={resource.reload} />}
       {result.state === 'ready' && (
         <>
-          <ProfileForm
-            key={`${result.data.id}:${result.data.applicationContact}`}
-            profile={result.data}
-          />
+          <ProfileForm key={result.data.id} profile={result.data} onSaved={resource.replace} />
         </>
       )}
       <AppearanceSettings />

@@ -1,45 +1,59 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Switch } from '@maxhub/max-ui'
+import { Input } from '../shared/ui/Input'
+import { Select } from '../shared/ui/Select'
+import { Modal } from '../shared/ui/Modal'
+import { Toast } from '../shared/ui/Toast'
+import { fieldError } from '../shared/api/fieldError'
+import { displayDate } from '../shared/format'
+import { BadgePicker } from '../features/badges/BadgePicker'
+import { useCategories } from '../features/categories/useCategories'
+import { scheduleLabels } from '../features/vacancies/model'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RegionSelect } from '../shared/ui/RegionSelect'
 import { useSession } from '../features/session/context'
 import { useResource } from '../shared/api/useResource'
 import { CandidateError, Loading } from '../features/candidate/ui'
-import type { PartnerChannel } from '../features/partners/api'
+import type { PartnerChannel, ChannelInput } from '../features/partners/api'
 import '../features/partners/partners.css'
 
-function ChannelEditor({ channel }: { channel: PartnerChannel }) {
-  const { partners, mode } = useSession()
-  const [region, setRegion] = useState(channel.region?.code ?? '')
-  const [student, setStudent] = useState(channel.studentOnly)
-  const [active, setActive] = useState(channel.active)
-  const [busy, setBusy] = useState(false),
-    lock = useRef(false)
-  const [error, setError] = useState<unknown>(),
-    [notice, setNotice] = useState('')
-  async function save(nextActive = active) {
-    if (lock.current) return
+function ChannelEditor({
+  channel,
+  onEditing,
+}: {
+  channel: PartnerChannel
+  onEditing: (id: number, active: boolean) => void
+}) {
+  const { partners } = useSession()
+  const [current, setCurrent] = useState(channel)
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const lock = useRef(false)
+  const [error, setError] = useState<unknown>()
+  const [notice, setNotice] = useState('')
+  useEffect(() => {
+    onEditing(channel.id, editing || busy)
+    return () => onEditing(channel.id, false)
+  }, [channel.id, editing, busy, onEditing])
+  async function save(input: ChannelInput) {
+    if (lock.current || current.removed) return false
     lock.current = true
     setBusy(true)
     setError(undefined)
-    setNotice('')
     try {
-      const result = await partners!.update(channel.id, {
-        active: nextActive,
-        region_code: region || null,
-        student_only: student,
-      })
-      setActive(result.active)
-      setRegion(result.region?.code ?? '')
-      setStudent(result.studentOnly)
+      const result = await partners!.update(current.id, input)
+      setCurrent(result)
       setNotice(
-        mode === 'preview'
-          ? 'Настройки сохранены в демо. Публикаций не будет.'
-          : result.active
-            ? 'Автопубликация новых подходящих вакансий включена.'
-            : 'Автопубликация выключена.',
+        input.active !== undefined
+          ? result.active
+            ? 'Автопубликация включена'
+            : 'Автопубликация выключена'
+          : 'Настройки сохранены',
       )
+      return true
     } catch (e) {
       setError(e)
+      return false
     } finally {
       lock.current = false
       setBusy(false)
@@ -47,55 +61,257 @@ function ChannelEditor({ channel }: { channel: PartnerChannel }) {
   }
   return (
     <article
-      className={`partner-card${!active || channel.removed ? ' is-inactive' : ''}`}
+      className={`partner-card${!current.active || current.removed ? ' is-inactive' : ''}`}
       aria-busy={busy}
     >
-      <h2>{channel.title || `${channel.isChannel ? 'Канал' : 'Чат'} № ${channel.id}`}</h2>
-      {channel.removed ? (
-        <p role="status">Бот удалён из канала. Добавьте его снова и проверьте подключение.</p>
-      ) : (
-        <>
-          <label className="partner-publication-toggle">
-            <span>
-              <strong>Автопубликация</strong>
-              <span>{busy ? 'Сохраняем…' : active ? 'Включена' : 'Выключена'}</span>
-            </span>
-            <Switch
-              aria-label="Автопубликация в канал"
-              checked={active}
-              disabled={busy}
-              onChange={(e) => void save(e.target.checked)}
-            />
-          </label>
-          <fieldset className="partner-settings" disabled={busy || !active}>
-            <RegionSelect value={region} onChange={setRegion} disabled={busy || !active} />
-            <label className="student-check">
-              <input
-                type="checkbox"
-                checked={student}
-                onChange={(e) => setStudent(e.target.checked)}
-              />
-              Только вакансии для студентов
-            </label>
-            <Button
-              className="primary-button"
-              disabled={busy || !active}
-              onClick={() => void save()}
-            >
-              Сохранить настройки
-            </Button>
-          </fieldset>
-        </>
+      <div className="channel-heading">
+        <div>
+          <h2>{current.title || `Канал № ${current.id}`}</h2>
+          <span className="field-hint">{current.isChannel ? 'Канал' : 'Чат'}</span>
+        </div>
+        <label className="partner-publication-toggle">
+          <span>Автопубликация</span>
+          <Switch
+            aria-label="Автопубликация в канал"
+            checked={current.active && !current.removed}
+            disabled={busy || current.removed}
+            onChange={(e) => void save({ active: e.target.checked })}
+          />
+        </label>
+      </div>
+      {current.removed && <p>Добавьте бота в канал снова</p>}
+      <div className="channel-statistics">
+        <h3>Статистика</h3>
+        <p>Опубликовано вакансий · {current.stats?.vacanciesPosted ?? '—'}</p>
+        <p>Откликов из канала · {current.stats?.applications ?? '—'}</p>
+        <p>Нанято · {current.stats?.hired ?? '—'}</p>
+        <small>
+          Последний пост:{' '}
+          {current.stats?.lastPostedAt
+            ? displayDate(current.stats.lastPostedAt, new Date(), 'Europe/Moscow')
+            : 'пока нет'}
+        </small>
+      </div>
+      <Button
+        variant="secondary"
+        disabled={busy || !current.active || current.removed}
+        onClick={() => {
+          setError(undefined)
+          setEditing(true)
+        }}
+      >
+        Настроить
+      </Button>
+      {!editing && error !== undefined && <CandidateError error={error} />}
+      {editing && (
+        <Modal
+          title={`Настройки: ${current.title || 'Канал'}`}
+          onClose={() => {
+            if (!lock.current) setEditing(false)
+          }}
+        >
+          <ChannelSettings
+            channel={current}
+            busy={busy}
+            error={error}
+            onSave={async (input) => {
+              if (await save(input)) setEditing(false)
+            }}
+          />
+        </Modal>
       )}
-      {error !== undefined && <CandidateError error={error} />}
-      {notice && <p role="status">{notice}</p>}
+      {notice && <Toast message={notice} onClose={() => setNotice('')} />}
     </article>
+  )
+}
+function ChannelSettings({
+  channel,
+  busy,
+  error,
+  onSave,
+}: {
+  channel: PartnerChannel
+  busy: boolean
+  error: unknown
+  onSave: (input: ChannelInput) => Promise<void>
+}) {
+  const [region, setRegion] = useState(channel.region?.code ?? '')
+  const [categories, setCategories] = useState(channel.categories ?? [])
+  const [schedule, setSchedule] = useState(channel.schedule ?? '')
+  const [salary, setSalary] = useState(channel.salaryFrom?.toString() ?? '')
+  const [badges, setBadges] = useState(channel.badges?.map((b) => b.key) ?? [])
+  const [student, setStudent] = useState(channel.studentOnly)
+  const [trusted, setTrusted] = useState(channel.trustedOnly ?? false)
+  const [mode, setMode] = useState(channel.mode ?? 'instant')
+  const [hour, setHour] = useState(channel.digestHour ?? 10)
+  const [localError, setLocalError] = useState('')
+  const directory = useCategories()
+  return (
+    <form
+      className="channel-settings-form"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const n = salary.replace(/\s/g, '')
+        if (n && (!/^\d+$/.test(n) || Number(n) > 10000000)) {
+          setLocalError('Введите целую сумму от 0 до 10 000 000 ₽')
+          return
+        }
+        setLocalError('')
+        void onSave({
+          region_code: region || null,
+          categories,
+          schedule: (schedule as ChannelInput['schedule']) || null,
+          salary_from: n ? Number(n) : null,
+          badges,
+          student_only: student,
+          trusted_only: trusted,
+          mode,
+          digest_hour: hour,
+        })
+      }}
+    >
+      <fieldset disabled={busy} className="partner-settings">
+        <RegionSelect value={region} onChange={setRegion} disabled={busy} />
+        <div>
+          <h3>Сферы деятельности</h3>
+          <p className="field-hint">Ничего не выбрано — любые сферы. До 10.</p>
+          <div className="category-chips">
+            {directory.result.state === 'ready' &&
+              directory.result.data.map((c) => (
+                <Button
+                  key={c.name}
+                  type="button"
+                  variant="secondary"
+                  className="filter-chip"
+                  aria-pressed={categories.includes(c.name)}
+                  disabled={!categories.includes(c.name) && categories.length >= 10}
+                  onClick={() =>
+                    setCategories((previous) =>
+                      previous.includes(c.name)
+                        ? previous.filter((v) => v !== c.name)
+                        : [...previous, c.name],
+                    )
+                  }
+                >
+                  {c.emoji} {c.name}
+                </Button>
+              ))}
+          </div>
+          {directory.result.state === 'error' && (
+            <p role="alert">
+              Сферы не загружены.{' '}
+              <Button type="button" variant="ghost" onClick={directory.reload}>
+                Повторить
+              </Button>
+            </p>
+          )}
+          {fieldError(error, 'categories') && (
+            <p className="field-error" role="alert">
+              {fieldError(error, 'categories')}
+            </p>
+          )}
+        </div>
+        <label>
+          Занятость
+          <Select
+            label="Занятость"
+            value={schedule}
+            onChange={(e) => setSchedule(e.target.value as typeof schedule)}
+          >
+            <option value="">Любая</option>
+            {Object.entries(scheduleLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </label>
+        <label>
+          Зарплата от, ₽
+          <Input
+            aria-label="Зарплата от, ₽"
+            inputMode="numeric"
+            value={salary}
+            onChange={(e) => setSalary(e.target.value)}
+          />
+        </label>
+        {(localError || fieldError(error, 'salary_from')) && (
+          <p className="field-error" role="alert">
+            {localError || fieldError(error, 'salary_from')}
+          </p>
+        )}
+        <BadgePicker
+          value={badges.join(',')}
+          studentFriendly={false}
+          onChange={setBadges}
+          error={fieldError(error, 'badges')}
+        />
+        <label className="switch-line">
+          Только для студентов
+          <Switch checked={student} onChange={(e) => setStudent(e.target.checked)} />
+        </label>
+        <label className="switch-line">
+          Только надёжные работодатели
+          <Switch checked={trusted} onChange={(e) => setTrusted(e.target.checked)} />
+        </label>
+        <div>
+          <h3>Режим публикации</h3>
+          <div className="stage-filters" role="group" aria-label="Режим публикации">
+            {(['instant', 'digest'] as const).map((value) => (
+              <Button
+                type="button"
+                variant="secondary"
+                className="filter-chip"
+                aria-pressed={mode === value}
+                key={value}
+                onClick={() => setMode(value)}
+              >
+                {value === 'instant' ? 'Сразу' : 'Раз в день'}
+              </Button>
+            ))}
+          </div>
+        </div>
+        {mode === 'digest' && (
+          <label>
+            Час по Москве
+            <Select
+              label="Час по Москве"
+              value={hour}
+              onChange={(e) => setHour(Number(e.target.value))}
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option value={h} key={h}>
+                  {String(h).padStart(2, '0')}:00
+                </option>
+              ))}
+            </Select>
+            <small className="field-hint">Один пост со всеми новыми вакансиями за сутки</small>
+          </label>
+        )}
+        {error !== undefined && <CandidateError error={error} />}
+        <Button type="submit" className="primary-button" disabled={busy}>
+          {busy ? 'Сохраняем…' : 'Сохранить'}
+        </Button>
+      </fieldset>
+    </form>
   )
 }
 export function PartnerChannelsPage() {
   const { partners } = useSession()
   const load = useCallback((signal: AbortSignal) => partners!.list(signal), [partners])
-  const { result, reload } = useResource(load, 'partner-channels')
+  const { result, reload, refresh } = useResource(load, 'partner-channels')
+  const [editingIds, setEditingIds] = useState<Set<number>>(new Set())
+  const onEditing = useCallback(
+    (id: number, active: boolean) =>
+      setEditingIds((previous) => {
+        const next = new Set(previous)
+        if (active) next.add(id)
+        else next.delete(id)
+        return next
+      }),
+    [],
+  )
+  useRefreshOnReturn(refresh, editingIds.size > 0)
   return (
     <>
       <div className="page-heading">
@@ -134,8 +350,9 @@ export function PartnerChannelsPage() {
           <div className="partner-grid">
             {result.data.map((channel) => (
               <ChannelEditor
-                key={`${channel.id}:${channel.active}:${channel.region?.code}:${channel.studentOnly}:${channel.removed}`}
+                key={JSON.stringify(channel)}
                 channel={channel}
+                onEditing={onEditing}
               />
             ))}
           </div>

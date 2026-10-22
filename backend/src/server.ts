@@ -27,6 +27,7 @@ import { verifyMaxInitData } from './auth/maxInitData.js';
 import { issueSessionToken } from './auth/session.js';
 import { findOrCreateUserByMaxId } from './users/service.js';
 import { escapeMarkdown } from './markdown.js';
+import { maxContactUrl } from './moderation.js';
 import { sendError, zodFieldErrors, type ErrorCode } from './errors.js';
 import {
   createVacancySchema,
@@ -89,6 +90,12 @@ function parseIdParam(request: FastifyRequest, reply: FastifyReply): number | un
 }
 
 const CANDIDATE_SUMMARY_SELECT = { id: true, maxUserId: true, displayName: true, phone: true } as const;
+
+// maxContactUrl — для кнопки «Написать в MAX»: ссылка MAX из контакта, который кандидат оставил в
+// этом отклике; null — ссылки нет (тогда frontend предлагает действие по самому контакту).
+function withMaxContactUrl<T extends { contact: string | null; candidate: object }>(application: T) {
+  return { ...application, candidate: { ...application.candidate, maxContactUrl: maxContactUrl(application.contact) } };
+}
 
 // Readiness: проверяет и процесс, и доступность БД.
 app.get('/health', async (request, reply) => {
@@ -305,7 +312,7 @@ app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (r
   });
   // Работодатель открыл список — для кандидата это этап «Работодатель посмотрел».
   await markViewed(items.map((a) => a.id));
-  return items;
+  return items.map(withMaxContactUrl);
 });
 
 // Входящие отклики по всем вакансиям работодателя.
@@ -336,7 +343,7 @@ app.get('/api/applications', { preHandler: requireAuth }, async (request, reply)
   ]);
 
   await markViewed(items.map((a) => a.id));
-  return { items, total, limit, offset };
+  return { items: items.map(withMaxContactUrl), total, limit, offset };
 });
 
 // Дорожная карта отклика: видят кандидат и работодатель вакансии.
@@ -439,7 +446,13 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
   const { candidate, vacancy, ...updated } = result.application;
   return reply.send({
     ...updated,
-    candidate: { id: candidate.id, maxUserId: candidate.maxUserId, displayName: candidate.displayName, phone: candidate.phone },
+    candidate: {
+      id: candidate.id,
+      maxUserId: candidate.maxUserId,
+      displayName: candidate.displayName,
+      phone: candidate.phone,
+      maxContactUrl: maxContactUrl(updated.contact),
+    },
     vacancy: { id: vacancy.id, title: vacancy.title, status: vacancy.status },
     notified: result.notified,
     unchanged: result.unchanged ?? false,

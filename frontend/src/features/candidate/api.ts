@@ -18,6 +18,7 @@ export interface PublicVacancy extends Pick<
   | 'title'
   | 'regionCode'
   | 'category'
+  | 'categoryDetail'
   | 'schedule'
   | 'salaryMin'
   | 'salaryMax'
@@ -43,7 +44,8 @@ export interface MyApplication extends ApplicationRef, Shift {
   vacancy: PublicVacancy & { contactInfo: string | null }
 }
 export interface Profile {
-  employerTrust?: { confirmedHires: number }
+  companyName?: string | null
+  employerTrust?: { confirmedHires: number; threshold?: number; trusted?: boolean }
   id: number
   displayName: string | null
   applicationContact: string | null
@@ -88,6 +90,7 @@ export interface CandidateRepository {
   ): Promise<Page<MyApplication>>
   profile(signal?: AbortSignal): Promise<Profile>
   saveContact(contact: string | null): Promise<Profile>
+  saveCompany?(name: string): Promise<Profile>
 }
 
 function fail(): never {
@@ -146,6 +149,7 @@ function vacancy(body: unknown): PublicVacancy {
     title: str(v.title),
     regionCode: str(v.regionCode),
     category: str(v.category),
+    categoryDetail: v.categoryDetail == null ? null : nullable(v.categoryDetail),
     schedule: v.schedule as Vacancy['schedule'],
     salaryMin,
     salaryMax,
@@ -191,8 +195,21 @@ export function parseProfile(body: unknown): Profile {
   const v = record(body)
   return {
     ...(v.employerTrust !== undefined
-      ? { employerTrust: { confirmedHires: integer(record(v.employerTrust).confirmedHires) } }
+      ? {
+          employerTrust: {
+            confirmedHires: integer(record(v.employerTrust).confirmedHires),
+            threshold:
+              v.employerTrust && record(v.employerTrust).threshold !== undefined
+                ? integer(record(v.employerTrust).threshold, 1)
+                : 5,
+            trusted:
+              record(v.employerTrust).trusted === undefined
+                ? undefined
+                : bool(record(v.employerTrust).trusted),
+          },
+        }
       : {}),
+    companyName: v.companyName === undefined ? undefined : nullable(v.companyName),
     id: integer(v.id, 1),
     displayName: nullable(v.displayName),
     applicationContact: nullable(v.applicationContact),
@@ -319,6 +336,14 @@ export function createCandidateRepository(
     },
     async profile(signal) {
       return parseProfile(await request('/me', { signal }))
+    },
+    async saveCompany(name) {
+      return parseProfile(
+        await request('/me', {
+          method: 'PATCH',
+          body: JSON.stringify({ company_name: name.trim() || null }),
+        }),
+      )
     },
     async saveContact(contact) {
       return parseProfile(

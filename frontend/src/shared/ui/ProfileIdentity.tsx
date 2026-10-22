@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { useSession } from '../../features/session/context'
 
-export function ProfileIdentity({ name }: { name?: string | null }) {
+export function ProfileIdentity({
+  name,
+  subtitle = 'Профиль MAX',
+}: {
+  name?: string | null
+  subtitle?: string
+}) {
   const { user, bridge } = useSession()
   const [failed, setFailed] = useState(false)
   const nativeUser = bridge?.initDataUnsafe?.user
@@ -27,7 +33,7 @@ export function ProfileIdentity({ name }: { name?: string | null }) {
       </span>
       <div>
         <strong>{displayName}</strong>
-        <span>Профиль MAX</span>
+        <span>{subtitle}</span>
       </div>
     </div>
   )

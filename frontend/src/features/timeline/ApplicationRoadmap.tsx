@@ -41,7 +41,7 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
                 ? 'Ещё впереди'
                 : 'Время не указано'
           return (
-            <li key={step.key} className={`roadmap-step ${state}`}>
+            <li key={step.key} className={`roadmap-step ${state} stage-${step.key}`}>
               <Button
                 type="button"
                 variant="ghost"

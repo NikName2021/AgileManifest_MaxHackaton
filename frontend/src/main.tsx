@@ -11,6 +11,7 @@ import './index.css'
 import { App } from './app/App'
 import './app/redesign.css'
 import './app/worker-design.css'
+import './app/employer-review.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

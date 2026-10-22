@@ -1751,6 +1751,17 @@ components:
         phone:
           type: string
           nullable: true
+        maxContactUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://max.ru/u/ivan
+          description: >
+            Ссылка для кнопки «Написать в MAX»: https-ссылка на max.ru или web.max.ru из контакта,
+            который кандидат оставил в этом отклике. Из maxUserId не собирается (документированного
+            правила нет), сохранённый контакт профиля не используется. null — ссылки нет: показывать
+            действие по самому контакту (телефон, e-mail, копирование). Есть в GET /api/applications,
+            GET /api/vacancies/{id}/applications и PATCH /api/applications/{id}.
 
     Vacancy:
       type: object

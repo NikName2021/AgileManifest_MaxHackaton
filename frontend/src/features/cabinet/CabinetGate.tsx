@@ -15,7 +15,7 @@ function cabinetForPath(path: string): Cabinet {
   return /^\/channels(\/|$)/.test(path) ? 'partner' : isWorkerPath(path) ? 'worker' : 'employer'
 }
 function home(value: Cabinet) {
-  return value === 'partner' ? '/channels' : value === 'worker' ? '/jobs' : '/'
+  return value === 'partner' ? '/channels' : value === 'worker' ? '/jobs' : '/vacancies'
 }
 
 export function CabinetGate({ children }: { children: ReactNode }) {

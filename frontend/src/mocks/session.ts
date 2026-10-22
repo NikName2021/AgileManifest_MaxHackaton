@@ -8,6 +8,7 @@ import { createPreviewTeam } from './team'
 import { createPreviewSubscriptions } from './subscriptions'
 import { createPreviewPartners } from './partners'
 import { previewBadgeCatalog } from './badges'
+import { suggestCategory } from './catalogs'
 
 // Development only: no API calls, persistence or outgoing messages.
 export function createPreviewSession(): Session {
@@ -29,7 +30,8 @@ export function createPreviewSession(): Session {
       headcount: input.headcount ?? null,
       title: input.title,
       regionCode: input.region_code,
-      category: input.category,
+      category: suggestCategory(input.category).resolved.name,
+      categoryDetail: suggestCategory(input.category).resolved.detail,
       schedule: input.schedule,
       salaryMin: input.salary_min,
       salaryMax: input.salary_max,
@@ -66,7 +68,12 @@ export function createPreviewSession(): Session {
     async publish(id) {
       const row = get(id)
       if (row.status !== 'draft') throw new ApiError('server', 409, 'conflict')
-      return save({ ...row, status: 'published', cardMessageId: `demo-${id}` })
+      return save({
+        ...row,
+        status: 'published',
+        cardMessageId: `demo-${id}`,
+        applyUrl: `https://max.ru/example_bot?start=apply_${id}`,
+      })
     },
     async close(id) {
       return save({ ...get(id), status: 'closed' })

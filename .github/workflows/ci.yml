@@ -345,6 +345,6 @@ jobs:
           --namespace app \
           --set-string backend.image.tag=${{ github.sha }} \
           --set-string frontend.image.tag=${{ github.sha }} \
-          --rollback-on-failure
-          --timeout 10m\
+          --rollback-on-failure \
+          --timeout 10m \
           --description "backend=${{ github.sha }} frontend=${{ github.sha }}"

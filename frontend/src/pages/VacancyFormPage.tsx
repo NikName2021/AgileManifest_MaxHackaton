@@ -1,12 +1,13 @@
 import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
-import { RegionPicker } from '../features/regions/RegionPicker'
+import { RegionSelect } from '../shared/ui/RegionSelect'
+import { CategoryInput } from '../features/categories/CategoryInput'
+import { fieldError } from '../shared/api/fieldError'
 import { BadgePicker } from '../features/badges/BadgePicker'
-import { VacancySteps } from '../features/vacancies/VacancySteps'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
 import { Button, Textarea } from '@maxhub/max-ui'
-import { ArrowRight, Check, FilePenLine, Send } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import type { Vacancy } from '../entities/hiring'
 import { useSession } from '../features/session/context'
 import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
@@ -59,6 +60,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
   // Copy only editable fields; identity, publication and applications belong to the source.
   const [initial] = useState(() => formValues(vacancy ?? source))
   const [values, setValues] = useState(initial)
+  const [badgeLimit, setBadgeLimit] = useState(10)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [failure, setFailure] = useState<unknown>()
   const [uncertain, setUncertain] = useState(false)
@@ -99,7 +101,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (lock.current || uncertain) return
-    const checked = validateForm(values)
+    const checked = validateForm(values, badgeLimit)
     setErrors(checked.errors)
     if (Object.keys(checked.errors).length) {
       form.current
@@ -124,8 +126,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
       if (error instanceof ApiError) {
         const fields: FieldErrors = {}
         for (const name of error.fields)
-          if (name in fieldLabels)
-            fields[name as keyof VacancyForm] = 'Проверьте значение этого поля.'
+          if (name in fieldLabels) fields[name as keyof VacancyForm] = fieldError(error, name)
         setErrors(fields)
         // A lost response cannot prove a create failed. Require checking the list before resubmitting.
         setUncertain(
@@ -188,25 +189,13 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">ШАГ 1 · РАССКАЖИТЕ О РАБОТЕ</div>
+          <div className="eyebrow">КАБИНЕТ РАБОТОДАТЕЛЯ</div>
           <h1>
             {vacancy ? 'Редактировать черновик' : source ? 'Копия вакансии' : 'Новая вакансия'}
           </h1>
           <p>Сначала детали. Публикацию подтвердите на следующем экране.</p>
         </div>
       </div>
-      <VacancySteps current={1} />
-      {source && (
-        <div className="vacancy-notice vacancy-copy-note">
-          <p>
-            На основе вакансии № {source.id}: <strong>{source.title}</strong>.
-          </p>
-          <p>
-            Копия пока не сохранена. Проверьте даты, оплату и контакт, затем сохраните новый
-            черновик. Отклики не переносятся; исходная вакансия не изменится.
-          </p>
-        </div>
-      )}
       <div className="vacancy-editor-layout">
         <form
           className="vacancy-form"
@@ -218,30 +207,21 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
           <fieldset disabled={busy}>
             <legend className="sr-only">Данные вакансии</legend>
             <section className="form-section">
-              <h2>
-                <span>01</span>Кого ищем
-              </h2>
-              {field('title', {
-                limit: 200,
-                placeholder: 'Например, повар в летнее кафе',
-                hint: 'Обязательное поле. Понятное название поможет быстрее найти сотрудника.',
-              })}
-              <div className="form-grid">
-                {field('region_code', {
-                  limit: 100,
-                  placeholder: 'Город или область',
-                  hint: 'Где предстоит работать.',
-                })}
-                {field('category', {
-                  limit: 100,
-                  placeholder: 'Например, общепит',
-                  hint: 'Необязательно.',
-                })}
-              </div>
-              <RegionPicker
+              {field('title', { limit: 200, placeholder: 'Например, повар в летнее кафе' })}
+              <CategoryInput
+                value={values.category}
+                onChange={(value) => change('category', value)}
+                error={errors.category}
+              />
+              <RegionSelect
                 value={values.region_code}
                 onChange={(value) => change('region_code', value)}
               />
+              {errors.region_code && (
+                <p role="alert" className="field-error">
+                  {errors.region_code}
+                </p>
+              )}
               <div className="vacancy-field">
                 <label htmlFor="vacancy-schedule">Тип занятости</label>
                 <Select
@@ -249,7 +229,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                   id="vacancy-schedule"
                   name="schedule"
                   value={values.schedule}
-                  onChange={(event) => change('schedule', event.target.value)}
+                  onChange={(e) => change('schedule', e.target.value)}
                 >
                   {Object.entries(scheduleLabels).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -257,45 +237,27 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                     </option>
                   ))}
                 </Select>
-                {errors.schedule && <span className="field-error">{errors.schedule}</span>}
+                {errors.schedule && <small className="field-error">{errors.schedule}</small>}
               </div>
-            </section>
-            <section className="form-section">
-              <h2>
-                <span>02</span>Условия работы
-              </h2>
+              <div className="form-grid">
+                {field('salary_min', { numeric: true, placeholder: 'От, ₽' })}
+                {field('salary_max', { numeric: true, placeholder: 'До, ₽' })}
+              </div>
               {field('headcount', {
                 numeric: true,
                 placeholder: 'Например, 15',
-                hint: 'От 1 до 1000. Когда нужное число людей нанято, сервис закроет вакансию. Пустое поле — без лимита.',
+                hint: 'Пустое поле — без лимита. От 1 до 1000 человек.',
               })}
-              <div className="form-grid">
-                {field('salary_min', {
-                  numeric: true,
-                  placeholder: 'Например, 50 000',
-                  hint: 'Рубли, без копеек.',
-                })}
-                {field('salary_max', {
-                  numeric: true,
-                  placeholder: 'Например, 70 000',
-                  hint: 'Можно указать только одну границу.',
-                })}
-              </div>
-              <p className="form-note">
-                Если сумма пока не определена, оставьте оба поля пустыми. Период оплаты — за час,
-                смену или месяц — укажите в описании.
-              </p>
-              <SalaryBenchmark position={values.title} region={values.region_code} />
               {field('description', {
                 multiline: true,
                 limit: 4000,
-                placeholder: 'Задачи, график, период оплаты, требования и что вы предлагаете…',
-                hint: 'Будущему сотруднику важно представить свой рабочий день.',
+                placeholder: 'Задачи, график, период оплаты, требования…',
               })}
               <BadgePicker
                 value={values.badges}
                 studentFriendly={values.student_friendly === 'yes'}
                 error={errors.badges}
+                onLimit={setBadgeLimit}
                 onChange={(keys, student) => {
                   setValues((previous) => ({
                     ...previous,
@@ -305,15 +267,10 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                   setErrors((previous) => ({ ...previous, badges: undefined }))
                 }}
               />
-            </section>
-            <section className="form-section">
-              <h2>
-                <span>03</span>Как с вами связаться
-              </h2>
               {field('contact_info', {
                 limit: 300,
-                placeholder: 'Имя, телефон или контакт в MAX',
-                hint: 'Этот контакт будет виден всем, кому отправят карточку вакансии.',
+                placeholder: 'Телефон, @ник, e-mail или ссылка на MAX / Telegram',
+                hint: 'Кандидат увидит контакт, когда вы его пригласите. До 3 контактов через запятую.',
               })}
             </section>
           </fieldset>
@@ -344,31 +301,7 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
           </div>
         </form>
         <aside className="vacancy-form-aside">
-          <div className="eyebrow">ОТ ИДЕИ ДО ПУБЛИКАЦИИ</div>
-          <ol className="vacancy-progress">
-            <li className="current">
-              <FilePenLine size={18} />
-              <div>
-                <strong>Заполните детали</strong>
-                <p>Что за работа и кого вы ждёте.</p>
-              </div>
-            </li>
-            <li>
-              <Check size={18} />
-              <div>
-                <strong>Проверьте черновик</strong>
-                <p>Можно вернуться и всё поправить.</p>
-              </div>
-            </li>
-            <li>
-              <Send size={18} />
-              <div>
-                <strong>Опубликуйте в MAX</strong>
-                <p>Карточка придёт в чат с ботом.</p>
-              </div>
-            </li>
-          </ol>
-          <p>Коротко и по делу: конкретные задачи, понятная оплата и удобный способ связи.</p>
+          <SalaryBenchmark position={values.title} region={values.region_code} />
         </aside>
       </div>
       {blocker.state === 'blocked' && (

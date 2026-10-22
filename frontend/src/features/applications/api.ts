@@ -25,6 +25,10 @@ export interface StatusResult {
   unchanged: boolean
 }
 export interface ApplicationRepository {
+  stats?(
+    id: number,
+    signal?: AbortSignal,
+  ): Promise<{ total: number; byStatus: Partial<Record<ApplicationStatus, number>> }>
   setShift?(
     id: number,
     startAt: string | null,
@@ -129,6 +133,24 @@ export function createApplicationRepository(
   const root = authUrl(base, '/api', import.meta.env.PROD)
   const request = authenticatedRequest(token, onUnauthorized)
   return {
+    async stats(id, signal) {
+      const body = record(
+        await request(authUrl(base, `/api/vacancies/${id}/stats`, import.meta.env.PROD), {
+          signal,
+        }),
+      )
+      const byStatus = record(body.byStatus)
+      if (
+        !Number.isSafeInteger(body.total) ||
+        Number(body.total) < 0 ||
+        Object.values(byStatus).some((v) => !Number.isSafeInteger(v) || Number(v) < 0)
+      )
+        throw new ApiError('contract')
+      return {
+        total: Number(body.total),
+        byStatus: byStatus as Partial<Record<ApplicationStatus, number>>,
+      }
+    },
     async setShift(applicationId, startAt, note) {
       const value = record(
         await request(`${root}/applications/${id(applicationId)}/shift`, {

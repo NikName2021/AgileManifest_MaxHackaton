@@ -1,3 +1,12 @@
+import { useState } from 'react'
+import { Button } from '@maxhub/max-ui'
+import { Input } from '../shared/ui/Input'
+import { ProfileIdentity } from '../shared/ui/ProfileIdentity'
+import { Toast } from '../shared/ui/Toast'
+import { useResource } from '../shared/api/useResource'
+import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
+import { CandidateError, Loading } from '../features/candidate/ui'
+import { fieldError } from '../shared/api/fieldError'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from '../features/appearance/context'
 import { useSession } from '../features/session/context'
@@ -8,39 +17,99 @@ const options = [
   { value: 'dark', title: 'Тёмная', icon: Moon },
 ] as const
 export function SettingsPage() {
-  const { user, mode } = useSession()
+  const { candidate, mode } = useSession()
+  const profile = useResource(candidate.profile, 'employer-profile')
+  useRefreshOnReturn(profile.refresh)
+  const [notice, setNotice] = useState('')
   return (
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">Кабинет работодателя</div>
-          <h1>Настройки</h1>
-          <p>Оформление приложения и данные входа.</p>
+          <div className="eyebrow">КАБИНЕТ РАБОТОДАТЕЛЯ</div>
+          <h1>Профиль</h1>
         </div>
       </div>
-      <AppearanceSettings />
-      <EmployerTrustProgress />
-      <section className="settings-panel account-panel">
-        <div>
-          <h2>Рабочий профиль</h2>
-          <p>
-            {mode === 'preview'
-              ? 'Демонстрационный профиль для просмотра интерфейса.'
-              : 'Профиль подтверждён при входе через MAX.'}
-          </p>
-        </div>
-        <dl>
-          <div>
-            <dt>Аккаунт</dt>
-            <dd>{mode === 'preview' ? 'Демонстрационный' : `№ ${user.id}`}</dd>
-          </div>
-          <div>
-            <dt>Режим</dt>
-            <dd>{mode === 'preview' ? 'Локальный просмотр' : 'MAX'}</dd>
-          </div>
-        </dl>
+      <section className="settings-panel">
+        <h2>Аккаунт</h2>
+        <ProfileIdentity />
+        <p>
+          {mode === 'preview'
+            ? 'Демонстрационный профиль'
+            : 'Профиль подтверждён при входе через MAX'}
+        </p>
       </section>
+      {profile.result.state === 'loading' && <Loading />}
+      {profile.result.state === 'error' && (
+        <CandidateError error={profile.result.error} retry={profile.reload} />
+      )}
+      {profile.result.state === 'ready' && (
+        <CompanyEditor
+          key={profile.result.data.companyName ?? ''}
+          initial={profile.result.data.companyName ?? ''}
+          onSaved={() => {
+            profile.refresh()
+            setNotice('Сохранено')
+          }}
+        />
+      )}
+      <EmployerTrustProgress />
+      <AppearanceSettings />
+      {notice && <Toast message={notice} onClose={() => setNotice('')} />}
     </>
+  )
+}
+
+function CompanyEditor({ initial, onSaved }: { initial: string; onSaved: () => void }) {
+  const { candidate } = useSession()
+  const [name, setName] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<unknown>()
+  return (
+    <form
+      className="settings-panel company-form"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        if (busy || !candidate.saveCompany) return
+        setBusy(true)
+        setError(undefined)
+        try {
+          const actual = await candidate.saveCompany(name)
+          setName(actual.companyName ?? '')
+          onSaved()
+        } catch (e) {
+          setError(e)
+        } finally {
+          setBusy(false)
+        }
+      }}
+    >
+      <h2>Название компании</h2>
+      <label htmlFor="company-name" className="sr-only">
+        Название компании
+      </label>
+      <Input
+        id="company-name"
+        value={name}
+        maxLength={120}
+        disabled={busy}
+        placeholder="Например, Кафе «Чайка»"
+        onChange={(e) => setName(e.target.value)}
+        aria-invalid={!!fieldError(error, 'company_name')}
+      />
+      <small className="field-hint">
+        Показывается в вакансиях вместо вашего имени. Пустое поле — имя из MAX.
+      </small>
+      {fieldError(error, 'company_name') ? (
+        <p role="alert" className="field-error">
+          {fieldError(error, 'company_name')}
+        </p>
+      ) : error ? (
+        <CandidateError error={error} />
+      ) : null}
+      <Button className="primary-button" type="submit" disabled={busy || !candidate.saveCompany}>
+        {busy ? 'Сохраняем…' : 'Сохранить'}
+      </Button>
+    </form>
   )
 }
 

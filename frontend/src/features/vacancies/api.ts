@@ -88,6 +88,14 @@ export function parseVacancy(value: unknown): Vacancy {
     title: v.title,
     regionCode: v.regionCode,
     category: v.category,
+    categoryDetail:
+      v.categoryDetail == null
+        ? null
+        : nullableString(v.categoryDetail)
+          ? v.categoryDetail
+          : (() => {
+              throw new ApiError('contract')
+            })(),
     schedule: v.schedule as Vacancy['schedule'],
     status: v.status as Vacancy['status'],
     salaryMin: v.salaryMin,

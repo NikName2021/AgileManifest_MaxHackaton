@@ -3,13 +3,21 @@ export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly fields: string[]
-  constructor(kind: ApiError['kind'], status = 0, code = '', fields: string[] = []) {
+  readonly fieldMessages: Record<string, string[]>
+  constructor(
+    kind: ApiError['kind'],
+    status = 0,
+    code = '',
+    fields: string[] = [],
+    fieldMessages: Record<string, string[]> = {},
+  ) {
     super(kind)
     this.name = 'ApiError'
     this.kind = kind
     this.status = status
     this.code = code
     this.fields = fields
+    this.fieldMessages = fieldMessages
   }
 }
 
@@ -57,6 +65,18 @@ export async function requestJson(url: string, options: RequestInit = {}): Promi
       response.status,
       typeof details.code === 'string' ? details.code : '',
       details.fields && typeof details.fields === 'object' ? Object.keys(details.fields) : [],
+      details.fields && typeof details.fields === 'object'
+        ? Object.fromEntries(
+            Object.entries(details.fields).map(([key, value]) => [
+              key,
+              Array.isArray(value)
+                ? value.filter((v): v is string => typeof v === 'string')
+                : typeof value === 'string'
+                  ? [value]
+                  : [],
+            ]),
+          )
+        : {},
     )
   }
   if (response.status === 204) return null

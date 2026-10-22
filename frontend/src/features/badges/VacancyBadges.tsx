@@ -1,22 +1,24 @@
+import { categoryLabel } from '../categories/api'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@maxhub/max-ui'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { displayedBadges, type VacancyBadge } from './api'
 import { scheduleLabels } from '../vacancies/model'
 import type { Vacancy } from '../../entities/hiring'
+import { Pill } from '../../shared/ui/Pill'
 
 export function VacancyBadges({
   job,
   detailed = false,
 }: {
-  job: Pick<Vacancy, 'schedule' | 'category' | 'badges' | 'studentFriendly'>
+  job: Pick<Vacancy, 'schedule' | 'category' | 'categoryDetail' | 'badges' | 'studentFriendly'>
   detailed?: boolean
 }) {
   const perks = displayedBadges(job.badges, job.studentFriendly)
   const items: VacancyBadge[] = [
     { key: 'employment', emoji: '🗓️', label: scheduleLabels[job.schedule] },
     ...(job.category && job.category !== 'general'
-      ? [{ key: 'category', emoji: '', label: job.category }]
+      ? [{ key: 'category', emoji: '', label: categoryLabel(job.category, job.categoryDetail) }]
       : []),
     ...perks,
   ]
@@ -55,18 +57,18 @@ export function VacancyBadges({
     <div className={`vacancy-badges ${detailed ? 'detailed' : ''}`}>
       <div className="badge-measure" ref={measurement} aria-hidden="true">
         {items.map((item) => (
-          <span key={item.key} className="vacancy-badge">
+          <Pill key={item.key} tone="vacancy-badge">
             {item.emoji && <span>{item.emoji}</span>}
             {item.label}
-          </span>
+          </Pill>
         ))}
       </div>
       <div className="badge-list" aria-label="Условия вакансии">
         {(expanded ? items : items.slice(0, visibleCount)).map((item) => (
-          <span key={item.key} className="vacancy-badge" title={item.label}>
+          <Pill key={item.key} tone="vacancy-badge">
             {item.emoji && <span aria-hidden="true">{item.emoji}</span>}
             {item.label}
-          </span>
+          </Pill>
         ))}
         {overflow && (
           <Button

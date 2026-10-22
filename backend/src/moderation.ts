@@ -84,3 +84,23 @@ const CONTACT_LIKE_RU: Record<ContactLikeKind, string> = {
 export function contactLikeErrorRu(kind: ContactLikeKind): string {
   return `Уберите ${CONTACT_LIKE_RU[kind]}: ссылки и контакты в этом поле запрещены. Контакт указывается отдельно и открывается кандидату после приглашения.`;
 }
+
+const MAX_PROFILE_HOSTS = new Set(['max.ru', 'web.max.ru']);
+
+// Ссылка на профиль или диалог в MAX, которую кандидат сам оставил в контакте отклика: только https
+// и только max.ru / web.max.ru. Из maxUserId адрес не собирается — правила для этого в MAX нет.
+export function maxContactUrl(contact: string | null): string | null {
+  if (!contact) return null;
+  for (const part of contact.split(/[\s,;]+/)) {
+    let url: URL;
+    try {
+      url = new URL(part);
+    } catch {
+      continue;
+    }
+    if (url.protocol === 'https:' && MAX_PROFILE_HOSTS.has(url.hostname) && !url.username && !url.password && url.pathname.length > 1) {
+      return url.href;
+    }
+  }
+  return null;
+}

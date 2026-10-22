@@ -1,0 +1,24 @@
+{{- $ctx := dict "root" . "component" "frontend" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.componentName" $ctx }}-nginx
+  labels:
+    {{- include "helm.labels" $ctx | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+        absolute_redirect off;
+
+        location /assets/ {
+            try_files $uri =404;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }

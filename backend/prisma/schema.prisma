@@ -41,6 +41,8 @@ model Vacancy {
   // Код субъекта РФ из справочника (regions/dictionary.ts), распознанный по regionCode; null — не распознан.
   regionSubject   String?   @map("region_subject")
   category        String
+  // Что написал работодатель, если сфера не распознана и вакансия отнесена к «Другое».
+  categoryDetail  String?   @map("category_detail")
   schedule        String
   salaryMin       Int?      @map("salary_min")
   salaryMax       Int?      @map("salary_max")
@@ -88,6 +90,8 @@ model Application {
   candidateChatId          String?            @map("candidate_chat_id")
   // card | link | qr | subscription | channel | miniapp | team; null — отклики до появления поля.
   source                   String?
+  // Канал партнёра, из поста которого пришёл отклик (source = channel) — статистика канала.
+  partnerChannelId         Int?               @map("partner_channel_id")
   // Последний перевод в hired — для списка «Моя бригада».
   hiredAt                  DateTime?          @map("hired_at")
   // Выход на смену: когда, где и подтвердил ли кандидат (pending | confirmed | declined).
@@ -104,6 +108,7 @@ model Application {
   @@unique([vacancyId, candidateUserId])
   // GET /api/me/applications
   @@index([candidateUserId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([partnerChannelId])
   @@map("applications")
 }
 
@@ -120,10 +125,11 @@ model BenchmarkCache {
 }
 
 model PendingApplication {
-  chatId    String   @id @map("chat_id")
-  vacancyId Int      @map("vacancy_id")
-  source    String?
-  createdAt DateTime @default(now()) @map("created_at")
+  chatId           String   @id @map("chat_id")
+  vacancyId        Int      @map("vacancy_id")
+  source           String?
+  partnerChannelId Int?     @map("partner_channel_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   @@map("pending_applications")
 }
@@ -203,6 +209,17 @@ model PartnerChannel {
   active        Boolean   @default(false)
   regionSubject String?   @map("region_subject")
   studentOnly   Boolean   @default(false) @map("student_only")
+  // Фильтры публикации; пустой массив и null — «любое значение».
+  categories    String[]  @default([])
+  schedule      String?
+  salaryFrom    Int?      @map("salary_from")
+  trustedOnly   Boolean   @default(false) @map("trusted_only")
+  // Вакансия должна иметь все перечисленные бейджи.
+  badges        String[]  @default([])
+  // instant — каждая вакансия сразу; digest — раз в день одним постом в digestHour (МСК).
+  mode          String    @default("instant")
+  digestHour    Int       @default(10) @map("digest_hour")
+  lastDigestAt  DateTime? @map("last_digest_at")
   createdAt     DateTime  @default(now()) @map("created_at")
   // Бота удалили из чата — публикации прекращаются.
   removedAt     DateTime? @map("removed_at")
@@ -230,4 +247,18 @@ model ApplicationEvent {
 
   @@index([applicationId, createdAt])
   @@map("application_events")
+}
+
+// Сферы, которые работодатели написали своими словами и которые не распознались (вакансия ушла в
+// «Другое»). Команда смотрит этот список и добавляет слова в синонимы встроенных сфер.
+model CategoryMiss {
+  id        Int      @id @default(autoincrement())
+  text      String
+  // Нормализованный текст (регистр, ё/е, знаки) — одно и то же слово считается один раз.
+  normKey   String   @unique @map("norm_key")
+  uses      Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("category_misses")
 }

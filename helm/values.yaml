@@ -1,0 +1,76 @@
+global:
+  registry: 0f0c1e4e-honest-aquila.registry.twcstorage.ru
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets:
+  - name: my-private-registry
+
+frontend:
+  fullnameOverride: ""
+  replicaCount: 1
+  image:
+    repository: agile-manifest-project/frontend
+    tag: 2026-10-21
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 5000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+backend:
+  fullnameOverride: ""
+
+  replicaCount: 1
+  image:
+    repository: agile-manifest-project/backend
+    tag: 2026-10-21
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3000
+
+  existingSecret: agile-manifest-secrets
+  config:
+    TZ: Europe/Moscow
+    NODE_ENV: production
+    MAX_API_BASE_URL: https://platform-api2.max.ru
+    PUBLIC_BASE_URL: "https://5696077-bs94300.twc1.net"
+    FRONTEND_ORIGIN: ""
+    TRUSTED_EMPLOYER_MIN_HIRES: "5"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: traefik
+  host: 5696077-bs94300.twc1.net
+  annotations:
+    # TLS завершается на внешнем Nginx; в Traefik запрос приходит по HTTP.
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+
+  paths:
+    - path: /api
+      pathType: Prefix
+      component: backend
+    - path: /webhook/max
+      pathType: Exact
+      component: backend
+    - path: /health
+      pathType: Exact
+      component: backend
+    - path: /
+      pathType: Prefix
+      component: frontend

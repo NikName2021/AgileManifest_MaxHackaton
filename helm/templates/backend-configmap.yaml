@@ -1,0 +1,11 @@
+{{- $ctx := dict "root" . "component" "backend" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "helm.componentName" $ctx }}-config
+  labels:
+    {{- include "helm.labels" $ctx | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.backend.config }}
+  {{ $key }}: {{ $value | toString | quote }}
+  {{- end }}

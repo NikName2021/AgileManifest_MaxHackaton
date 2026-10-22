@@ -13,9 +13,10 @@ import { registerTeamRoutes } from './team/routes.js';
 import { registerPosterRoutes } from './vacancies/posterRoutes.js';
 import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerChannelRoutes } from './channels/routes.js';
+import { startChannelDigests } from './channels/service.js';
 import { setShift, startShiftReminders } from './shifts/service.js';
 import { normalizeRegion } from './regions/dictionary.js';
-import { BADGE_GROUPS, MAX_BADGES_PER_VACANCY, resolveBadges } from './vacancies/badges.js';
+import { BADGE_GROUPS, MAX_BADGES_PER_VACANCY, resolveBadges, suggestBadges } from './vacancies/badges.js';
 import { loadTimelines, markViewed } from './application/timeline.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
@@ -38,7 +39,10 @@ import {
   benchmarkQuerySchema,
   idParamSchema,
   setShiftSchema,
+  badgeSuggestQuerySchema,
+  suggestQuerySchema,
 } from './validation.js';
+import { backfillCategories, listCategories, NO_CATEGORY, resolveCategory, suggestCategories } from './categories/service.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 // Экспорт для интеграционных тестов (app.inject без порта и без MAX).
@@ -138,7 +142,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       title: body.title,
       regionCode: body.region_code ?? '',
       regionSubject: normalizeRegion(body.region_code),
-      category: body.category ?? 'general',
+      ...(body.category ? await resolveCategory(body.category) : { category: NO_CATEGORY, categoryDetail: null }),
       schedule: body.schedule ?? 'temporary',
       salaryMin: body.salary_min ?? null,
       salaryMax: body.salary_max ?? null,
@@ -214,7 +218,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
       title: merged.title,
       regionCode: merged.region_code,
       regionSubject: normalizeRegion(merged.region_code),
-      ...(body.category !== undefined ? { category: body.category } : {}),
+      ...(body.category !== undefined ? await resolveCategory(body.category) : {}),
       schedule: merged.schedule,
       salaryMin: merged.salary_min,
       salaryMax: merged.salary_max,
@@ -466,6 +470,28 @@ app.patch('/api/applications/:id/shift', { preHandler: requireAuth }, async (req
 // Справочник бейджей вакансии по группам — для выбора в форме и подписей в каталоге.
 app.get('/api/badges', async () => ({ groups: BADGE_GROUPS, maxPerVacancy: MAX_BADGES_PER_VACANCY }));
 
+// Автодополнение бейджей: «жил» → бейджи про жильё, лучшие совпадения первыми.
+app.get('/api/badges/suggest', async (request, reply) => {
+  const parsed = badgeSuggestQuerySchema.safeParse(request.query);
+  if (!parsed.success) {
+    return sendError(reply, 400, 'validation_error', 'invalid query', zodFieldErrors(parsed.error.flatten()));
+  }
+  return { items: suggestBadges(parsed.data.q, parsed.data.limit, parsed.data.exclude) };
+});
+
+// Справочник сфер деятельности; «Другое» — последней.
+app.get('/api/categories', async () => ({ items: await listCategories() }));
+
+// Автодополнение сферы: «кафе» → «Общепит», «кейтринг» → «Общепит». resolved — к какой сфере текст
+// будет отнесён при сохранении (other — «Другое»), items — варианты для выбора.
+app.get('/api/categories/suggest', async (request, reply) => {
+  const parsed = suggestQuerySchema.safeParse(request.query);
+  if (!parsed.success) {
+    return sendError(reply, 400, 'validation_error', 'invalid query', zodFieldErrors(parsed.error.flatten()));
+  }
+  return suggestCategories(parsed.data.q, parsed.data.limit);
+});
+
 // Справочник субъектов РФ для выбора региона в мини-приложении.
 app.get('/api/regions', async () => ({ items: listRegions() }));
 
@@ -556,8 +582,12 @@ async function start() {
   backfillRegionSubjects()
     .then((n) => n > 0 && app.log.info({ updated: n }, 'region_subject backfilled'))
     .catch((err) => app.log.error(err, 'region_subject backfill failed'));
+  backfillCategories()
+    .then((n) => n > 0 && app.log.info({ updated: n }, 'vacancy categories backfilled'))
+    .catch((err) => app.log.error(err, 'category backfill failed'));
   startStaleVacancyReminders();
   startShiftReminders();
+  startChannelDigests();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 }

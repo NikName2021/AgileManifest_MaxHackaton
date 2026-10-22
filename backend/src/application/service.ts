@@ -5,6 +5,7 @@ import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
 import { markViewed, recordEvents, type EventType } from './timeline.js';
 import { hasForbiddenChars, normalizeSingleLine } from '../text.js';
 import { CONTACT_FORMAT_HINT, normalizeContact } from '../moderation.js';
+import { knownChannelId } from '../channels/service.js';
 import type { Application, User, Vacancy } from '@prisma/client';
 
 const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
@@ -73,6 +74,8 @@ export async function createApplicationRecord(input: {
     // invited — отклик по приглашению работодателя («Моя бригада»), минуя «Новый».
     status?: 'new' | 'invited';
     source?: ApplicationSource;
+    // Канал партнёра, из поста которого пришёл отклик.
+    partnerChannelId?: number | null;
 }): Promise<CreateApplicationResult> {
     try {
         return await db.$transaction(async (tx) => {
@@ -92,6 +95,7 @@ export async function createApplicationRecord(input: {
                     candidateUserId: input.candidateUserId,
                     status: input.status ?? 'new',
                     source: input.source ?? null,
+                    partnerChannelId: input.partnerChannelId ?? null,
                     contact: input.contact,
                     candidateChatId: input.candidateChatId,
                 },
@@ -110,7 +114,13 @@ export async function createApplicationRecord(input: {
 
 // Шаг 1 отклика через бота: кандидат нажал «Откликнуться», просим контакт.
 
-export async function handleApplyClick(candidateChatId: string, candidateMaxUserId: string, vacancyId: number, source: ApplicationSource = 'card') {
+export async function handleApplyClick(
+    candidateChatId: string,
+    candidateMaxUserId: string,
+    vacancyId: number,
+    source: ApplicationSource = 'card',
+    channelId?: number
+) {
     const candidate = await db.user.findUnique({ where: { maxUserId: candidateMaxUserId } });
     if (!candidate) {
         await maxApi.sendMessage(candidateChatId, 'Не получилось оформить отклик, попробуйте ещё раз чуть позже.');
@@ -141,10 +151,11 @@ export async function handleApplyClick(candidateChatId: string, candidateMaxUser
         return;
     }
 
+    const partnerChannelId = await knownChannelId(channelId);
     await db.pendingApplication.upsert({
         where: { chatId: candidateChatId },
-        update: { vacancyId, source },
-        create: { chatId: candidateChatId, vacancyId, source },
+        update: { vacancyId, source, partnerChannelId },
+        create: { chatId: candidateChatId, vacancyId, source, partnerChannelId },
     });
 
     // TODO: реальный вид payload при нажатии request_contact подтверждён частично (vcf_info) —
@@ -207,6 +218,7 @@ export async function resolvePendingApplication(
             contact,
             candidateChatId: chatId,
             source: (pending.source as ApplicationSource | null) ?? undefined,
+            partnerChannelId: pending.partnerChannelId,
         });
         if (!result.ok) {
             await db.pendingApplication.delete({ where: { chatId } }).catch(() => {});

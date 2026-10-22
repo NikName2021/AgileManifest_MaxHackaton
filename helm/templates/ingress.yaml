@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := required "ingress.host must contain the application domain without https:// or a path" .Values.ingress.host }}
+{{- if or (contains "/" $host) (contains ":" $host) }}
+{{- fail "ingress.host must be a domain only, without a scheme, port or path" }}
+{{- end }}
+{{- if not .Values.ingress.paths }}
+{{- fail "ingress.paths must contain at least one route" }}
+{{- end }}
+{{- $ctx := dict "root" . "component" "frontend" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "helm.fullname" . }}
+  labels:
+    {{- include "helm.labels" $ctx | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          {{- range $route := .Values.ingress.paths }}
+          {{- if not (has $route.component (list "frontend" "backend")) }}
+          {{- fail "Each ingress.paths entry must use component: frontend or backend" }}
+          {{- end }}
+          - path: {{ required "Each ingress.paths entry must specify a path" $route.path | quote }}
+            pathType: {{ $route.pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "helm.componentName" (dict "root" $ "component" $route.component) }}
+                port:
+                  number: {{ (index $.Values $route.component).service.port }}
+          {{- end }}
+{{- end }}

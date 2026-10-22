@@ -144,7 +144,7 @@ describe('диалог создания вакансии в групповом �
     await groupMessage(B, group, 'Чужой ответ');
     expect((await db.dialogSession.findUniqueOrThrow({ where: { chatId: group } })).step).toBe(0);
 
-    for (const answer of ['Сборщик', 'Краснодар', 'seasonal', '40000-60000', 'нет', '+7 900 111-22-33']) {
+    for (const answer of ['Сборщик', 'Сельское хозяйство', 'Краснодар', 'seasonal', '40000-60000', 'нет', '+7 900 111-22-33']) {
       await groupMessage(A, group, answer);
       // B последним писал в группу — по старой логике (findFirst по chatId) вакансия могла уйти ему.
       await db.user.update({ where: { id: B.user.id }, data: { chatId: group } });

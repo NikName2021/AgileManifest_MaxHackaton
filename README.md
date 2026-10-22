@@ -206,7 +206,10 @@ docker compose --env-file monitoring/.env --env-file .env -p maxhack-monitoring 
   превращаются в 0.
 - **Кандидат в ответах работодателя.** `candidate` в `GET /api/applications`,
   `GET /api/vacancies/:id/applications` и `PATCH /api/applications/:id` содержит только
-  `id`, `maxUserId`, `displayName`, `phone`; ответ `PATCH` также содержит `vacancy { id, title, status }`.
+  `id`, `maxUserId`, `displayName`, `phone` и `maxContactUrl`; ответ `PATCH` также содержит
+  `vacancy { id, title, status }`. `maxContactUrl` — https-ссылка на max.ru / web.max.ru из контакта,
+  который кандидат оставил в этом отклике (для кнопки «Написать в MAX»), иначе `null`; из `maxUserId`
+  адрес не собирается.
 - **Формат ошибок.** Единый на весь API конверт:
   ```json
   { "error": { "code": "validation_error", "message": "invalid request body", "fields": { "title": ["title is required"] } } }

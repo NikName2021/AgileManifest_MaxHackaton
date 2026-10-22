@@ -87,7 +87,9 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
       const draft = await vacancies.create({
         title: titles[group],
         region_code: 'Тула',
-        category: 'Демо',
+        category: group === 0 ? 'Общепит' : 'Сельское хозяйство',
+        headcount: 7,
+        badges: ['housing_free', 'meals_3'],
         schedule: 'seasonal',
         salary_min: 50000,
         salary_max: null,
@@ -97,7 +99,7 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
       const vacancy = await vacancies.publish(draft.id)
       for (let i = 0; i < 23; i++) {
         const id = group * 23 + i + 1
-        const date = new Date(Date.UTC(2026, 8, 26, 12, 0) - id * 3600000).toISOString()
+        const date = new Date(Date.now() - id * 3600000).toISOString()
         rows.set(id, {
           id,
           vacancyId: vacancy.id,

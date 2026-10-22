@@ -1,6 +1,5 @@
 import type { BadgeCatalog } from '../features/badges/api'
-
-// Development-only snapshot of the public catalog; live sessions always use /api/badges.
+// Development-only catalog snapshot. Live sessions use the API.
 export const previewBadgeCatalog: BadgeCatalog = {
   groups: [
     {
@@ -24,9 +23,39 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Общежитие',
         },
         {
+          key: 'apartment',
+          emoji: '🏢',
+          label: 'Квартира',
+        },
+        {
+          key: 'room_shared',
+          emoji: '🛌',
+          label: 'Комната на 2–4 человека',
+        },
+        {
+          key: 'housing_near',
+          emoji: '🚶',
+          label: 'Жильё рядом с работой',
+        },
+        {
           key: 'housing_help',
           emoji: '🔑',
           label: 'Помощь с жильём',
+        },
+        {
+          key: 'utilities_paid',
+          emoji: '💡',
+          label: 'Коммуналка оплачена',
+        },
+        {
+          key: 'shower',
+          emoji: '🚿',
+          label: 'Душ и горячая вода',
+        },
+        {
+          key: 'own_kitchen',
+          emoji: '🫕',
+          label: 'Кухня в жилье',
         },
         {
           key: 'wifi',
@@ -61,9 +90,24 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Обед за счёт работодателя',
         },
         {
+          key: 'food_compensation',
+          emoji: '🧾',
+          label: 'Компенсация питания',
+        },
+        {
           key: 'staff_discount',
           emoji: '☕',
           label: 'Скидка на еду и напитки',
+        },
+        {
+          key: 'free_drinks',
+          emoji: '🥤',
+          label: 'Чай, кофе и вода бесплатно',
+        },
+        {
+          key: 'harvest_take',
+          emoji: '🍒',
+          label: 'Урожай можно брать с собой',
         },
       ],
     },
@@ -83,14 +127,34 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Проезд компенсируют',
         },
         {
+          key: 'transfer',
+          emoji: '🚐',
+          label: 'Трансфер от вокзала',
+        },
+        {
           key: 'shuttle',
           emoji: '🚌',
           label: 'Развозка',
         },
         {
+          key: 'taxi_night',
+          emoji: '🚕',
+          label: 'Такси после ночной смены',
+        },
+        {
           key: 'fuel_compensation',
           emoji: '⛽',
           label: 'Компенсация бензина',
+        },
+        {
+          key: 'near_transport',
+          emoji: '🚇',
+          label: 'Рядом с остановкой',
+        },
+        {
+          key: 'parking',
+          emoji: '🅿️',
+          label: 'Парковка',
         },
       ],
     },
@@ -115,6 +179,31 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Выплаты дважды в месяц',
         },
         {
+          key: 'advance',
+          emoji: '💸',
+          label: 'Авансы',
+        },
+        {
+          key: 'pay_card',
+          emoji: '🏦',
+          label: 'Оплата на карту',
+        },
+        {
+          key: 'pay_cash',
+          emoji: '💴',
+          label: 'Оплата наличными',
+        },
+        {
+          key: 'white_salary',
+          emoji: '📈',
+          label: 'Белая зарплата',
+        },
+        {
+          key: 'pay_on_time',
+          emoji: '✅',
+          label: 'Зарплата без задержек',
+        },
+        {
           key: 'piecework',
           emoji: '⚖️',
           label: 'Сдельная оплата',
@@ -123,6 +212,16 @@ export const previewBadgeCatalog: BadgeCatalog = {
           key: 'bonus',
           emoji: '🎁',
           label: 'Премии',
+        },
+        {
+          key: 'season_bonus',
+          emoji: '🏆',
+          label: 'Бонус за весь сезон',
+        },
+        {
+          key: 'referral_bonus',
+          emoji: '🤝',
+          label: 'Бонус за друга',
         },
         {
           key: 'tips',
@@ -152,6 +251,16 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Можно самозанятым',
         },
         {
+          key: 'foreigners_ok',
+          emoji: '🌍',
+          label: 'Можно иностранцам',
+        },
+        {
+          key: 'patent_help',
+          emoji: '🗂️',
+          label: 'Помощь с патентом',
+        },
+        {
           key: 'workwear',
           emoji: '🦺',
           label: 'Спецодежда выдаётся',
@@ -167,14 +276,76 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Обучение на месте',
         },
         {
+          key: 'mentor',
+          emoji: '🧑‍🏫',
+          label: 'Наставник',
+        },
+        {
+          key: 'career',
+          emoji: '🚀',
+          label: 'Карьерный рост',
+        },
+        {
           key: 'medbook_help',
           emoji: '🩺',
           label: 'Помощь с медкнижкой',
         },
         {
+          key: 'medbook_paid',
+          emoji: '💉',
+          label: 'Медкнижку оплатят',
+        },
+        {
+          key: 'no_medbook',
+          emoji: '📋',
+          label: 'Медкнижка не нужна',
+        },
+        {
           key: 'insurance',
           emoji: '🛡️',
           label: 'Страховка',
+        },
+      ],
+    },
+    {
+      key: 'benefits',
+      label: 'Соцпакет и досуг',
+      emoji: '🎉',
+      items: [
+        {
+          key: 'dms',
+          emoji: '🏥',
+          label: 'ДМС',
+        },
+        {
+          key: 'paid_vacation',
+          emoji: '🏝️',
+          label: 'Оплачиваемый отпуск',
+        },
+        {
+          key: 'sick_leave',
+          emoji: '🤒',
+          label: 'Больничные оплачиваются',
+        },
+        {
+          key: 'gym',
+          emoji: '🏋️',
+          label: 'Спортзал',
+        },
+        {
+          key: 'beach_access',
+          emoji: '🏊',
+          label: 'Бассейн и пляж для персонала',
+        },
+        {
+          key: 'leisure',
+          emoji: '🎢',
+          label: 'Экскурсии и досуг',
+        },
+        {
+          key: 'team_events',
+          emoji: '🎉',
+          label: 'Корпоративы',
         },
       ],
     },
@@ -204,9 +375,34 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'С 16 лет',
         },
         {
+          key: 'from_14',
+          emoji: '🧑',
+          label: 'С 14 лет',
+        },
+        {
           key: 'couples_ok',
           emoji: '👫',
           label: 'Можно парой',
+        },
+        {
+          key: 'families_ok',
+          emoji: '👨‍👩‍👧',
+          label: 'Можно с семьёй',
+        },
+        {
+          key: 'pets_ok',
+          emoji: '🐕',
+          label: 'Можно с животными',
+        },
+        {
+          key: 'driver_license',
+          emoji: '🚗',
+          label: 'Нужны права',
+        },
+        {
+          key: 'english',
+          emoji: '🇬🇧',
+          label: 'Нужен английский',
         },
         {
           key: 'accessible',
@@ -231,9 +427,29 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Сменный график',
         },
         {
-          key: 'part_time',
-          emoji: '⌛',
-          label: 'Неполный день',
+          key: 'five_two',
+          emoji: '📆',
+          label: 'График 5/2',
+        },
+        {
+          key: 'two_two',
+          emoji: '🔂',
+          label: 'График 2/2',
+        },
+        {
+          key: 'rotation',
+          emoji: '🔄',
+          label: 'Вахта',
+        },
+        {
+          key: 'day_shifts',
+          emoji: '☀️',
+          label: 'Дневные смены',
+        },
+        {
+          key: 'morning_shifts',
+          emoji: '🌅',
+          label: 'Утренние смены',
         },
         {
           key: 'night_shifts',
@@ -241,14 +457,29 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Ночные смены',
         },
         {
+          key: 'part_time',
+          emoji: '⌛',
+          label: 'Неполный день',
+        },
+        {
           key: 'weekends_off',
           emoji: '🗓️',
           label: 'Выходные свободны',
         },
         {
+          key: 'weekend_job',
+          emoji: '🎈',
+          label: 'Подработка в выходные',
+        },
+        {
           key: 'short_gig',
           emoji: '⚡',
           label: 'Короткая подработка',
+        },
+        {
+          key: 'start_now',
+          emoji: '🏁',
+          label: 'Выход сразу',
         },
         {
           key: 'whole_season',
@@ -273,9 +504,29 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'В горах',
         },
         {
+          key: 'ski_resort',
+          emoji: '🎿',
+          label: 'Горнолыжный курорт',
+        },
+        {
+          key: 'resort',
+          emoji: '🌴',
+          label: 'Курорт',
+        },
+        {
           key: 'countryside',
           emoji: '🌾',
           label: 'За городом',
+        },
+        {
+          key: 'forest',
+          emoji: '🌲',
+          label: 'В лесу',
+        },
+        {
+          key: 'city',
+          emoji: '🏙️',
+          label: 'В городе',
         },
         {
           key: 'outdoor',
@@ -288,9 +539,24 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Поле и сад',
         },
         {
+          key: 'vineyard',
+          emoji: '🍇',
+          label: 'Виноградник',
+        },
+        {
           key: 'farm_animals',
           emoji: '🐄',
           label: 'Работа с животными',
+        },
+        {
+          key: 'camp',
+          emoji: '🏕️',
+          label: 'Детский лагерь',
+        },
+        {
+          key: 'festival',
+          emoji: '🎪',
+          label: 'Фестивали и мероприятия',
         },
         {
           key: 'kitchen',
@@ -308,12 +574,22 @@ export const previewBadgeCatalog: BadgeCatalog = {
           label: 'Отель',
         },
         {
+          key: 'shop',
+          emoji: '🛒',
+          label: 'Магазин',
+        },
+        {
           key: 'warehouse',
           emoji: '📦',
           label: 'Склад',
         },
+        {
+          key: 'construction',
+          emoji: '🏗️',
+          label: 'Стройка',
+        },
       ],
     },
   ],
-  maxPerVacancy: 4,
+  maxPerVacancy: 10,
 }

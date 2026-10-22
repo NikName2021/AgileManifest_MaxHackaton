@@ -1,3 +1,4 @@
+import * as categoriesApi from '../categories/api'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, Outlet, useBlocker } from 'react-router-dom'
@@ -119,11 +120,11 @@ describe('cabinet selection and candidate flows', () => {
     const category = await screen.findByRole('combobox', { name: 'Сфера деятельности' })
     await waitFor(() => expect(category).toBeEnabled())
     fireEvent.click(category)
-    fireEvent.click(screen.getByRole('radio', { name: 'Сельское хозяйство' }))
+    fireEvent.click(screen.getByRole('radio', { name: /Сельское хозяйство/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить подписку' }))
     await screen.findByRole('heading', { name: 'Мои подписки (1/5)' })
     expect(create).toHaveBeenCalledExactlyOnceWith({
-      category: 'agriculture',
+      category: 'Сельское хозяйство',
       region_code: null,
       schedule: null,
       salary_from: null,
@@ -140,7 +141,7 @@ describe('cabinet selection and candidate flows', () => {
   })
   it('retries failed subscription categories before allowing save', async () => {
     const session = createPreviewSession()
-    vi.spyOn(session.candidate, 'filters').mockRejectedValueOnce(new ApiError('network'))
+    vi.spyOn(categoriesApi, 'loadCategories').mockRejectedValueOnce(new ApiError('network'))
     start(session, '/subscriptions')
     worker()
     const retry = await screen.findByRole('button', { name: 'Повторить загрузку сфер' })
@@ -240,7 +241,9 @@ describe('cabinet selection and candidate flows', () => {
     const first = start(session)
     expect(jobs).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
-    expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: /Обзор работодателя|Свои вакансии/ }),
+    ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
     worker()
     expect(await screen.findByText('Помощник на сбор урожая')).toBeInTheDocument()
@@ -276,7 +279,9 @@ describe('cabinet selection and candidate flows', () => {
     expect(await screen.findByRole('heading', { name: 'Вы откликнулись' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
     fireEvent.click(screen.getByRole('button', { name: /Зайти как работодатель/ }))
-    expect(await screen.findByRole('heading', { name: 'Обзор работодателя' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: /Обзор работодателя|Свои вакансии/ }),
+    ).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: 'Выйти' }))
     worker()
     expect(

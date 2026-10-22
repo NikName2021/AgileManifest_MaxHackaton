@@ -83,13 +83,82 @@ export function Contact({ value, profile = false }: { value: string; profile?: b
   )
 }
 
-export function CandidateContacts({ application }: { application: Application }) {
+export function CandidateContacts({
+  application,
+  compact = false,
+}: {
+  application: Application
+  compact?: boolean
+}) {
+  const { bridge } = useSession()
+  const [copied, setCopied] = useState(false)
+  const [failure, setFailure] = useState('')
   const contact = candidateContact(application)
   const phone = application.candidate.phone?.trim() || ''
   const phoneLink = contactLink(phone)
   const duplicate =
     contact === phone ||
     (phoneLink?.kind === 'phone' && phoneLink.href === contactLink(contact)?.href)
+  if (compact) {
+    const link = contactLink(contact)
+    return (
+      <div className="application-contact-buttons">
+        <Button
+          variant="secondary"
+          disabled={!contact}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(contact)
+              setCopied(true)
+              setFailure('')
+            } catch {
+              setFailure('Не удалось скопировать контакт')
+            }
+          }}
+        >
+          <Copy size={18} />
+          {copied ? 'Скопировано' : 'Контакт'}
+        </Button>
+        {link && (
+          <Button asChild className="primary-button">
+            <a
+              href={link.href}
+              target={link.kind === 'max' ? '_blank' : undefined}
+              rel="noopener noreferrer"
+              onClick={(event) => {
+                if (
+                  link.kind !== 'max' ||
+                  !bridge?.openMaxLink ||
+                  event.ctrlKey ||
+                  event.metaKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return
+                try {
+                  bridge.openMaxLink(link.href)
+                  event.preventDefault()
+                } catch {
+                  /* Keep the normal link available. */
+                }
+              }}
+            >
+              <MessageCircle size={18} />
+              {link.kind === 'max' ? 'Написать в MAX' : link.label}
+            </a>
+          </Button>
+        )}
+        {phone && !duplicate && <Contact key={`profile:${phone}`} value={phone} profile />}
+        {failure && (
+          <div role="alert">
+            <p>{failure}. Выделите и скопируйте контакт вручную.</p>
+            <p className="candidate-contact-value">{contact}</p>
+          </div>
+        )}
+        {!contact && <p>Кандидат не оставил контакт для связи.</p>}
+      </div>
+    )
+  }
   return (
     <section className="application-contact">
       <h3>Контакт кандидата</h3>

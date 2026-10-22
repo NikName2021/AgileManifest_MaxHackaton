@@ -25,7 +25,7 @@ export function EmployerTrustProgress() {
   useRefreshOnReturn(refresh)
   return (
     <section className="settings-panel">
-      <h2>Отметка работодателя</h2>
+      <h2>Надёжный работодатель</h2>
       {result.state === 'loading' && <p role="status">Загружаем сведения о наймах…</p>}
       {result.state === 'error' && (
         <div role="alert">
@@ -39,11 +39,18 @@ export function EmployerTrustProgress() {
         (result.data.employerTrust ? (
           <>
             <EmployerBadge confirmedHires={result.data.employerTrust.confirmedHires} />
-            <p>Подтверждённых наймов: {result.data.employerTrust.confirmedHires}.</p>
+            <p>
+              {result.data.employerTrust.confirmedHires} из{' '}
+              {result.data.employerTrust.threshold ?? successfulHireThreshold} подтверждённых
+              выходов
+            </p>
             <progress
               className="trust-progress"
-              max={successfulHireThreshold}
-              value={Math.min(result.data.employerTrust.confirmedHires, successfulHireThreshold)}
+              max={result.data.employerTrust.threshold ?? successfulHireThreshold}
+              value={Math.min(
+                result.data.employerTrust.confirmedHires,
+                result.data.employerTrust.threshold ?? successfulHireThreshold,
+              )}
               aria-label="Прогресс до отметки работодателя"
             />
             <p>

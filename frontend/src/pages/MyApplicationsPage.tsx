@@ -1,5 +1,8 @@
-import { Select } from '../shared/ui/Select'
+import { StageFilters } from '../features/applications/StageFilters'
+import { Contact } from '../features/applications/CandidateContacts'
+import { displayDate } from '../shared/format'
 import { useCallback, useState } from 'react'
+import { Pill } from '../shared/ui/Pill'
 import { Button } from '@maxhub/max-ui'
 import { Link, useSearchParams } from 'react-router-dom'
 
@@ -28,6 +31,28 @@ export function MyApplicationsPage() {
     (signal: AbortSignal) => candidate.applications({ status, limit: pageSize, offset }, signal),
     [candidate, status, offset],
   )
+  const loadCounts = useCallback(
+    async (signal: AbortSignal) => {
+      const values = await Promise.all(
+        [undefined, ...statuses].map((status) =>
+          candidate.applications({ status, limit: 1, offset: 0 }, signal),
+        ),
+      )
+      return {
+        total: values[0].total,
+        stages: {
+          new: values[1].total,
+          contacted: values[2].total,
+          invited: values[3].total,
+          hired: values[4].total,
+          rejected: values[5].total,
+        },
+      }
+    },
+    [candidate],
+  )
+  const counts = useResource(loadCounts, 'worker-stage-counts')
+  useRefreshOnReturn(counts.refresh)
   const resource = useResource(load, `${status}:${offset}`)
   useRefreshOnReturn(resource.refresh)
   const { result } = resource
@@ -40,20 +65,11 @@ export function MyApplicationsPage() {
           <p>Ответы работодателей и условия вакансий, на которые вы откликнулись.</p>
         </div>
       </div>
-      <div className="candidate-input candidate-status-filter">
-        <Select
-          label="Этап рассмотрения"
-          value={status ?? ''}
-          onChange={(event) => setParams(event.target.value ? { status: event.target.value } : {})}
-        >
-          <option value="">Все отклики</option>
-          {statuses.map((s) => (
-            <option value={s} key={s}>
-              {applicationLabels[s]}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <StageFilters
+        value={status}
+        counts={counts.result.state === 'ready' ? counts.result.data : undefined}
+        onChange={(s) => setParams(s ? { status: s } : {})}
+      />
       <div className="history-layout">
         <div>
           <RefreshStatus
@@ -87,10 +103,13 @@ export function MyApplicationsPage() {
                           <h2>{application.vacancy.title}</h2>
                         </Button>
                       )}
-                      <span className={`application-status ${application.status}`}>
+                      <Pill tone={`application-status ${application.status}`}>
                         {applicationLabels[application.status]}
-                      </span>
+                      </Pill>
                     </div>
+                    <time dateTime={application.createdAt}>
+                      {displayDate(application.createdAt)}
+                    </time>
                     <JobFacts job={application.vacancy} />
                     <ShiftSummary shift={application} worker />
                     {application.vacancy.status !== 'published' && (
@@ -103,6 +122,15 @@ export function MyApplicationsPage() {
                       <div className="vacancy-description">
                         {application.vacancy.description || 'Описание не добавлено.'}
                       </div>
+                      {application.vacancy.contactInfo &&
+                        ['invited', 'hired'].includes(application.status) && (
+                          <section>
+                            <h3>Контакт работодателя</h3>
+                            {application.vacancy.contactInfo.split(',').map((contact) => (
+                              <Contact key={contact} value={contact.trim()} />
+                            ))}
+                          </section>
+                        )}
                       <h3>Вы отправили</h3>
                       <p className="candidate-contact-value">
                         {application.contact || 'Контакт не был указан'}

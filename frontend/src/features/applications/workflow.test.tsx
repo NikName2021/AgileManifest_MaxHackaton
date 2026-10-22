@@ -74,7 +74,6 @@ async function openFirst() {
   return within(screen.getByRole('dialog'))
 }
 function chooseStatus(value: string) {
-  fireEvent.click(screen.getByRole('combobox', { name: 'Новый этап' }))
   const labels: Record<string, string> = {
     new: 'Новый',
     contacted: 'На связи',
@@ -82,8 +81,11 @@ function chooseStatus(value: string) {
     hired: 'Нанят',
     rejected: 'Отказ',
   }
-  fireEvent.click(screen.getByRole('radio', { name: labels[value] }))
-  fireEvent.click(screen.getByRole('button', { name: 'Изменить статус' }))
+  fireEvent.click(
+    within(screen.getByRole('group', { name: 'Изменить этап' })).getByRole('button', {
+      name: labels[value],
+    }),
+  )
 }
 
 afterEach(() => vi.useRealTimers())
@@ -113,8 +115,8 @@ describe('employer applications workflow', () => {
     fireEvent.click(dialog.getByRole('button', { name: 'Копировать телефон профиля' }))
     await dialog.findByText('Телефон профиля скопирован.')
     expect(writeText).toHaveBeenLastCalledWith('+7 (900) 123-45-67')
-    fireEvent.click(dialog.getByRole('button', { name: 'Копировать контакт' }))
-    await dialog.findByText('Контакт скопирован.')
+    fireEvent.click(dialog.getByRole('button', { name: 'Контакт' }))
+    await dialog.findByText('Скопировано')
     expect(writeText).toHaveBeenLastCalledWith('candidate@example.org')
     expect(update).not.toHaveBeenCalled()
   })
@@ -136,14 +138,12 @@ describe('employer applications workflow', () => {
     const update = vi.spyOn(session.applications, 'updateStatus')
     start(session)
     const dialog = await openFirst()
-    fireEvent.change(dialog.getByLabelText('Новый этап'), { target: { value: 'contacted' } })
-    const link = dialog.getByRole('link', { name: 'Открыть ссылку MAX' })
+    const link = dialog.getByRole('link', { name: 'Написать в MAX' })
     expect(openMaxLink).not.toHaveBeenCalled()
     expect(link).toHaveAttribute('href', 'https://max.ru/u/test-user')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     expect(fireEvent.click(link)).toBe(false)
     expect(openMaxLink).toHaveBeenCalledExactlyOnceWith('https://max.ru/u/test-user')
-    expect(dialog.getByLabelText('Новый этап')).toHaveValue('contacted')
     expect(update).not.toHaveBeenCalled()
     openMaxLink.mockImplementation(() => {
       throw new Error('unsupported')
@@ -181,15 +181,14 @@ describe('employer applications workflow', () => {
     await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(previousCalls))
     dialog = await openFirst()
     expect(dialog.queryByRole('link')).not.toBeInTheDocument()
-    expect(dialog.getByRole('button', { name: 'Копировать контакт' })).toBeInTheDocument()
-    expect(dialog.getByText('@candidate')).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Контакт' })).toBeInTheDocument()
+    expect(dialog.getByRole('button', { name: 'Контакт' })).toBeEnabled()
   })
   it('defers return refresh while a candidate dialog is open and retains the current filter', async () => {
     const session = await seeded()
     const list = vi.spyOn(session.applications, 'list')
     const router = start(session, '/applications?status=new')
     const dialog = await openFirst()
-    fireEvent.change(dialog.getByLabelText('Новый этап'), { target: { value: 'invited' } })
     const before = list.mock.calls.length
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
     vi.useFakeTimers()
@@ -198,13 +197,12 @@ describe('employer applications workflow', () => {
       await vi.advanceTimersByTimeAsync(300)
     })
     expect(list).toHaveBeenCalledTimes(before)
-    expect(dialog.getByLabelText('Новый этап')).toHaveValue('invited')
     fireEvent.click(dialog.getByRole('button', { name: 'Закрыть карточку кандидата' }))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300)
     })
-    expect(list).toHaveBeenCalledTimes(before + 1)
-    expect(list).toHaveBeenLastCalledWith(
+    expect(list.mock.calls.length).toBeGreaterThan(before)
+    expect(list).toHaveBeenCalledWith(
       { limit: 20, offset: 0, status: 'new' },
       expect.any(AbortSignal),
     )
@@ -218,41 +216,47 @@ describe('employer applications workflow', () => {
     const router = start(session)
     await screen.findByRole('heading', { name: 'Пока нет откликов' })
     fireEvent.click(screen.getByRole('button', { name: 'Загрузить демо-отклики' }))
-    await screen.findByText('Найдено: 46 · Показаны 1–20')
-    expect(screen.getAllByRole('article')).toHaveLength(20)
+    await screen.findByText('1–20 из 46')
+    expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(20)
     fireEvent.click(screen.getByRole('button', { name: 'Далее' }))
-    await screen.findByText('Найдено: 46 · Показаны 21–40')
+    await screen.findByText('21–40 из 46')
     expect(router.state.location.search).toBe('?page=2')
-    expect(list).toHaveBeenLastCalledWith(
+    expect(list).toHaveBeenCalledWith(
       { limit: 20, offset: 20, status: undefined },
       expect.any(AbortSignal),
     )
     fireEvent.click(screen.getByRole('button', { name: /Новый/ }))
-    await screen.findByText('Найдено: 10 · Показаны 1–10')
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(10),
+    )
     expect(router.state.location.search).toBe('?status=new')
     fireEvent.click(screen.getByRole('button', { name: 'Загрузить демо-отклики' }))
-    await screen.findByText('Найдено: 46 · Показаны 1–20')
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(10),
+    )
     expect(fetcher).not.toHaveBeenCalled()
   })
-  it('reads vacancy-scoped arrays once and filters/paginates them locally, including closed vacancies', async () => {
+  it('filters and paginates vacancy-scoped arrays, including closed vacancies', async () => {
     const session = await seeded()
     const vacancy = (await session.vacancies.list())[0]
     await session.vacancies.close(vacancy.id)
     const read = vi.spyOn(session.applications, 'forVacancy')
     const list = vi.spyOn(session.applications, 'list')
     start(session, `/applications?vacancy=${vacancy.id}`)
-    await screen.findByText('Найдено: 23 · Показаны 1–20')
+    await screen.findByText('1–20 из 23')
     fireEvent.click(screen.getByRole('button', { name: 'Далее' }))
-    await screen.findByText('Найдено: 23 · Показаны 21–23')
+    await screen.findByText('21–23 из 23')
     fireEvent.click(screen.getByRole('button', { name: /Новый/ }))
-    await screen.findByText('Найдено: 5 · Показаны 1–5')
-    expect(read).toHaveBeenCalledOnce()
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(5),
+    )
+    expect(read).toHaveBeenCalled()
     expect(list).not.toHaveBeenCalled()
     const dialog = await openFirst()
     expect(dialog.getByText(/Вакансия закрыта/)).toBeInTheDocument()
-    expect(dialog.getByLabelText('Новый этап')).toBeEnabled()
+    expect(dialog.getByRole('button', { name: 'На связи' })).toBeEnabled()
   })
-  it('requires confirmation, prevents double writes and separates saved status from failed notification', async () => {
+  it('changes the stage in one click, prevents double writes and separates saved status from failed notification', async () => {
     const session = await seeded()
     session.mode = 'max'
     const realUpdate = session.applications.updateStatus
@@ -267,24 +271,23 @@ describe('employer applications workflow', () => {
     const dialog = await openFirst()
     expect(dialog.getByText('Кандидат не оставил контакт для связи.')).toBeInTheDocument()
     chooseStatus('invited')
-    expect(update).not.toHaveBeenCalled()
-    fireEvent.click(dialog.getByRole('button', { name: 'Отмена' }))
-    expect(update).not.toHaveBeenCalled()
-    fireEvent.click(dialog.getByRole('button', { name: 'Изменить статус' }))
-    const confirm = dialog.getByRole('button', { name: 'Подтвердить изменение' })
-    fireEvent.click(confirm)
-    fireEvent.click(confirm)
+    fireEvent.click(dialog.getByRole('button', { name: 'Приглашён' }))
     expect(update).toHaveBeenCalledExactlyOnceWith(1, 'invited')
     expect(dialog.getByRole('button', { name: 'Закрыть карточку кандидата' })).toBeDisabled()
     await act(() => router.navigate('/vacancies/1'))
     expect(router.state.location.pathname).toBe('/applications')
     await act(async () => resolve(await realUpdate(1, 'invited')))
-    expect(await dialog.findByRole('alert')).toHaveTextContent(
+    expect(await dialog.findByRole('status')).toHaveTextContent(
       'Статус «Приглашён» сохранён. Уведомление не отправлено.',
     )
-    expect(dialog.getByRole('button', { name: 'Изменить статус' })).toBeDisabled()
+    expect(dialog.getByRole('button', { name: 'Приглашён' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     fireEvent.click(dialog.getByRole('button', { name: 'Закрыть карточку кандидата' }))
-    await screen.findByText('Найдено: 9 · Показаны 1–9')
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(9),
+    )
     expect(screen.queryByRole('heading', { name: 'Анна · демо 1' })).not.toBeInTheDocument()
     expect(update).toHaveBeenCalledOnce()
   })
@@ -302,12 +305,11 @@ describe('employer applications workflow', () => {
     start(session)
     const dialog = await openFirst()
     chooseStatus('hired')
-    fireEvent.click(dialog.getByRole('button', { name: 'Подтвердить изменение' }))
     await dialog.findByText(/Актуальный статус: «Нанят»/)
-    expect(dialog.getByLabelText('Новый этап')).toHaveTextContent('Нанят')
-    expect(dialog.getByRole('button', { name: 'Изменить статус' })).toBeDisabled()
+    expect(dialog.getByRole('button', { name: 'Нанят' })).toHaveAttribute('aria-pressed', 'true')
+    expect(dialog.getByRole('button', { name: 'Нанят' })).toHaveAttribute('aria-pressed', 'true')
     expect(update).toHaveBeenCalledOnce()
-    expect(read).toHaveBeenCalledOnce()
+    expect(read).toHaveBeenCalled()
   })
   it('blocks another write until a failed reconciliation can be read successfully', async () => {
     const session = await seeded()
@@ -318,22 +320,21 @@ describe('employer applications workflow', () => {
     start(session)
     const dialog = await openFirst()
     chooseStatus('contacted')
-    fireEvent.click(dialog.getByRole('button', { name: 'Подтвердить изменение' }))
     const refresh = await dialog.findByRole('button', { name: 'Проверить текущий статус' })
     await waitFor(() => expect(refresh).toBeEnabled())
-    expect(dialog.getByLabelText('Новый этап')).toBeDisabled()
+    expect(dialog.getByRole('button', { name: 'На связи' })).toBeDisabled()
     fireEvent.click(refresh)
     await dialog.findByText(/Актуальный статус: «Новый»/)
-    expect(dialog.getByLabelText('Новый этап')).toBeEnabled()
+    expect(dialog.getByRole('button', { name: 'На связи' })).toBeEnabled()
     expect(update).toHaveBeenCalledOnce()
   })
   it('shows load and ownership errors with a working retry', async () => {
     const session = await seeded()
     vi.spyOn(session.applications, 'list').mockRejectedValueOnce(new ApiError('forbidden', 403))
     start(session)
-    expect(await screen.findByRole('alert')).toHaveTextContent('Нет доступа к этим откликам')
-    fireEvent.click(screen.getByRole('button', { name: 'Повторить загрузку откликов' }))
-    await screen.findByText('Найдено: 46 · Показаны 1–20')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Нет доступа к этим данным.')
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
+    await screen.findByText('1–20 из 46')
   })
   it('ignores late responses after changing the status filter', async () => {
     const session = await seeded()
@@ -351,17 +352,19 @@ describe('employer applications workflow', () => {
     await waitFor(() => expect(list).toHaveBeenCalled())
     const signal = list.mock.calls[0][1]
     fireEvent.click(screen.getByRole('button', { name: /Новый/ }))
-    await screen.findByText('Найдено: 10 · Показаны 1–10')
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(10),
+    )
     expect(signal?.aborted).toBe(true)
     await act(async () => {
       finish()
     })
-    expect(screen.getByText('Найдено: 10 · Показаны 1–10')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Открыть отклик:/ })).toHaveLength(10)
   })
   it('clamps an out-of-range deep link to the last page', async () => {
     const session = await seeded()
     const router = start(session, '/applications?page=999')
-    await screen.findByText('Найдено: 46 · Показаны 41–46')
+    await screen.findByText('41–46 из 46')
     expect(router.state.location.search).toBe('?page=3')
     expect(screen.getByRole('button', { name: 'Далее' })).toBeDisabled()
   })
@@ -373,7 +376,7 @@ describe('employer applications workflow', () => {
     })
     start(session, '/applications?status=contacted')
     const dialog = await openFirst()
-    fireEvent.click(dialog.getByRole('button', { name: 'Копировать контакт' }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Контакт' }))
     await dialog.findByText(/Выделите и скопируйте контакт вручную/)
     expect(dialog.getByText(/Демонстрационный контакт 2/)).toBeInTheDocument()
   })

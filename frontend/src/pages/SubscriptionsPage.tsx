@@ -1,3 +1,5 @@
+import { useCategories } from '../features/categories/useCategories'
+import { fieldError } from '../shared/api/fieldError'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button, Switch } from '@maxhub/max-ui'
@@ -15,9 +17,12 @@ import { config } from '../shared/config'
 import { ApiError } from '../shared/api/client'
 
 export function SubscriptionsPage() {
-  const { subscriptions, candidate, mode } = useSession()
-  const filters = useResource(candidate.filters, 'subscription-filters')
-  const categories = filters.result.state === 'ready' ? filters.result.data.categories : []
+  const { subscriptions, mode } = useSession()
+  const filters = useCategories()
+  const categories =
+    filters.result.state === 'ready'
+      ? filters.result.data.map((c) => ({ value: c.name, label: `${c.emoji} ${c.name}` }))
+      : []
   const [params] = useSearchParams()
   const [region, setRegion] = useState(params.get('region_code') ?? '')
   const load = useCallback((signal: AbortSignal) => subscriptions!.list(signal), [subscriptions])
@@ -158,6 +163,11 @@ export function SubscriptionsPage() {
                   ))}
                 </Select>
               </label>
+              {fieldError(error, 'category') && (
+                <p role="alert" className="field-error">
+                  {fieldError(error, 'category')}
+                </p>
+              )}
               {filters.result.state === 'loading' && (
                 <p role="status">Загружаем сферы деятельности…</p>
               )}

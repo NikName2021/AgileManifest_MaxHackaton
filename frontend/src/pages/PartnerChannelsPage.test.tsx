@@ -22,33 +22,20 @@ describe('partner autopublication', () => {
     const update = vi.spyOn(session.partners!, 'update')
     renderPage(session)
     const toggle = await screen.findByRole('switch', { name: 'Автопубликация в канал' })
-    const student = screen.getByRole('checkbox', { name: 'Только вакансии для студентов' })
-    const region = screen.getByRole('combobox', { name: 'Регион' })
-    const save = screen.getByRole('button', { name: 'Сохранить настройки' })
+    const configure = screen.getByRole('button', { name: 'Настроить' })
     expect(toggle).toBeEnabled()
     expect(toggle).not.toBeChecked()
-    expect(region).toBeDisabled()
-    expect(student).toBeDisabled()
-    expect(save).toBeDisabled()
+    expect(configure).toBeDisabled()
     fireEvent.click(toggle)
     await waitFor(() => expect(toggle).toBeChecked())
-    expect(student).toBeEnabled()
-    expect(save).toBeEnabled()
-    expect(update).toHaveBeenLastCalledWith(1, {
-      active: true,
-      region_code: '71',
-      student_only: true,
-    })
+    expect(configure).toBeEnabled()
+    expect(update).toHaveBeenLastCalledWith(1, { active: true })
     fireEvent.click(toggle)
     await waitFor(() => expect(toggle).not.toBeChecked())
     expect(toggle).toBeEnabled()
-    expect(student).toBeDisabled()
-    expect(student).toBeChecked()
-    expect(update).toHaveBeenLastCalledWith(1, {
-      active: false,
-      region_code: '71',
-      student_only: true,
-    })
+    expect(configure).toBeDisabled()
+    expect(update).toHaveBeenLastCalledWith(1, { active: false })
+    expect((await session.partners!.list())[0].studentOnly).toBe(true)
     expect((await session.partners!.list())[0].active).toBe(false)
   })
 
@@ -70,7 +57,7 @@ describe('partner autopublication', () => {
     })
     expect(toggle).not.toBeChecked()
     expect(toggle).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Сохранить настройки' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Настроить' })).toBeDisabled()
     expect(screen.getByRole('alert')).toBeInTheDocument()
   })
 })

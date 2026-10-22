@@ -72,6 +72,32 @@ export async function loadBadgeCatalog(signal?: AbortSignal): Promise<BadgeCatal
   )
 }
 
+export async function suggestBadges(
+  q: string,
+  exclude: string[],
+  preview: boolean,
+  signal?: AbortSignal,
+): Promise<VacancyBadge[]> {
+  if (import.meta.env.DEV && preview) {
+    const { previewBadgeCatalog } = await import('../../mocks/badges')
+    const clean = q.toLocaleLowerCase('ru').replaceAll('ё', 'е')
+    return previewBadgeCatalog.groups
+      .flatMap((g) => g.items)
+      .filter(
+        (b) =>
+          !exclude.includes(b.key) &&
+          b.label.toLocaleLowerCase('ru').replaceAll('ё', 'е').includes(clean),
+      )
+      .slice(0, 8)
+  }
+  const query = new URLSearchParams({ q, limit: '8', exclude: exclude.join(',') })
+  const data = (await requestJson(
+    `${authUrl(config.apiBaseUrl, '/api/badges/suggest', import.meta.env.PROD)}?${query}`,
+    { signal },
+  )) as { items: unknown }
+  return parseBadges(data?.items)
+}
+
 export function displayedBadges(badges: VacancyBadge[] = [], studentFriendly = false) {
   return studentFriendly && !badges.some((b) => b.key === 'students_ok')
     ? [...badges, { key: 'students_ok', emoji: '🎓', label: 'Подходит студентам' }]

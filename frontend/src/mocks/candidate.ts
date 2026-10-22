@@ -121,6 +121,10 @@ export function createPreviewCandidate(): CandidateRepository {
     async profile() {
       return clone(profile)
     },
+    async saveCompany(name) {
+      profile = { ...profile, companyName: name.trim() || null }
+      return clone(profile)
+    },
     async saveContact(contact) {
       profile = { ...profile, applicationContact: contact }
       return clone(profile)

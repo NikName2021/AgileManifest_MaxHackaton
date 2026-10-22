@@ -1,16 +1,17 @@
 import { Button } from '@maxhub/max-ui'
-import { BriefcaseBusiness, MapPin } from 'lucide-react'
 import type { Vacancy, VacancyStatus } from '../../entities/hiring'
 import { errorText, formatSalary, statusLabels } from './model'
-import { VacancyBadges } from '../badges/VacancyBadges'
+import { displayedBadges } from '../badges/api'
+import { scheduleLabels } from './model'
+import { useSession } from '../session/context'
+import { useResource } from '../../shared/api/useResource'
+import { EmployerBadge } from '../trust/EmployerTrust'
+import { Pill } from '../../shared/ui/Pill'
+import { categoryLabel } from '../categories/api'
+import { useRegionName } from '../../shared/api/useRegionName'
 
 export function VacancyStatusBadge({ status }: { status: VacancyStatus }) {
-  return (
-    <span className={`vacancy-status ${status}`}>
-      <span />
-      {statusLabels[status]}
-    </span>
-  )
+  return <Pill tone={`vacancy-status ${status}`}>{statusLabels[status]}</Pill>
 }
 export function VacancyFailure({ error, retry }: { error: unknown; retry?: () => void }) {
   return (
@@ -33,39 +34,51 @@ export function VacancyLoading() {
   )
 }
 export function VacancyPreview({ vacancy }: { vacancy: Vacancy }) {
+  const { candidate } = useSession()
+  const regionName = useRegionName()
+  const profile = useResource(candidate.profile, 'preview-trust')
+  const n = vacancy.headcount ?? 0
+  const word = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'человека' : 'человек'
+  const badges = displayedBadges(vacancy.badges, vacancy.studentFriendly)
   return (
-    <article className="vacancy-preview" aria-label="Предпросмотр вакансии">
-      <div className="vacancy-preview-top">
-        <span className="step-icon">
-          <BriefcaseBusiness size={24} />
-        </span>
-        <span className="eyebrow">ВАША ВАКАНСИЯ</span>
+    <article className="vacancy-preview max-card-preview" aria-label="Предпросмотр вакансии">
+      <div>
+        <h2>{vacancy.title}</h2>
+        <EmployerBadge
+          confirmedHires={
+            profile.result.state === 'ready'
+              ? profile.result.data.employerTrust?.confirmedHires
+              : undefined
+          }
+        />
       </div>
-      <h2>{vacancy.title}</h2>
-      {vacancy.headcount && (
+      <div>
+        <strong className="vacancy-salary">
+          {formatSalary(vacancy.salaryMin, vacancy.salaryMax)}
+        </strong>
         <p>
-          Нужно человек: <strong>{vacancy.headcount}</strong>
+          {[vacancy.regionCode && regionName(vacancy.regionCode), scheduleLabels[vacancy.schedule]]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
-      )}
-      <strong className="vacancy-salary">
-        {formatSalary(vacancy.salaryMin, vacancy.salaryMax)}
-      </strong>
-      <div className="vacancy-meta">
-        <span>
-          <MapPin size={16} />
-          {vacancy.regionCode || 'Регион не указан'}
-        </span>
+        {n > 0 && (
+          <p>
+            Набор: {n} {word}
+          </p>
+        )}
       </div>
-      <VacancyBadges job={vacancy} />
-      <div className="vacancy-description">
-        {vacancy.description || 'Описание пока не добавлено.'}
-      </div>
-      {vacancy.contactInfo && (
-        <div className="vacancy-contact">
-          <small>КОНТАКТ ДЛЯ СВЯЗИ</small>
-          <p>{vacancy.contactInfo}</p>
-        </div>
+      {!!badges.length && <p>{badges.map((b) => `${b.emoji} ${b.label}`).join(' · ')}</p>}
+      {vacancy.description && <div className="vacancy-description">{vacancy.description}</div>}
+      {vacancy.applyUrl ? (
+        <a className="text-link" href={vacancy.applyUrl} target="_blank" rel="noreferrer">
+          Ссылка для отклика
+        </a>
+      ) : (
+        <span className="field-hint">Ссылка для отклика появится после публикации</span>
       )}
+      <small className="preview-category">
+        Сфера: {categoryLabel(vacancy.category, vacancy.categoryDetail)}
+      </small>
     </article>
   )
 }

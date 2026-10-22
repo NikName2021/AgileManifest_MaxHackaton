@@ -11,6 +11,13 @@ export async function loadVacancyHiringSummary(
   vacancyId: number,
   signal: AbortSignal,
 ): Promise<HiringSummary> {
+  if (applications.stats) {
+    const data = await applications.stats(vacancyId, signal)
+    return {
+      total: data.total,
+      stages: { new: 0, contacted: 0, invited: 0, hired: 0, rejected: 0, ...data.byStatus },
+    }
+  }
   // The vacancy endpoint returns the complete list, unlike the paginated employer endpoint.
   const { items } = await applications.forVacancy(vacancyId, signal)
   signal.throwIfAborted()

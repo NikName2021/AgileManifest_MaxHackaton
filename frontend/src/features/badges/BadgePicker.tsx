@@ -1,83 +1,144 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@maxhub/max-ui'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useSession } from '../session/context'
 import { useResource } from '../../shared/api/useResource'
-import { loadBadgeCatalog } from './api'
+import { Input } from '../../shared/ui/Input'
+import { useDebounce } from '../../shared/hooks/useDebounce'
+import { loadBadgeCatalog, suggestBadges, type BadgeGroup } from './api'
 
 export function BadgePicker({
   value,
   studentFriendly,
   onChange,
   error,
+  onLimit,
 }: {
   value: string
   studentFriendly: boolean
   onChange: (keys: string[], student: boolean) => void
   error?: string
+  onLimit?: (limit: number) => void
 }) {
   const { mode } = useSession()
   const load = useCallback(
     async (signal: AbortSignal) => {
-      if (import.meta.env.DEV && mode === 'preview')
-        return (await import('../../mocks/badges')).previewBadgeCatalog
-      return loadBadgeCatalog(signal)
+      const catalog =
+        import.meta.env.DEV && mode === 'preview'
+          ? (await import('../../mocks/badges')).previewBadgeCatalog
+          : await loadBadgeCatalog(signal)
+      onLimit?.(catalog.maxPerVacancy)
+      return catalog
     },
-    [mode],
+    [mode, onLimit],
   )
   const { result, reload } = useResource(load, 'badge-catalog')
+  const [term, setTerm] = useState('')
+  const query = useDebounce(term.trim(), 200)
   const selected = new Set([
     ...value.split(',').filter(Boolean),
     ...(studentFriendly ? ['students_ok'] : []),
   ])
+  const exclude = [value, studentFriendly ? 'students_ok' : ''].filter(Boolean).join(',')
+  const search = useCallback(
+    (signal: AbortSignal) =>
+      query
+        ? suggestBadges(query, exclude.split(',').filter(Boolean), mode === 'preview', signal)
+        : Promise.resolve([]),
+    [query, exclude, mode],
+  )
+  const suggestions = useResource(search, `${query}:${exclude}`)
+  const limit = result.state === 'ready' ? result.data.maxPerVacancy : 10
+  const all = result.state === 'ready' ? result.data.groups.flatMap((g) => g.items) : []
+  function toggle(key: string) {
+    const next = new Set(selected)
+    if (next.has(key)) next.delete(key)
+    else if (next.size < limit) next.add(key)
+    onChange([...next], next.has('students_ok'))
+  }
   return (
     <section className="badge-picker" aria-label="Бейджи вакансии">
       <div className="badge-picker-heading">
-        <h3>Что вы предлагаете</h3>
+        <h3>Условия и преимущества</h3>
         <span>
-          {selected.size} / {result.state === 'ready' ? result.data.maxPerVacancy : 4}
+          {selected.size} / {limit}
         </span>
       </div>
-      <p className="field-hint">
-        Выберите до 4 преимуществ, включая отметку для студентов. Они появятся в карточке вакансии.
-      </p>
-      {result.state === 'loading' && <p role="status">Загружаем условия…</p>}
-      {result.state === 'error' && (
-        <div role="alert">
-          <p>Не удалось загрузить бейджи. Уже выбранные условия сохранятся.</p>
-          <Button variant="secondary" type="button" onClick={reload}>
-            Повторить
-          </Button>
-        </div>
-      )}
-      {result.state === 'ready' &&
-        result.data.groups.map((group) => (
-          <div className="badge-picker-group" key={group.key}>
-            <h4>
-              {group.emoji} {group.label}
-            </h4>
-            <div>
-              {group.items.map((badge) => (
+      <div className="selected-badges">
+        {[...selected].map((key) => {
+          const badge = all.find((b) => b.key === key)
+          return (
+            <Button
+              type="button"
+              variant="secondary"
+              className="badge-choice selected"
+              aria-label={`Убрать: ${badge?.label ?? key}`}
+              key={key}
+              onClick={() => toggle(key)}
+            >
+              {badge?.emoji} {badge?.label ?? key}
+              <X size={14} />
+            </Button>
+          )
+        })}
+      </div>
+      <Input
+        aria-label="Поиск условий"
+        placeholder="Найти условие: жильё, питание, оплата…"
+        maxLength={100}
+        value={term}
+        onChange={(e) => setTerm(e.target.value)}
+      />
+      {!!term.trim() && (
+        <div className="badge-suggestions" aria-live="polite">
+          {query !== term.trim() || suggestions.result.state === 'loading' ? (
+            <p>Ищем условия…</p>
+          ) : suggestions.result.state === 'error' ? (
+            <p>
+              Не удалось загрузить подсказки.{' '}
+              <Button type="button" variant="ghost" onClick={suggestions.reload}>
+                Повторить
+              </Button>
+            </p>
+          ) : suggestions.result.data.length ? (
+            suggestions.result.data
+              .filter((b) => !selected.has(b.key))
+              .map((b) => (
                 <Button
-                  key={badge.key}
+                  key={b.key}
                   type="button"
                   variant="secondary"
                   className="badge-choice"
-                  aria-pressed={selected.has(badge.key)}
-                  disabled={!selected.has(badge.key) && selected.size >= result.data.maxPerVacancy}
-                  onClick={() => {
-                    const next = new Set(selected)
-                    if (next.has(badge.key)) next.delete(badge.key)
-                    else next.add(badge.key)
-                    onChange([...next], next.has('students_ok'))
-                  }}
-                  iconAfter={selected.has(badge.key) ? <Check size={14} /> : undefined}
+                  disabled={selected.size >= limit}
+                  onClick={() => toggle(b.key)}
                 >
-                  {badge.emoji} {badge.label}
+                  {b.emoji} {b.label}
                 </Button>
-              ))}
-            </div>
-          </div>
+              ))
+          ) : (
+            <p>Условия не найдены. Выберите из групп ниже.</p>
+          )}
+        </div>
+      )}
+      <p className="field-hint">До {limit} бейджей вместе с «Подходит студентам».</p>
+      {result.state === 'loading' && <p role="status">Загружаем условия…</p>}
+      {result.state === 'error' && (
+        <p role="alert">
+          Условия не загружены.{' '}
+          <Button type="button" variant="secondary" onClick={reload}>
+            Повторить
+          </Button>
+        </p>
+      )}
+      {result.state === 'ready' &&
+        result.data.groups.map((group) => (
+          <BadgeChoices
+            key={group.key}
+            group={group}
+            selected={selected}
+            limit={limit}
+            toggle={toggle}
+          />
         ))}
       {error && (
         <p role="alert" className="field-error">
@@ -85,5 +146,76 @@ export function BadgePicker({
         </p>
       )}
     </section>
+  )
+}
+function BadgeChoices({
+  group,
+  selected,
+  limit,
+  toggle,
+}: {
+  group: BadgeGroup
+  selected: Set<string>
+  limit: number
+  toggle: (key: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [count, setCount] = useState(group.items.length)
+  const measure = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const element = measure.current!
+    const update = () => {
+      const children = [...element.children] as HTMLElement[]
+      const rows = [...new Set(children.map((c) => c.offsetTop))]
+      setCount(rows.length > 2 ? children.findIndex((c) => c.offsetTop > rows[1]) : children.length)
+    }
+    update()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(update)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [group])
+  return (
+    <div className="badge-picker-group">
+      <h4>
+        {group.emoji} {group.label}
+      </h4>
+      <div className="badge-choice-measure" ref={measure} aria-hidden="true">
+        {group.items.map((b) => (
+          <span className="badge-choice" key={b.key}>
+            {b.emoji} {b.label}
+            <Check size={14} />
+          </span>
+        ))}
+      </div>
+      <div className="badge-choices">
+        {(expanded ? group.items : group.items.slice(0, count)).map((b) => (
+          <Button
+            key={b.key}
+            type="button"
+            variant="secondary"
+            className="badge-choice"
+            aria-pressed={selected.has(b.key)}
+            disabled={!selected.has(b.key) && selected.size >= limit}
+            onClick={() => toggle(b.key)}
+          >
+            {b.emoji} {b.label}
+            {selected.has(b.key) && <Check size={14} />}
+          </Button>
+        ))}
+      </div>
+      {count < group.items.length && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="small"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? 'Свернуть' : 'Ещё'}
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </Button>
+      )}
+    </div>
   )
 }

@@ -21,8 +21,8 @@ export const fieldLabels = {
   region_code: 'Город или регион',
   category: 'Сфера деятельности',
   schedule: 'Тип занятости',
-  salary_min: 'Зарплата от',
-  salary_max: 'Зарплата до',
+  salary_min: 'Зарплата от, ₽',
+  salary_max: 'Зарплата до, ₽',
   description: 'Описание работы',
   contact_info: 'Контакт для связи',
 }
@@ -52,7 +52,7 @@ export function formValues(v?: Vacancy): VacancyForm {
     student_friendly: v?.studentFriendly ? 'yes' : '',
     title: v?.title ?? '',
     region_code: v?.regionCode ?? '',
-    category: v?.category ?? '',
+    category: v?.category === 'Другое' && v.categoryDetail ? v.categoryDetail : (v?.category ?? ''),
     schedule: v?.schedule ?? 'seasonal',
     salary_min: v?.salaryMin?.toString() ?? '',
     salary_max: v?.salaryMax?.toString() ?? '',
@@ -60,11 +60,17 @@ export function formValues(v?: Vacancy): VacancyForm {
     contact_info: v?.contactInfo ?? '',
   }
 }
-export function validateForm(form: VacancyForm): { input: VacancyInput; errors: FieldErrors } {
+export function validateForm(
+  form: VacancyForm,
+  maxBadges = 10,
+): { input: VacancyInput; errors: FieldErrors } {
   const errors: FieldErrors = {}
   const badges = [...new Set(form.badges.split(',').filter(Boolean))]
-  if (new Set([...badges, ...(form.student_friendly === 'yes' ? ['students_ok'] : [])]).size > 4)
-    errors.badges = 'Выберите не больше 4 бейджей, включая отметку для студентов.'
+  if (
+    new Set([...badges, ...(form.student_friendly === 'yes' ? ['students_ok'] : [])]).size >
+    maxBadges
+  )
+    errors.badges = `Не больше ${maxBadges} бейджей вместе с «Подходит студентам»`
   const headcount = form.headcount.trim() ? Number(form.headcount) : null
   if (
     headcount !== null &&
@@ -107,7 +113,7 @@ export function validateForm(form: VacancyForm): { input: VacancyInput; errors: 
       student_friendly: form.student_friendly === 'yes',
       title: form.title.trim(),
       region_code: form.region_code.trim(),
-      category: form.category.trim() || 'general',
+      category: form.category.trim() || 'Другое',
       schedule: form.schedule,
       salary_min: min,
       salary_max: max,
@@ -128,36 +134,29 @@ export function formatSalary(min: number | null, max: number | null): string {
 // Keep in sync with backend/src/vacancies/cardText.ts.
 export function cardTextLength(v: Vacancy): number {
   const escape = (text: string) => text.replace(/([\\`*_[\]()~>#+\-=|{}.!])/g, '\\$1')
-  const salary =
-    v.salaryMin !== null && v.salaryMax !== null
-      ? `${v.salaryMin}–${v.salaryMax} ₽`
-      : v.salaryMin !== null
-        ? `от ${v.salaryMin} ₽`
-        : v.salaryMax !== null
-          ? `до ${v.salaryMax} ₽`
-          : 'по договорённости'
-  const schedule = { seasonal: 'сезонная', temporary: 'временная', permanent: 'постоянная' }[
-    v.schedule
-  ]
-  const link = `https://max.ru/${'x'.repeat(64)}?start=apply_2147483647`
+  const link = `https://max.ru/${'x'.repeat(64)}?start=apply_2147483647_ch2147483647`
+  const n = v.headcount ?? 0
+  const word = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'человека' : 'человек'
   return [
-    `**${escape(v.title)}**`,
-    '✓ Надёжный работодатель',
-    `Регион: ${escape(v.regionCode)}`,
-    `График: ${escape(schedule)}`,
-    `Зарплата: ${salary}`,
-    v.headcount ? `Нужно человек: ${v.headcount}` : undefined,
-    escape(
-      displayedBadges(v.badges, v.studentFriendly)
-        .map((b) => `${b.emoji} ${b.label}`)
-        .join(' · '),
-    ) || undefined,
-    v.description ? escape(v.description) : undefined,
-    v.contactInfo ? `Контакт: ${escape(v.contactInfo)}` : undefined,
-    `Откликнуться:\n[${escape(link)}](${link})`,
+    [`**${escape(v.title)}**`, '✓ Надёжный работодатель'],
+    [
+      `**${escape(formatSalary(v.salaryMin, v.salaryMax))}**`,
+      escape([v.regionCode, scheduleLabels[v.schedule]].filter(Boolean).join(' · ')),
+      n ? `Набор: ${n} ${word}` : '',
+    ],
+    [
+      escape(
+        displayedBadges(v.badges, v.studentFriendly)
+          .map((b) => `${b.emoji} ${b.label}`)
+          .join(' · '),
+      ),
+    ],
+    [v.description ? escape(v.description) : ''],
+    [`[Ссылка для отклика](${link})`],
   ]
+    .map((block) => block.filter(Boolean).join('\n'))
     .filter(Boolean)
-    .join('\n').length
+    .join('\n\n').length
 }
 export function errorText(error: unknown): string {
   if (!(error instanceof ApiError)) return 'Не удалось выполнить запрос. Попробуйте позже.'

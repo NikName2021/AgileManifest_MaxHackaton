@@ -1,3 +1,5 @@
+import { parseBadges, type VacancyBadge } from '../badges/api'
+import type { Vacancy } from '../../entities/hiring'
 import { ApiError, authenticatedRequest } from '../../shared/api/client'
 import { authUrl } from '../session/auth'
 import type { Region } from '../../shared/api/regions'
@@ -11,11 +13,31 @@ export interface PartnerChannel {
   studentOnly: boolean
   removed: boolean
   createdAt: string
+  categories?: string[]
+  schedule?: Vacancy['schedule'] | null
+  salaryFrom?: number | null
+  trustedOnly?: boolean
+  badges?: VacancyBadge[]
+  mode?: 'instant' | 'digest'
+  digestHour?: number
+  stats?: {
+    vacanciesPosted: number
+    applications: number
+    hired: number
+    lastPostedAt: string | null
+  }
 }
 export interface ChannelInput {
-  active: boolean
-  region_code: string | null
-  student_only: boolean
+  active?: boolean
+  region_code?: string | null
+  student_only?: boolean
+  categories?: string[]
+  schedule?: Vacancy['schedule'] | null
+  salary_from?: number | null
+  trusted_only?: boolean
+  badges?: string[]
+  mode?: 'instant' | 'digest'
+  digest_hour?: number
 }
 export interface PartnerRepository {
   list(signal?: AbortSignal): Promise<PartnerChannel[]>
@@ -42,7 +64,44 @@ export function parseChannel(body: unknown): PartnerChannel {
     !Number.isFinite(Date.parse(v.createdAt))
   )
     throw new ApiError('contract')
+  if (
+    v.categories !== undefined &&
+    (!Array.isArray(v.categories) || v.categories.some((c) => typeof c !== 'string'))
+  )
+    throw new ApiError('contract')
+  if (v.schedule != null && !['seasonal', 'temporary', 'permanent'].includes(String(v.schedule)))
+    throw new ApiError('contract')
+  if (v.salaryFrom != null && (!Number.isSafeInteger(v.salaryFrom) || Number(v.salaryFrom) < 0))
+    throw new ApiError('contract')
+  if (v.trustedOnly !== undefined && typeof v.trustedOnly !== 'boolean')
+    throw new ApiError('contract')
+  if (v.mode !== undefined && !['instant', 'digest'].includes(String(v.mode)))
+    throw new ApiError('contract')
+  if (
+    v.digestHour !== undefined &&
+    (!Number.isInteger(v.digestHour) || Number(v.digestHour) < 0 || Number(v.digestHour) > 23)
+  )
+    throw new ApiError('contract')
+  const stats = v.stats === undefined ? undefined : obj(v.stats)
+  if (
+    stats &&
+    (['vacanciesPosted', 'applications', 'hired'].some(
+      (k) => !Number.isSafeInteger(stats[k]) || Number(stats[k]) < 0,
+    ) ||
+      (stats.lastPostedAt !== null &&
+        (typeof stats.lastPostedAt !== 'string' ||
+          !Number.isFinite(Date.parse(stats.lastPostedAt)))))
+  )
+    throw new ApiError('contract')
   return {
+    ...(v.categories !== undefined ? { categories: v.categories as string[] } : {}),
+    ...(v.schedule !== undefined ? { schedule: v.schedule as PartnerChannel['schedule'] } : {}),
+    ...(v.salaryFrom !== undefined ? { salaryFrom: v.salaryFrom as number | null } : {}),
+    ...(v.trustedOnly !== undefined ? { trustedOnly: v.trustedOnly as boolean } : {}),
+    ...(v.badges !== undefined ? { badges: parseBadges(v.badges) } : {}),
+    ...(v.mode !== undefined ? { mode: v.mode as 'instant' | 'digest' } : {}),
+    ...(v.digestHour !== undefined ? { digestHour: Number(v.digestHour) } : {}),
+    ...(stats ? { stats: stats as unknown as PartnerChannel['stats'] } : {}),
     id: v.id,
     title: v.title as string | null,
     isChannel: v.isChannel,

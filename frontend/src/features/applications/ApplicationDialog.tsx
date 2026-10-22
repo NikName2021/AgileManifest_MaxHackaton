@@ -1,9 +1,11 @@
-import { Select } from '../../shared/ui/Select'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useBeforeUnload, useBlocker } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { X } from 'lucide-react'
 import { CandidateContacts } from './CandidateContacts'
+import { Toast } from '../../shared/ui/Toast'
+import { Pill } from '../../shared/ui/Pill'
+import { displayDate, initials } from '../../shared/format'
 import { applicationLabels, type Application, type ApplicationStatus } from '../../entities/hiring'
 import { useSession } from '../session/context'
 import { statuses } from './api'
@@ -29,7 +31,6 @@ export function ApplicationDialog({
   const { applications, mode } = useSession()
   const [current, setCurrent] = useState(application)
   const [target, setTarget] = useState<ApplicationStatus>(application.status)
-  const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [failure, setFailure] = useState('')
@@ -37,8 +38,7 @@ export function ApplicationDialog({
   const dialog = useRef<HTMLDialogElement>(null)
   const mounted = useRef(true),
     lock = useRef(false)
-  const titleId = useId(),
-    statusId = useId()
+  const titleId = useId()
   const blocker = useBlocker(() => lock.current)
   useBeforeUnload(
     useCallback(
@@ -100,14 +100,15 @@ export function ApplicationDialog({
       if (mounted.current) setBusy(false)
     }
   }
-  async function save() {
-    if (lock.current || needsRefresh || target === current.status) return
+  async function save(nextTarget: ApplicationStatus) {
+    if (lock.current || needsRefresh || nextTarget === current.status) return
     lock.current = true
     setBusy(true)
     setFailure('')
+    setTarget(nextTarget)
     setNotice(undefined)
     try {
-      const result = await applications.updateStatus(current.id, target)
+      const result = await applications.updateStatus(current.id, nextTarget)
       if (!mounted.current) return
       setCurrent(result.application)
       setTarget(result.application.status)
@@ -127,7 +128,6 @@ export function ApplicationDialog({
       lock.current = false
       if (mounted.current) {
         setBusy(false)
-        setConfirming(false)
       }
     }
   }
@@ -146,7 +146,8 @@ export function ApplicationDialog({
           <div className="eyebrow">ОТКЛИК № {current.id}</div>
           <h2 id={titleId}>{candidateName(current)}</h2>
         </div>
-        <button
+        <Button
+          variant="ghost"
           type="button"
           className="application-dismiss"
           aria-label="Закрыть карточку кандидата"
@@ -155,50 +156,34 @@ export function ApplicationDialog({
           autoFocus
         >
           <X size={22} />
-        </button>
+        </Button>
       </div>
-      <div className="application-job">
-        <span>ВАКАНСИЯ</span>
-        <strong>{current.vacancy.title}</strong>
-        {current.vacancy.status === 'closed' && (
-          <small>Вакансия закрыта. Работу с полученными откликами можно продолжить.</small>
-        )}
+      <div className="application-person-summary">
+        <span className="candidate-avatar">{initials(candidateName(current))}</span>
+        <div>
+          <strong>{current.vacancy.title}</strong>
+          <p>{displayDate(current.createdAt)}</p>
+        </div>
+        <Pill tone={current.status}>{applicationLabels[current.status]}</Pill>
       </div>
-      <CandidateContacts application={current} />
-      <dl className="application-dates">
-        <div>
-          <dt>Отклик получен</dt>
-          <dd>
-            {new Date(current.createdAt).toLocaleString('ru-RU', {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            })}
-          </dd>
-        </div>
-        <div>
-          <dt>Обновлён</dt>
-          <dd>
-            {new Date(current.updatedAt).toLocaleString('ru-RU', {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            })}
-          </dd>
-        </div>
-      </dl>
+      <CandidateContacts application={current} compact />
+      {current.vacancy.status === 'closed' && (
+        <p className="field-hint">
+          Вакансия закрыта. История отклика сохранена; этап можно обновить.
+        </p>
+      )}
       <section className="application-status-editor" aria-busy={busy}>
         <div className="application-current">
           <h3>Этап найма</h3>
-          <span className={`application-status ${current.status}`}>
+          <Pill tone={`application-status ${current.status}`}>
             {applicationLabels[current.status]}
-          </span>
+          </Pill>
         </div>
         {notice && (
-          <div
-            className={`application-notice ${notice.tone}`}
-            role={notice.tone === 'warning' ? 'alert' : 'status'}
-          >
-            {notice.text}
-          </div>
+          <Toast
+            message={notice.tone === 'success' ? 'Этап изменён' : notice.text}
+            onClose={() => setNotice(undefined)}
+          />
         )}
         {failure && (
           <div className="application-notice error" role="alert">
@@ -216,65 +201,32 @@ export function ApplicationDialog({
             </Button>
           </div>
         )}
-        <label htmlFor={statusId}>Новый этап</label>
-        <Select
-          label="Новый этап"
-          id={statusId}
-          value={target}
-          disabled={busy || needsRefresh || confirming}
-          onChange={(event) => {
-            setTarget(event.target.value as ApplicationStatus)
-            setNotice(undefined)
-          }}
-        >
+        <div className="stage-filters" role="group" aria-label="Изменить этап">
           {statuses.map((status) => (
-            <option key={status} value={status}>
-              {applicationLabels[status]}
-            </option>
-          ))}
-        </Select>
-        <p className="application-status-hint">
-          {mode === 'preview'
-            ? 'В демо статус изменится только в памяти браузера.'
-            : notificationExpected(target)
-              ? 'При изменении на этот этап бот отправит кандидату уведомление в MAX.'
-              : 'Этот этап сохраняется без автоматического уведомления кандидата.'}
-        </p>
-        {confirming && (
-          <div className="application-confirm" role="status">
-            Изменить статус на «{applicationLabels[target]}»?{' '}
-            {mode === 'max' && notificationExpected(target)
-              ? 'Кандидату будет отправлено уведомление.'
-              : ''}
-          </div>
-        )}
-        <div className="application-dialog-actions">
-          {confirming ? (
-            <>
-              <Button variant="secondary" disabled={busy} onClick={() => setConfirming(false)}>
-                Отмена
-              </Button>
-              <Button className="primary-button" disabled={busy} onClick={() => void save()}>
-                {busy ? 'Сохраняем…' : 'Подтвердить изменение'}
-              </Button>
-            </>
-          ) : (
             <Button
-              className="primary-button"
-              disabled={busy || needsRefresh || target === current.status}
-              onClick={() => setConfirming(true)}
+              key={status}
+              variant="secondary"
+              className={`filter-chip stage-${status}`}
+              aria-pressed={current.status === status}
+              disabled={busy || needsRefresh}
+              onClick={() => void save(status)}
             >
-              Изменить статус
+              {applicationLabels[status]}
             </Button>
-          )}
+          ))}
         </div>
+        <p className="application-status-hint">
+          {current.status === 'invited'
+            ? 'Кандидат увидит ваш контакт и получит его в сообщении'
+            : 'Кандидат увидит новый этап'}
+        </p>
         {blocker.state === 'blocked' && (
           <p role="status">Дождитесь завершения запроса перед выходом.</p>
         )}
       </section>
       <ShiftEditor
         application={current}
-        disabled={busy || needsRefresh || confirming}
+        disabled={busy || needsRefresh}
         onBusy={(value) => {
           lock.current = value
           setBusy(value)

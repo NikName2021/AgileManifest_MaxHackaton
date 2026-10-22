@@ -82,60 +82,17 @@ async function seed(session: Session) {
   })
 }
 describe('employer vacancy workflow', () => {
-  it('restores sorting from the URL and keeps it through filtering, refresh, history and clearing filters', async () => {
+  it('searches titles with debounce, hides the removed sort control and keeps status filtering', async () => {
     const session = createPreviewSession()
-    const first = await seed(session)
-    await session.vacancies.update(first.id, {
-      title: 'Бариста',
-      region_code: 'Тула',
-      category: 'Общепит',
-      schedule: 'seasonal',
-      salary_min: null,
-      salary_max: null,
-      description: null,
-      contact_info: null,
-    })
-    await seed(session)
-    const list = vi.spyOn(session.vacancies, 'list')
-    const router = start(session, '/vacancies?sort=oldest&status=draft&q=Тула')
-    const titles = () =>
-      screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
-    await screen.findByRole('heading', { name: 'Бариста' })
-    expect(titles()).toEqual(['Бариста', 'Повар'])
-    expect(screen.getByRole('combobox', { name: 'Сортировка вакансий' })).toHaveTextContent(
-      'Сначала старые',
-    )
-    fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('radio', { name: 'По названию' }))
-    expect(new URLSearchParams(router.state.location.search).get('q')).toBe('Тула')
-    expect(new URLSearchParams(router.state.location.search).get('status')).toBe('draft')
-    expect(list).toHaveBeenCalledOnce()
-    fireEvent.click(screen.getByRole('link', { name: /Бариста/ }))
-    await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
-    await act(() => router.navigate(-1))
-    await screen.findByRole('heading', { name: 'Бариста' })
-    expect(screen.getByRole('combobox')).toHaveTextContent('По названию')
-    fireEvent.focus(window)
-    await screen.findByRole('heading', { name: 'Бариста' })
-    expect(titles()).toEqual(['Бариста', 'Повар'])
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Нет такой вакансии' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'Сбросить фильтры' }))
-    expect(router.state.location.search).toBe('?sort=title')
-    expect(titles()).toEqual(['Бариста', 'Повар'])
-    fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('radio', { name: 'Сначала новые' }))
-    expect(router.state.location.search).toBe('')
-    expect(titles()).toEqual(['Повар', 'Бариста'])
-  })
-  it('falls back to newest for an invalid sort URL and treats reserved option names as literal search text', async () => {
-    const session = createPreviewSession()
-    await seed(session)
-    const router = start(session, '/vacancies?sort=unknown')
-    await screen.findByRole('heading', { name: 'Повар' })
-    expect(screen.getByRole('combobox')).toHaveTextContent('Сначала новые')
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'all' } })
-    expect(new URLSearchParams(router.state.location.search).get('q')).toBe('all')
-    expect(screen.getByRole('heading', { name: 'Ничего не нашлось' })).toBeInTheDocument()
+    for (let i = 0; i < 6; i++) await seed(session)
+    const router = start(session, '/vacancies?status=draft')
+    await screen.findAllByRole('heading', { name: 'Повар' }, { timeout: 2500 })
+    expect(screen.queryByRole('combobox', { name: 'Сортировка вакансий' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Тула' } })
+    await screen.findByText('Ничего не нашлось', {}, { timeout: 2500 })
+    expect(router.state.location.search).toContain('status=draft')
+    fireEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }))
+    await screen.findAllByRole('heading', { name: 'Повар' }, { timeout: 2500 })
   })
   it('shows confirmed delivery when a read resolves a lost response and clears the obsolete error', async () => {
     const session = createPreviewSession()
@@ -155,7 +112,7 @@ describe('employer vacancy workflow', () => {
       }),
     )
     await screen.findByText(/Проверка подтвердила отправку карточки/)
-    expect(screen.getByRole('heading', { name: 'Вакансия опубликована' })).toBeInTheDocument()
+    expect(screen.getByText('Опубликована', { selector: '.vacancy-status' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(publish).toHaveBeenCalledOnce()
   })
@@ -190,7 +147,7 @@ describe('employer vacancy workflow', () => {
     await act(() => router.navigate('/vacancies'))
     expect(router.state.location.pathname).toBe(`/vacancies/${row.id}`)
     await act(() => resolve({ ...row, cardMessageId: 'confirmed-card' }))
-    await screen.findByRole('heading', { name: 'Вакансия опубликована' })
+    await screen.findByText('Опубликована', { selector: '.vacancy-status' })
     expect(screen.queryByRole('button', { name: 'Повторить отправку' })).not.toBeInTheDocument()
     expect(router.state.location.pathname).toBe(`/vacancies/${row.id}`)
   })
@@ -198,6 +155,7 @@ describe('employer vacancy workflow', () => {
     'cancels resend if the preflight read reports %s',
     async (state) => {
       const session = createPreviewSession()
+      session.mode = 'max'
       const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
       vi.spyOn(session.vacancies, 'get')
         .mockResolvedValueOnce(row)
@@ -225,6 +183,7 @@ describe('employer vacancy workflow', () => {
   )
   it('locks resend after a failed state check and restores it only after a successful read and renewed chat check', async () => {
     const session = createPreviewSession()
+    session.mode = 'max'
     const row = { ...(await seed(session)), status: 'published' as const, cardMessageId: null }
     vi.spyOn(session.applications, 'forVacancy').mockResolvedValue({ vacancy: row, items: [] })
     const get = vi
@@ -292,7 +251,9 @@ describe('employer vacancy workflow', () => {
       fireEvent.click(await screen.findByRole('link', { name: 'Создать копию' }))
       await screen.findByRole('heading', { name: 'Копия вакансии' })
       expect(screen.getByLabelText(/Название вакансии/)).toHaveValue('Повар')
-      expect(screen.getByLabelText(/Город или регион/)).toHaveValue('Тула')
+      await waitFor(() =>
+        expect(screen.getByRole('combobox', { name: 'Регион' })).toHaveTextContent('Тула'),
+      )
       expect(screen.getByLabelText(/Сфера деятельности/)).toHaveValue('Общепит')
       expect(screen.getByLabelText(/Тип занятости/)).toHaveTextContent('Сезонная работа')
       expect(screen.getByLabelText(/Зарплата от/)).toHaveValue('50000')
@@ -413,7 +374,10 @@ describe('employer vacancy workflow', () => {
     const create = vi.spyOn(session.vacancies, 'create')
     start(session, '/vacancies/new')
     type('Название вакансии', 'Повар')
-    type('Регион', 'Тула')
+    const region = screen.getByRole('combobox', { name: 'Регион' })
+    await waitFor(() => expect(region).toBeEnabled())
+    fireEvent.click(region)
+    fireEvent.click(screen.getByRole('radio', { name: 'Тульская область' }))
     type('Зарплата от', '50 000')
     fireEvent.click(screen.getByRole('button', { name: 'Посмотреть ориентир' }))
     await screen.findByText(/Сейчас ориентир недоступен/)
@@ -439,7 +403,7 @@ describe('employer vacancy workflow', () => {
     const session = createPreviewSession()
     const publish = vi.spyOn(session.vacancies, 'publish')
     const router = start(session)
-    fireEvent.click(await screen.findByRole('link', { name: /Создать первую/ }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Создать вакансию' }))
     type('Название вакансии', 'Повар в кафе')
     type('Зарплата от', '50 000')
     type('Контакт для связи', 'Анна, MAX')
@@ -456,7 +420,7 @@ describe('employer vacancy workflow', () => {
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Подтвердить публикацию' }),
     )
-    await screen.findByRole('heading', { name: 'Демо-публикация готова' })
+    await screen.findByText('Опубликована', { selector: '.vacancy-status' })
     expect(publish).toHaveBeenCalledOnce()
     expect(screen.queryByRole('link', { name: 'Редактировать' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Закрыть вакансию' }))
@@ -465,7 +429,7 @@ describe('employer vacancy workflow', () => {
     await act(() => router.navigate('/vacancies?status=closed&q=повар'))
     expect(await screen.findByRole('heading', { name: 'Старший повар' })).toBeInTheDocument()
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'садовник' } })
-    expect(await screen.findByText('Ничего не нашлось')).toBeInTheDocument()
+    expect(await screen.findByText('Ничего не нашлось', {}, { timeout: 2500 })).toBeInTheDocument()
     expect(fetcher).not.toHaveBeenCalled()
   })
   it('validates input and protects an unsaved form during navigation', async () => {

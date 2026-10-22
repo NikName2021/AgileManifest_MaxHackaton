@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { Component, type ReactNode } from 'react'
 import { AppearanceProvider } from '../features/appearance/AppearanceProvider'
 import { SessionGate } from '../features/session/SessionGate'
@@ -9,7 +9,6 @@ import { MyApplicationsPage } from '../pages/MyApplicationsPage'
 import { WorkerProfilePage } from '../pages/WorkerProfilePage'
 import '../features/candidate/candidate.css'
 import { Shell } from './Shell'
-import { OverviewPage } from '../pages/OverviewPage'
 import { ApplicationsPage } from '../pages/ApplicationsPage'
 import { TeamPage } from '../pages/TeamPage'
 import { SubscriptionsPage } from '../pages/SubscriptionsPage'
@@ -46,7 +45,7 @@ const router = createBrowserRouter([
       { path: 'my-applications', element: <MyApplicationsPage /> },
       { path: 'profile', element: <WorkerProfilePage /> },
       { path: 'subscriptions', element: <SubscriptionsPage /> },
-      { index: true, element: <OverviewPage /> },
+      { index: true, element: <Navigate to="/vacancies" replace /> },
       { path: 'vacancies', element: <VacanciesPage /> },
       { path: 'vacancies/new', element: <VacancyFormPage /> },
       { path: 'vacancies/:id', element: <VacancyPage /> },

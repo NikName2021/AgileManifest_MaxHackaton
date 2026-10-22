@@ -16,6 +16,7 @@ export interface Vacancy {
   title: string
   regionCode: string
   category: string
+  categoryDetail?: string | null
   schedule: 'seasonal' | 'temporary' | 'permanent'
   salaryMin: number | null
   salaryMax: number | null

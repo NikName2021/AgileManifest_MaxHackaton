@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useBeforeUnload, useBlocker, useParams } from 'react-router-dom'
+import { Link, useBeforeUnload, useBlocker, useParams, useLocation } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
-import { ArrowUpRight, CheckCircle2, Clock3, Copy, Pencil, Send } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Copy, Pencil, Send } from 'lucide-react'
 import { useSession } from '../features/session/context'
 import { SalaryBenchmark } from '../features/benchmark/SalaryBenchmark'
 import { VacancyPoster } from '../features/poster/VacancyPoster'
-import { VacancySteps } from '../features/vacancies/VacancySteps'
+import { Toast } from '../shared/ui/Toast'
+import { Modal } from '../shared/ui/Modal'
+import { displayDate } from '../shared/format'
+import { loadVacancyHiringSummary } from '../features/overview/loadSummary'
 import { cardTextLength } from '../features/vacancies/model'
 import {
   VacancyFailure,
@@ -17,7 +20,6 @@ import { useResource } from '../shared/api/useResource'
 import { config } from '../shared/config'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import { NotFoundPage } from './NotFoundPage'
-import { VacancyHiringSummary } from '../features/overview/VacancyHiringSummary'
 
 export function VacancyPage() {
   const { id: routeId } = useParams()
@@ -28,7 +30,7 @@ export function VacancyPage() {
   return <VacancyDetails key={routeId} id={id} />
 }
 function VacancyDetails({ id }: { id: number }) {
-  const { vacancies, mode } = useSession()
+  const { vacancies, applications, mode } = useSession()
   const load = useCallback((signal: AbortSignal) => vacancies.get(id, signal), [id, vacancies])
   const { result, reload, replace } = useResource(load, String(id))
   const [confirm, setConfirm] = useState<'publish' | 'resend' | 'close' | null>(null)
@@ -36,7 +38,14 @@ function VacancyDetails({ id }: { id: number }) {
   const [failure, setFailure] = useState<unknown>()
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [checkedChat, setCheckedChat] = useState(false)
-  const [notice, setNotice] = useState('')
+  const location = useLocation()
+  const [notice, setNotice] = useState(location.state?.saved ? 'Сохранено' : '')
+  const [posterOpen, setPosterOpen] = useState(false)
+  const loadStats = useCallback(
+    (signal: AbortSignal) => loadVacancyHiringSummary(applications, id, signal),
+    [applications, id],
+  )
+  const stats = useResource(loadStats, String(id))
   const lock = useRef(false),
     mounted = useRef(true)
   const blocker = useBlocker(() => lock.current)
@@ -115,6 +124,13 @@ function VacancyDetails({ id }: { id: number }) {
       const updated = await vacancies[action === 'resend' ? 'publish' : action](id)
       if (mounted.current) {
         replace(updated)
+        setNotice(
+          action === 'close'
+            ? 'Вакансия закрыта'
+            : mode === 'preview'
+              ? 'Демо-публикация сохранена'
+              : 'Карточка отправлена в MAX',
+        )
         setConfirm(null)
       }
     } catch (error) {
@@ -150,13 +166,10 @@ function VacancyDetails({ id }: { id: number }) {
     <>
       <div className="page-heading vacancies-heading">
         <div>
-          <div className="eyebrow">
-            {vacancy.status === 'draft' ? 'ШАГ 2 · ПРОВЕРЬТЕ ПЕРЕД ПУБЛИКАЦИЕЙ' : 'ВАША ВАКАНСИЯ'}
-          </div>
+          <div className="eyebrow">КАБИНЕТ РАБОТОДАТЕЛЯ</div>
           <h1>{vacancy.status === 'draft' ? 'Всё выглядит верно?' : 'Детали вакансии'}</h1>
           <p>
-            Вакансия № {vacancy.id} · Создана{' '}
-            {new Date(vacancy.createdAt).toLocaleDateString('ru-RU')}
+            Вакансия № {vacancy.id} · Создана {displayDate(vacancy.createdAt)}
           </p>
         </div>
         {mode === 'max' && vacancy.status === 'published' && !vacancy.cardMessageId ? (
@@ -165,41 +178,60 @@ function VacancyDetails({ id }: { id: number }) {
           <VacancyStatusBadge status={vacancy.status} />
         )}
       </div>
-      {vacancy.status === 'draft' && <VacancySteps current={2} />}
       {Boolean(failure) && <VacancyFailure error={failure} />}
-      {notice && (
-        <div className="vacancy-notice" role="status">
-          <p>{notice}</p>
-        </div>
+      {notice && <Toast message={notice} onClose={() => setNotice('')} />}
+      {posterOpen && (
+        <Modal title="QR-плакат" onClose={() => setPosterOpen(false)}>
+          <VacancyPoster key={vacancy.id} id={vacancy.id} />
+        </Modal>
       )}
       <div className="vacancy-detail-layout">
         <div className="vacancy-detail-main">
           <VacancyPreview vacancy={vacancy} />
-          <SalaryBenchmark position={vacancy.title} region={vacancy.regionCode ?? ''} />
-          {vacancy.status === 'published' && <VacancyPoster key={vacancy.id} id={vacancy.id} />}
+          {vacancy.contactInfo && (
+            <section className="surface-panel">
+              <h2>Ваш контакт для кандидатов</h2>
+              <p>{vacancy.contactInfo}</p>
+              <small>Откроется после приглашения кандидата.</small>
+            </section>
+          )}
         </div>
         <aside className="vacancy-side-panel" aria-busy={busy}>
+          {vacancy.status === 'published' && (
+            <>
+              {vacancy.applyUrl && (
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(vacancy.applyUrl!)
+                      setNotice('Ссылка скопирована')
+                    } catch {
+                      setNotice('Не удалось скопировать ссылку')
+                    }
+                  }}
+                >
+                  <Copy size={18} />
+                  Скопировать ссылку для MAX
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setPosterOpen(true)}>
+                QR-плакат
+              </Button>
+            </>
+          )}
           <Button asChild variant="secondary">
-            <Link to={`/applications?vacancy=${id}`}>Отклики на вакансию</Link>
+            <Link to={`/applications?vacancy=${id}`}>
+              Отклики · {stats.result.state === 'ready' ? stats.result.data.total : '—'}
+            </Link>
           </Button>
           {vacancy.status === 'draft' && (
             <>
-              <span className="step-icon">
-                <Send size={24} />
-              </span>
-              <h2>Готовы искать команду?</h2>
-              <p>
-                Черновик сохранён. После публикации карточка придёт в чат с ботом — её можно
-                переслать в нужное сообщество.
-              </p>
-              <p>
-                Сначала начните личный чат с ботом. После публикации изменить вакансию будет нельзя.
-              </p>
               {tooLong && (
                 <div className="vacancy-notice is-error" role="alert">
                   <p>
                     Карточка слишком длинная для MAX. Сократите описание: вместе с заголовком и
-                    контактами она должна занимать до 4 000 символов.
+                    условиями она должна занимать до 4 000 символов.
                   </p>
                 </div>
               )}
@@ -217,36 +249,13 @@ function VacancyDetails({ id }: { id: number }) {
                   Редактировать
                 </Link>
               </Button>
-              <small>
-                Здесь показано содержание вакансии. Оформление сообщения в MAX может отличаться.
-              </small>
             </>
           )}
           {vacancy.status === 'published' && (
             <>
-              <span className="step-icon">
-                {vacancy.cardMessageId || mode === 'preview' ? (
-                  <CheckCircle2 size={25} />
-                ) : (
-                  <Clock3 size={25} />
-                )}
-              </span>
-              <h2>
-                {mode === 'preview'
-                  ? 'Демо-публикация готова'
-                  : vacancy.cardMessageId
-                    ? 'Вакансия опубликована'
-                    : 'Отправка не подтверждена'}
-              </h2>
-              <p>
-                {mode === 'preview'
-                  ? 'Это локальный пример. Сообщения в MAX не отправлялись.'
-                  : vacancy.cardMessageId
-                    ? 'Карточка отправлена в чат с ботом. Откройте MAX и перешлите её в нужные чаты.'
-                    : 'Сервис сохранил статус публикации, но не вернул подтверждение карточки. Проверьте чат с ботом и обновите данные.'}
-              </p>
-              {!vacancy.cardMessageId && (
+              {!vacancy.cardMessageId && mode === 'max' && (
                 <div className="publication-recovery">
+                  <h2>Отправка не подтверждена</h2>
                   <p>
                     Сначала проверьте чат с ботом. Если карточка уже там, повторно отправлять её не
                     нужно.
@@ -321,14 +330,15 @@ function VacancyDetails({ id }: { id: number }) {
             </a>
           )}
           {vacancy.status !== 'closed' && (
-            <button
+            <Button
+              variant="secondary"
               className="close-vacancy"
               type="button"
               disabled={busy || needsRefresh}
               onClick={() => setConfirm('close')}
             >
               Закрыть вакансию
-            </button>
+            </Button>
           )}
           {needsRefresh && (
             <p role="status">
@@ -345,9 +355,9 @@ function VacancyDetails({ id }: { id: number }) {
           {blocker.state === 'blocked' && (
             <p role="status">Дождитесь завершения запроса перед выходом.</p>
           )}
+          <SalaryBenchmark position={vacancy.title} region={vacancy.regionCode ?? ''} />
         </aside>
       </div>
-      <VacancyHiringSummary vacancy={vacancy} paused={busy || confirm !== null} />
       {vacancy.status === 'published' && (
         <Link className="text-link" to={`/team?vacancy=${vacancy.id}`}>
           Пригласить мою команду →
@@ -379,7 +389,7 @@ function VacancyDetails({ id }: { id: number }) {
               : confirm === 'publish'
                 ? mode === 'preview'
                   ? 'Демо изменит статус только в этом браузере. Карточка в MAX не отправится.'
-                  : 'Бот отправит карточку с описанием и контактами в ваш чат. Редактирование станет недоступно.'
+                  : 'Бот отправит карточку с описанием в ваш чат. Редактирование станет недоступно.'
                 : 'Новые отклики больше не будут приниматься. Это действие нельзя отменить; сама вакансия останется в списке.'}
           </p>
         </ConfirmDialog>

@@ -3,12 +3,14 @@ import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
 import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
 import { markViewed, recordEvents, type EventType } from './timeline.js';
+import { notifyCandidate, type NotifyResult } from './notify.js';
 import { hasForbiddenChars, normalizeSingleLine } from '../text.js';
 import { CONTACT_FORMAT_HINT, normalizeContact } from '../moderation.js';
 import { knownChannelId } from '../channels/service.js';
 import type { Application, User, Vacancy } from '@prisma/client';
 
-const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
+// Этапы, которые ставит работодатель. «Новый» — начальный этап отклика, вручную его не ставят.
+const EMPLOYER_STATUSES = ['contacted', 'invited', 'hired', 'rejected'];
 
 function statusLabel(status: string): string {
     const labels: Record<string, string> = {
@@ -21,23 +23,6 @@ function statusLabel(status: string): string {
     return labels[status] ?? status;
 }
 
-// После приглашения кандидату открывается контакт работодателя — он же приходит в сообщении.
-function statusMessageForCandidate(status: string, vacancyTitle: string, contactInfo: string | null): string | undefined {
-    const title = escapeMarkdown(vacancyTitle);
-    const contact = contactInfo ? `
-Контакт работодателя: ${escapeMarkdown(contactInfo)}` : '';
-    if (status === 'invited') {
-        return `Хорошие новости! Вас пригласили на вакансию «${title}». Работодатель свяжется с вами.${contact}`;
-    }
-    if (status === 'hired') {
-        return `Поздравляем! Вас приняли на вакансию «${title}».${contact}`;
-    }
-    if (status === 'rejected') {
-        return `По вакансии «${title}», к сожалению, вам отказали.`;
-    }
-    // contacted и возврат в new — без уведомления.
-    return undefined;
-}
 
 export function funnelButtons(applicationId: number): InlineButton[][] {
     return [
@@ -274,7 +259,7 @@ export async function handleStatusChangeFromChat(
     applicationId: number,
     status: string
 ) {
-    if (!VALID_STATUSES.includes(status)) return;
+    if (!EMPLOYER_STATUSES.includes(status)) return;
 
     const application = await db.application.findUnique({
         where: { id: applicationId },
@@ -288,18 +273,30 @@ export async function handleStatusChangeFromChat(
     if (application.vacancy.employer.maxUserId !== senderMaxUserId) return;
 
     const result = await applyStatusChange(applicationId, status);
-    const suffix = result.unchanged
-        ? ' (статус не изменился)'
-        : result.notified
-          ? ''
-          : ' (не удалось уведомить кандидата — сообщите ему лично)';
-    await maxApi.sendMessage(employerChatId, `Статус обновлён: ${statusLabel(status)}.${suffix}`);
+    const note = result.unchanged ? ' (статус не изменился)' : notificationNote(result.notification);
+    await maxApi.sendMessage(employerChatId, `Статус обновлён: ${statusLabel(status)}.${note}`);
+}
+
+// Пояснение для работодателя: что узнал кандидат. Пусто — сообщение ушло или сообщать было нечего.
+export function notificationNote(notification: NotifyResult): string {
+    switch (notification.outcome) {
+        case 'deferred':
+            return ' Кандидату придёт одно сообщение с итоговым этапом через пару минут — чтобы не засыпать его уведомлениями.';
+        case 'no_chat':
+            return ' Кандидат не запускал бота в MAX, поэтому сообщение ему не доставить — свяжитесь с ним по контакту из отклика.';
+        case 'failed':
+            return ' Не удалось отправить сообщение кандидату — сообщите ему лично.';
+        default:
+            return '';
+    }
 }
 
 export interface ApplyStatusChangeResult {
     application: Application & { vacancy: Vacancy; candidate: User };
+    // Сообщение кандидату ушло сейчас (для совместимости; подробности — в notification).
     notified: boolean;
     notifyError?: string;
+    notification: NotifyResult;
     // Статус уже был таким — ни записи, ни повторного уведомления.
     unchanged?: boolean;
     // Этот найм заполнил все места (headcount) — вакансия закрыта автоматически.
@@ -318,33 +315,15 @@ export async function applyStatusChange(applicationId: number, status: string): 
         include: { vacancy: true, candidate: true },
     });
     if (changed.count === 0) {
-        return { application, notified: false, unchanged: true };
+        return { application, notified: false, notification: { outcome: 'none' }, unchanged: true };
     }
     // Смена этапа означает, что работодатель отклик видел (в том числе кнопкой в чате).
     await recordEvents(db, [applicationId], `status:${status}` as EventType);
     await markViewed([applicationId]);
 
-    const notification = await notifyCandidate(application, status);
+    const notification = await notifyCandidate(applicationId);
     const vacancyClosed = status === 'hired' ? await closeIfFilled(application.vacancyId) : false;
-    return { application, ...notification, vacancyClosed };
-}
-
-async function notifyCandidate(
-    application: Application & { vacancy: Vacancy; candidate: User },
-    status: string
-): Promise<{ notified: boolean; notifyError?: string }> {
-    const candidateText = statusMessageForCandidate(status, application.vacancy.title, application.vacancy.contactInfo);
-    // Фолбэк — только личный чат: последний chatId мог быть групповым.
-    const targetChatId = application.candidateChatId || application.candidate.dialogChatId;
-    if (!candidateText || !targetChatId) return { notified: false };
-
-    try {
-        await maxApi.sendMessage(targetChatId, candidateText);
-        return { notified: true };
-    } catch (err: any) {
-        console.error('failed to notify candidate about status change', application.id, err);
-        return { notified: false, notifyError: err?.message ?? String(err) };
-    }
+    return { application, notified: notification.outcome === 'sent', notifyError: notification.error, notification, vacancyClosed };
 }
 
 // Все места заняты — закрываем вакансию и вежливо отвечаем тем, кто ещё ждёт (Новый, На связи).
@@ -368,7 +347,8 @@ async function closeIfFilled(vacancyId: number): Promise<boolean> {
     });
     await db.application.updateMany({
         where: { id: { in: waiting.map((a) => a.id) }, status: { in: ['new', 'contacted'] } },
-        data: { status: 'rejected' },
+        // Вежливый отказ ниже и есть сообщение об этапе — отложенное «Отказ» не нужно.
+        data: { status: 'rejected', notifiedStatus: 'rejected', notifiedAt: new Date(), pendingNotifyAt: null },
     });
     await recordEvents(db, waiting.map((a) => a.id), 'status:rejected');
     const title = escapeMarkdown(vacancy.title);

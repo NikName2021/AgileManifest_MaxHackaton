@@ -24,10 +24,14 @@ export async function recordEvents(client: Client, applicationIds: number[], typ
   });
 }
 
-// Первый просмотр работодателем. Повторные просмотры время не меняют.
-export async function markViewed(applicationIds: number[], at = new Date()) {
-  if (applicationIds.length === 0) return;
-  await db.application.updateMany({ where: { id: { in: applicationIds }, viewedAt: null }, data: { viewedAt: at } });
+// Первый просмотр работодателем. Повторные просмотры время не меняют. Возвращает отклики, которые
+// просмотрены впервые, — кандидатам по ним уходит сообщение «работодатель посмотрел».
+export async function markViewed(applicationIds: number[], at = new Date()): Promise<number[]> {
+  if (applicationIds.length === 0) return [];
+  const fresh = await db.application.findMany({ where: { id: { in: applicationIds }, viewedAt: null }, select: { id: true } });
+  const ids = fresh.map((a) => a.id);
+  if (ids.length > 0) await db.application.updateMany({ where: { id: { in: ids }, viewedAt: null }, data: { viewedAt: at } });
+  return ids;
 }
 
 export type StepKey = 'applied' | 'viewed' | 'contacted' | 'invited' | 'shift_confirmed' | 'hired';

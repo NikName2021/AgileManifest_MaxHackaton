@@ -111,7 +111,7 @@ describe('подсказки бейджей', () => {
 });
 
 describe('сферы деятельности', () => {
-  it('синоним, опечатка и фраза относятся к сфере справочника; нераспознанное — «Другое» с исходным текстом', async () => {
+  it('синоним, опечатка и фраза относятся к сфере справочника; не из словаря — 400, текст в журнал', async () => {
     const saved = async (category: string) => {
       const v = await createVacancy({ category });
       return { category: v.category, categoryDetail: v.categoryDetail };
@@ -121,13 +121,21 @@ describe('сферы деятельности', () => {
     expect(await saved('кейтринг')).toEqual({ category: 'Общепит', categoryDetail: null });
     expect(await saved('Сфера общественного питания')).toEqual({ category: 'Общепит', categoryDetail: null });
     expect(await saved('работа в теплице')).toEqual({ category: 'Сельское хозяйство', categoryDetail: null });
-    expect(await saved('Ремонт  обуви')).toEqual({ category: 'Другое', categoryDetail: 'Ремонт обуви' });
-    expect(await saved('ремонт обуви')).toEqual({ category: 'Другое', categoryDetail: 'ремонт обуви' });
-    // Новых сфер не появляется, нераспознанное копится в журнале для пополнения синонимов.
+    expect(await saved('Другое')).toEqual({ category: 'Другое', categoryDetail: null });
+
+    // Не из словаря — вакансия не сохраняется, текст копится в журнале для пополнения синонимов.
+    for (const category of ['Ремонт  обуви', 'ремонт обуви']) {
+      const res = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'Мастер', category } });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.fields).toHaveProperty('category');
+    }
+    expect(await db.vacancy.count({ where: { title: 'Мастер' } })).toBe(0);
     expect(await db.categoryMiss.findMany({ select: { text: true, uses: true } })).toEqual([{ text: 'Ремонт обуви', uses: 2 }]);
 
-    const job = await publish({ category: 'Ремонт обуви' });
-    expect((await get(`/api/jobs/${job.id}`, B)).json()).toMatchObject({ category: 'Другое', categoryDetail: 'Ремонт обуви' });
+    const draft = await createVacancy({ category: 'кафе' });
+    const patched = await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { category: 'Ремонт обуви' } });
+    expect(patched.statusCode).toBe(400);
+    expect((await db.vacancy.findUniqueOrThrow({ where: { id: draft.id } })).category).toBe('Общепит');
   });
 
   it('GET /api/categories — справочник с «Другое» последней; suggest показывает, к чему отнесётся текст', async () => {

@@ -18,6 +18,7 @@ import { setShift, startShiftReminders } from './shifts/service.js';
 import { normalizeRegion } from './regions/dictionary.js';
 import { BADGE_GROUPS, MAX_BADGES_PER_VACANCY, resolveBadges, suggestBadges } from './vacancies/badges.js';
 import { loadTimelines, markViewed } from './application/timeline.js';
+import { scheduleViewedNotifications, startCandidateNotifications } from './application/notify.js';
 import { backfillRegionSubjects, listRegions, regionDto } from './regions/service.js';
 import { buildApplyDeepLink } from './vacancies/cardText.js';
 import type { Vacancy } from '@prisma/client';
@@ -43,7 +44,7 @@ import {
   badgeSuggestQuerySchema,
   suggestQuerySchema,
 } from './validation.js';
-import { backfillCategories, listCategories, NO_CATEGORY, resolveCategory, suggestCategories } from './categories/service.js';
+import { backfillCategories, listCategories, NO_CATEGORY, resolveCategory, suggestCategories, UNKNOWN_CATEGORY_MESSAGE } from './categories/service.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 // Экспорт для интеграционных тестов (app.inject без порта и без MAX).
@@ -75,7 +76,7 @@ function withApplyUrl(vacancy: Vacancy) {
     ...vacancy,
     subject: regionDto(vacancy.regionSubject),
     // В ответах — готовые объекты { key, emoji, label }; на вход PATCH/POST принимаются ключи.
-    badges: resolveBadges(vacancy.badges, vacancy.studentFriendly),
+    badges: resolveBadges(vacancy.badges),
     applyUrl: vacancy.status === 'published' ? buildApplyDeepLink(vacancy.id) : null,
   };
 }
@@ -141,6 +142,10 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
     return sendError(reply, 400, 'validation_error', 'invalid request body', zodFieldErrors(parsed.error.flatten()));
   }
   const body = parsed.data;
+  const category = body.category ? await resolveCategory(body.category) : { category: NO_CATEGORY, categoryDetail: null };
+  if (!category) {
+    return sendError(reply, 400, 'validation_error', 'unknown category', { category: [UNKNOWN_CATEGORY_MESSAGE] });
+  }
 
   const employer = await db.user.findUnique({ where: { id: request.sessionUserId! } });
   const vacancy = await db.vacancy.create({
@@ -149,7 +154,7 @@ app.post('/api/vacancies', { preHandler: requireAuth }, async (request, reply) =
       title: body.title,
       regionCode: body.region_code ?? '',
       regionSubject: normalizeRegion(body.region_code),
-      ...(body.category ? await resolveCategory(body.category) : { category: NO_CATEGORY, categoryDetail: null }),
+      ...category,
       schedule: body.schedule ?? 'temporary',
       salaryMin: body.salary_min ?? null,
       salaryMax: body.salary_max ?? null,
@@ -211,6 +216,10 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
     student_friendly: body.student_friendly ?? existing.studentFriendly,
     badges: body.badges ?? existing.badges,
   };
+  const category = body.category !== undefined ? await resolveCategory(body.category) : undefined;
+  if (category === null) {
+    return sendError(reply, 400, 'validation_error', 'unknown category', { category: [UNKNOWN_CATEGORY_MESSAGE] });
+  }
   const constraintCheck = checkMergedVacancyConstraints(merged);
   if (!constraintCheck.ok) {
     return sendError(reply, 400, 'validation_error', 'invalid request body', {
@@ -225,7 +234,7 @@ app.patch('/api/vacancies/:id', { preHandler: requireAuth }, async (request, rep
       title: merged.title,
       regionCode: merged.region_code,
       regionSubject: normalizeRegion(merged.region_code),
-      ...(body.category !== undefined ? await resolveCategory(body.category) : {}),
+      ...(category ?? {}),
       schedule: merged.schedule,
       salaryMin: merged.salary_min,
       salaryMax: merged.salary_max,
@@ -311,7 +320,7 @@ app.get('/api/vacancies/:id/applications', { preHandler: requireAuth }, async (r
     orderBy: { createdAt: 'desc' },
   });
   // Работодатель открыл список — для кандидата это этап «Работодатель посмотрел».
-  await markViewed(items.map((a) => a.id));
+  await scheduleViewedNotifications(await markViewed(items.map((a) => a.id)));
   return items.map(withMaxContactUrl);
 });
 
@@ -342,7 +351,7 @@ app.get('/api/applications', { preHandler: requireAuth }, async (request, reply)
     }),
   ]);
 
-  await markViewed(items.map((a) => a.id));
+  await scheduleViewedNotifications(await markViewed(items.map((a) => a.id)));
   return { items: items.map(withMaxContactUrl), total, limit, offset };
 });
 
@@ -455,6 +464,9 @@ app.patch('/api/applications/:id', { preHandler: requireAuth }, async (request, 
     },
     vacancy: { id: vacancy.id, title: vacancy.title, status: vacancy.status },
     notified: result.notified,
+    // sent | deferred | none | no_chat | failed — что узнал кандидат (антиспам: deferred до notifyAt).
+    notification: result.notification.outcome,
+    notifyAt: result.notification.at ?? null,
     unchanged: result.unchanged ?? false,
     vacancyClosed: result.vacancyClosed ?? false,
   });
@@ -600,6 +612,7 @@ async function start() {
     .catch((err) => app.log.error(err, 'category backfill failed'));
   startStaleVacancyReminders();
   startShiftReminders();
+  startCandidateNotifications();
   startChannelDigests();
 
   await app.listen({ port: config.port, host: '0.0.0.0' });

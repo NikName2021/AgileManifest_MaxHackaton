@@ -101,6 +101,11 @@ model Application {
   attendanceReminderSentAt DateTime?          @map("attendance_reminder_sent_at")
   // Первый просмотр работодателем (список откликов в мини-приложении или смена этапа).
   viewedAt                 DateTime?          @map("viewed_at")
+  // Уведомления кандидату (application/notify.ts): о чём сообщили последним (viewed или этап) и когда;
+  // pendingNotifyAt — когда отправить отложенное сообщение с итоговым этапом (антиспам).
+  notifiedStatus           String?            @map("notified_status")
+  notifiedAt               DateTime?          @map("notified_at")
+  pendingNotifyAt          DateTime?          @map("pending_notify_at")
   events                   ApplicationEvent[]
   createdAt                DateTime           @default(now()) @map("created_at")
   updatedAt                DateTime           @updatedAt @map("updated_at")
@@ -109,6 +114,7 @@ model Application {
   // GET /api/me/applications
   @@index([candidateUserId, createdAt(sort: Desc), id(sort: Desc)])
   @@index([partnerChannelId])
+  @@index([pendingNotifyAt])
   @@map("applications")
 }
 

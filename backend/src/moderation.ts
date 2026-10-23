@@ -3,12 +3,13 @@
 // остальных полях (название, описание, регион…) ссылки, телефоны, почта и @ники запрещены: контакт
 // работодателя открывается кандидату только после приглашения, и обходить это через описание нельзя.
 
-// Ссылки в контактах — только на мессенджеры и соцсети, где можно написать человеку.
-export const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru', 't.me', 'telegram.me', 'vk.com', 'vk.ru', 'm.vk.com', 'ok.ru', 'wa.me'];
+// Ссылки в контактах — только на MAX и соцсети, где можно написать человеку. Telegram не принимаем:
+// сервис работает в MAX, и контакт для связи должен вести туда же.
+export const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru', 'vk.com', 'vk.ru', 'm.vk.com', 'ok.ru', 'wa.me'];
 // Сколько контактов можно указать в одном поле контакта вакансии (через запятую).
 export const MAX_CONTACTS_PER_FIELD = 3;
 
-export const CONTACT_FORMAT_HINT = 'телефон (+7 900 123-45-67), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me';
+export const CONTACT_FORMAT_HINT = 'телефон (+7 900 123-45-67), @ник в MAX, e-mail или ссылка на max.ru, vk.com, ok.ru, wa.me';
 
 const HANDLE = /^@[A-Za-z][A-Za-z0-9_.]{2,31}$/;
 const EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$/;

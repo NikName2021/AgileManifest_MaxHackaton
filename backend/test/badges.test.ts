@@ -66,15 +66,20 @@ describe('бейджи вакансии', () => {
     expect((await db.vacancy.findFirstOrThrow()).badges).toEqual(['tickets_paid', 'housing_free', 'meals_3']);
   });
 
-  it('видны в каталоге, карточке вакансии и истории откликов; отметка «для студентов» — тоже бейдж', async () => {
+  it('видны в каталоге, карточке вакансии и истории откликов; «Подходит студентам» — отдельная отметка, не бейдж', async () => {
     const { id } = await publish({ badges: ['housing_free'], student_friendly: true });
     const job = (await app.inject({ method: 'GET', url: `/api/jobs/${id}`, headers: B.auth })).json();
-    expect(job.badges.map((b: { key: string }) => b.key)).toEqual(['housing_free', 'students_ok']);
-    expect((await app.inject({ method: 'GET', url: '/api/jobs', headers: B.auth })).json().items[0].badges).toHaveLength(2);
+    expect(job.badges.map((b: { key: string }) => b.key)).toEqual(['housing_free']);
+    expect(job.studentFriendly).toBe(true);
+    expect((await app.inject({ method: 'GET', url: '/api/badges' })).json().groups.flatMap((g: any) => g.items).map((b: any) => b.key)).not.toContain('students_ok');
+    const card = String(sendMessageMock.mock.calls.find((c) => String(c[1]).includes('Сборщик урожая'))?.[1]);
+    expect(card).toContain('🎓 Подходит студентам');
+    expect(card).toContain('🏠 Жильё бесплатно');
 
     await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: '+7 900 111-22-33' } });
     const history = (await app.inject({ method: 'GET', url: '/api/me/applications', headers: B.auth })).json();
-    expect(history.items[0].vacancy.badges.map((b: { key: string }) => b.key)).toEqual(['housing_free', 'students_ok']);
+    expect(history.items[0].vacancy).toMatchObject({ studentFriendly: true });
+    expect(history.items[0].vacancy.badges.map((b: { key: string }) => b.key)).toEqual(['housing_free']);
   });
 
   it('строка бейджей в карточке MAX и на плакате', async () => {
@@ -102,32 +107,26 @@ describe('бейджи вакансии', () => {
     const many = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: BADGE_KEYS.slice(0, 11) } });
     expect(many.statusCode).toBe(400);
     expect(many.json().error.fields).toHaveProperty('badges');
-    // «Подходит студентам» тоже бейдж и входит в лимит 4.
+    // «Подходит студентам» — не бейдж: 10 бейджей и отметка вместе можно, ключ students_ok — неизвестный.
     const withStudents = await app.inject({
       method: 'POST',
       url: '/api/vacancies',
       headers: A.auth,
       payload: { title: 'x', badges: ['housing_free', 'meals_3', 'tickets_paid', 'bar', 'by_sea', 'tips', 'pay_weekly', 'workwear', 'training', 'shifts'], student_friendly: true },
     });
-    expect(withStudents.statusCode).toBe(400);
-    expect(withStudents.json().error.fields).toHaveProperty('badges');
-    const fourWithStudents = await app.inject({
-      method: 'POST',
-      url: '/api/vacancies',
-      headers: A.auth,
-      payload: { title: 'x', badges: ['housing_free', 'meals_3', 'students_ok'], student_friendly: true },
-    });
-    expect(fourWithStudents.statusCode).toBe(201);
-    expect(fourWithStudents.json().badges).toHaveLength(3);
+    expect(withStudents.statusCode).toBe(201);
+    expect(withStudents.json()).toMatchObject({ studentFriendly: true });
+    expect(withStudents.json().badges).toHaveLength(10);
+    const oldKey = await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'x', badges: ['students_ok'] } });
+    expect(oldKey.statusCode).toBe(400);
 
     const draft = (await app.inject({ method: 'POST', url: '/api/vacancies', headers: A.auth, payload: { title: 'Черновик', badges: ['bar'] } })).json();
     const patched = (await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { badges: ['kitchen', 'tips'] } })).json();
     expect(patched.badges.map((b: { key: string }) => b.key)).toEqual(['tips', 'kitchen']);
-    // PATCH проверяет лимит на слиянии: 10 бейджей + включаемая студенческая отметка — 400.
+    // Отметка студентов в лимит бейджей не входит: к 10 бейджам её можно включить.
     await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { badges: ['housing_free', 'meals_3', 'tickets_paid', 'bar', 'by_sea', 'tips', 'pay_weekly', 'workwear', 'training', 'shifts'] } });
-    const overflow = await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { student_friendly: true } });
-    expect(overflow.statusCode).toBe(400);
-    expect(overflow.json().error.fields).toHaveProperty('badges');
+    const patchStudents = await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { student_friendly: true } });
+    expect(patchStudents.statusCode).toBe(200);
     await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { badges: ['kitchen', 'tips'] } });
     const untouched = (await app.inject({ method: 'PATCH', url: `/api/vacancies/${draft.id}`, headers: A.auth, payload: { title: 'Повар' } })).json();
     expect(untouched.badges.map((b: { key: string }) => b.key)).toEqual(['tips', 'kitchen']);

@@ -718,7 +718,9 @@ html:has(dialog[open]) {
     padding: 28px 24px;
   }
   .mobile-account-actions {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
   }
   .vacancy-editor-layout {

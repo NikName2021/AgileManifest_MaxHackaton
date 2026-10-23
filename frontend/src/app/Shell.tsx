@@ -123,6 +123,16 @@ export function Shell() {
       void navigate(backTo, { state: { catalogSearch } })
     })
   }, [bridge, navigate, pathname, title, backTo, home, catalogSearch])
+  const themeButton = (
+    <Button
+      variant="secondary"
+      className="icon-button theme-toggle"
+      aria-label={dark ? 'Включить светлую тему' : 'Включить тёмную тему'}
+      onClick={() => setPreference(dark ? 'light' : 'dark')}
+    >
+      {dark ? <Sun size={20} /> : <Moon size={20} />}
+    </Button>
+  )
   const accountActions = (
     <div className="sidebar-account-actions">
       <Button
@@ -133,14 +143,7 @@ export function Shell() {
       >
         Выйти
       </Button>
-      <Button
-        variant="secondary"
-        className="icon-button theme-toggle"
-        aria-label={dark ? 'Включить светлую тему' : 'Включить тёмную тему'}
-        onClick={() => setPreference(dark ? 'light' : 'dark')}
-      >
-        {dark ? <Sun size={20} /> : <Moon size={20} />}
-      </Button>
+      {themeButton}
     </div>
   )
   const account = (
@@ -197,7 +200,18 @@ export function Shell() {
         >
           <div className="page-tools">
             <PullToRefresh key={pathname + search} target={main} />
-            <div className="mobile-account-actions">{accountActions}</div>
+            <div className="mobile-account-actions">
+              {themeButton}
+              <Button
+                variant="secondary"
+                className="icon-button mobile-logout"
+                aria-label="Выйти"
+                title="Выйти"
+                onClick={switchCabinet}
+              >
+                <LogOut size={20} aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           {(inVacancy || (inJob && !applying)) && (
             <Link className="back-link" to={backTo}>

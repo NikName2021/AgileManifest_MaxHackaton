@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { BadgeCheck, ArrowRight } from 'lucide-react'
 import { useSession } from '../features/session/context'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import { Modal } from '../shared/ui/Modal'
@@ -14,6 +14,7 @@ import '../features/team/team.css'
 
 export function TeamPage() {
   const { team, vacancies, mode, loadApplicationExamples } = useSession()
+  const invalidate = useInvalidateResources()
   const [params] = useSearchParams()
   const load = useCallback((signal: AbortSignal) => team!.list(signal), [team])
   const people = useResource(load, 'team')
@@ -53,7 +54,7 @@ export function TeamPage() {
     },
     [team, jobIds],
   )
-  const invites = useResource(loadInvites, jobIds)
+  const invites = useResource(loadInvites, `team:invites:${jobIds}`)
   const { refresh: refreshPeople } = people,
     { refresh: refreshJobs } = jobs,
     { refresh: refreshInvites } = invites
@@ -74,6 +75,7 @@ export function TeamPage() {
     setError(undefined)
     try {
       const result = await team!.invite(jobId, [member.candidate.id])
+      invalidate()
       const outcome = result.results.find((r) => r.candidateId === member.candidate.id)?.outcome
       if (outcome && ['sent', 'already_invited', 'already_applied'].includes(outcome))
         setSent((previous) => new Set([...previous, key]))
@@ -101,6 +103,7 @@ export function TeamPage() {
     setBusy(true)
     try {
       await team!.mark(m.candidate.id, !m.reliable)
+      invalidate()
       people.refresh()
       setNotice('Сохранено')
     } catch (e) {

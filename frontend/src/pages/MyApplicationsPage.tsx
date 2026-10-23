@@ -53,7 +53,7 @@ export function MyApplicationsPage() {
   )
   const counts = useResource(loadCounts, 'worker-stage-counts')
   useRefreshOnReturn(counts.refresh)
-  const resource = useResource(load, `${status}:${offset}`)
+  const resource = useResource(load, `worker:applications:${status}:${offset}`)
   useRefreshOnReturn(resource.refresh)
   const { result } = resource
   return (

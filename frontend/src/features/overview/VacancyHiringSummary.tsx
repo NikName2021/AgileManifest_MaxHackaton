@@ -19,7 +19,10 @@ export function VacancyHiringSummary({
     (signal: AbortSignal) => loadVacancyHiringSummary(applications, vacancy.id, signal),
     [applications, vacancy.id],
   )
-  const { result, refresh, isRefreshing, refreshError } = useResource(load, String(vacancy.id))
+  const { result, refresh, isRefreshing, refreshError } = useResource(
+    load,
+    `employer:vacancy-stats:${vacancy.id}`,
+  )
   useRefreshOnReturn(refresh, paused || result.state === 'loading' || isRefreshing)
   return (
     <div className="vacancy-hiring-summary">

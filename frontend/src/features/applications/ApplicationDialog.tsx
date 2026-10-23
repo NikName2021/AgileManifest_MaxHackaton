@@ -1,3 +1,4 @@
+import { useInvalidateResources } from '../../shared/api/useResource'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useBeforeUnload, useBlocker } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
@@ -29,6 +30,7 @@ export function ApplicationDialog({
   onChanged: (notice: StatusNotice) => void
 }) {
   const { applications, mode } = useSession()
+  const invalidate = useInvalidateResources()
   const [current, setCurrent] = useState(application)
   const [target, setTarget] = useState<ApplicationStatus>(application.status)
   const [busy, setBusy] = useState(false)
@@ -109,6 +111,7 @@ export function ApplicationDialog({
     setNotice(undefined)
     try {
       const result = await applications.updateStatus(current.id, nextTarget)
+      invalidate()
       if (!mounted.current) return
       setCurrent(result.application)
       setTarget(result.application.status)

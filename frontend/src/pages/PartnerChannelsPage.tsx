@@ -12,7 +12,7 @@ import { scheduleLabels } from '../features/vacancies/model'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RegionSelect } from '../shared/ui/RegionSelect'
 import { useSession } from '../features/session/context'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import type { PartnerChannel, ChannelInput } from '../features/partners/api'
 import '../features/partners/partners.css'
@@ -25,6 +25,7 @@ function ChannelEditor({
   onEditing: (id: number, active: boolean) => void
 }) {
   const { partners } = useSession()
+  const invalidate = useInvalidateResources()
   const [current, setCurrent] = useState(channel)
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -42,6 +43,7 @@ function ChannelEditor({
     setError(undefined)
     try {
       const result = await partners!.update(current.id, input)
+      invalidate()
       setCurrent(result)
       setNotice(
         input.active !== undefined
@@ -62,6 +64,7 @@ function ChannelEditor({
   return (
     <article
       className={`partner-card${!current.active || current.removed ? ' is-inactive' : ''}`}
+      data-refresh-lock={editing || busy}
       aria-busy={busy}
     >
       <div className="channel-heading">

@@ -1579,9 +1579,6 @@ p {
   border: 0;
   padding: 24px;
 }
-.main-content:has(.candidate-profile-form) {
-  max-width: 820px;
-}
 .cabinet-choice-heading h1 {
   font-size: 36px;
   font-weight: 500;

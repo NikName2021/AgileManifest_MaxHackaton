@@ -25,7 +25,7 @@ const filters = [
 ]
 export function VacanciesPage() {
   const { vacancies, applications } = useSession()
-  const resource = useResource(vacancies.list, 'list')
+  const resource = useResource(vacancies.list, 'employer:vacancies')
   const [params, setParams] = useSearchParams()
   const [term, setTerm] = useState(params.get('q') ?? '')
   const [notice, setNotice] = useState('')
@@ -55,7 +55,7 @@ export function VacanciesPage() {
     },
     [applications, ids],
   )
-  const stats = useResource(loadStats, ids)
+  const stats = useResource(loadStats, `employer:vacancy-counts:${ids}`)
   const catalog = useCategories()
   const regionName = useRegionName()
   const { refresh: refreshRows } = resource,

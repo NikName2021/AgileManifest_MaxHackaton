@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, BriefcaseBusiness, Search, GraduationCap } from 'lucide-react'
+import { ArrowRight, BriefcaseBusiness, Search, GraduationCap, CircleHelp } from 'lucide-react'
 import { CabinetContext, type Cabinet } from './context'
 import { Brand } from '../../shared/ui/Brand'
 import { useSession } from '../session/context'
 import { bindBackButton } from '../../shared/max/bridge'
 import { Button } from '@maxhub/max-ui'
 import { MaxLogo } from '../../shared/ui/MaxLogo'
+import { Modal } from '../../shared/ui/Modal'
 
 function isWorkerPath(path: string) {
   return /^\/(jobs|my-applications|profile|subscriptions)(\/|$)/.test(path)
@@ -21,6 +22,7 @@ function home(value: Cabinet) {
 export function CabinetGate({ children }: { children: ReactNode }) {
   // Deliberately scoped to this authenticated launch. A new launch always asks again.
   const [cabinet, setCabinet] = useState<Cabinet | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const { pathname, search } = useLocation()
   const navigate = useNavigate()
   const { bridge, mode } = useSession()
@@ -95,6 +97,41 @@ export function CabinetGate({ children }: { children: ReactNode }) {
             <p className="vacancy-notice">
               Демо: используются примеры, сообщения в MAX не отправляются.
             </p>
+          )}
+          <Button
+            variant="ghost"
+            className="cabinet-help"
+            iconBefore={<CircleHelp size={18} />}
+            onClick={() => setHelpOpen(true)}
+          >
+            Как работает Сезон
+          </Button>
+          {helpOpen && (
+            <Modal title="Как работает Сезон" onClose={() => setHelpOpen(false)}>
+              <div className="cabinet-help-content">
+                <section>
+                  <h3>Работнику</h3>
+                  <p>
+                    Выберите вакансию, проверьте условия и оставьте контакт. Статус будет виден в
+                    «Моих откликах». Подписки помогут узнавать о новых вакансиях.
+                  </p>
+                </section>
+                <section>
+                  <h3>Работодателю</h3>
+                  <p>
+                    Создайте и опубликуйте вакансию. В «Откликах» связывайтесь с кандидатами и
+                    отмечайте этап найма. Приглашайте проверенных сотрудников из «Команды».
+                  </p>
+                </section>
+                <section>
+                  <h3>Партнёру</h3>
+                  <p>
+                    Добавьте бота в канал MAX и разрешите публикацию сообщений. В кабинете включите
+                    автопубликацию и сохраните фильтры подходящих вакансий.
+                  </p>
+                </section>
+              </div>
+            </Modal>
           )}
         </div>
       </main>

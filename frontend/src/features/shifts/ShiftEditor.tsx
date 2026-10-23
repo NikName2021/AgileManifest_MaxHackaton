@@ -1,3 +1,4 @@
+import { useInvalidateResources } from '../../shared/api/useResource'
 import { useRef, useState } from 'react'
 import { Button } from '@maxhub/max-ui'
 import { Input } from '../../shared/ui/Input'
@@ -20,6 +21,7 @@ export function ShiftEditor({
   onSaved: (application: Application, notice: StatusNotice) => void
 }) {
   const { applications, mode } = useSession()
+  const invalidate = useInvalidateResources()
   const [time, setTime] = useState(shiftInput(application.startAt))
   const [note, setNote] = useState(application.shiftNote ?? '')
   const [error, setError] = useState('')
@@ -45,6 +47,7 @@ export function ShiftEditor({
         start,
         clear ? null : note.trim() || null,
       )
+      invalidate()
       setTime(shiftInput(result.startAt))
       setNote(result.shiftNote ?? '')
       onSaved(

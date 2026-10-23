@@ -15,6 +15,7 @@ import { createCandidateRepository } from '../candidate/api'
 import { createTeamRepository } from '../team/api'
 import { createSubscriptionRepository } from '../subscriptions/api'
 import { createPartnerRepository } from '../partners/api'
+import { ResourceProvider } from '../../shared/api/ResourceProvider'
 
 type Issue =
   | 'outside'
@@ -123,7 +124,11 @@ export function SessionGate({ children }: { children: ReactNode }) {
     setState({ kind: 'ready', session: createPreviewSession() })
   }
   if (state.kind === 'ready')
-    return <SessionContext value={state.session}>{children}</SessionContext>
+    return (
+      <SessionContext value={state.session}>
+        <ResourceProvider>{children}</ResourceProvider>
+      </SessionContext>
+    )
   const isLoading = state.kind === 'loading'
   const message = isLoading
     ? ['Подключаем рабочее пространство', 'Проверяем запуск в MAX. Это займёт несколько секунд.']

@@ -9,7 +9,7 @@ import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
 import { RegionSelect } from '../shared/ui/RegionSelect'
 import { useSession } from '../features/session/context'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { CandidateError, Loading } from '../features/candidate/ui'
 import { scheduleLabels } from '../features/vacancies/model'
 import type { SubscriptionInput } from '../features/subscriptions/api'
@@ -18,6 +18,7 @@ import { ApiError } from '../shared/api/client'
 
 export function SubscriptionsPage() {
   const { subscriptions, mode } = useSession()
+  const invalidate = useInvalidateResources()
   const filters = useCategories()
   const categories =
     filters.result.state === 'ready'
@@ -48,6 +49,7 @@ export function SubscriptionsPage() {
     setMessage('')
     try {
       await work()
+      invalidate()
       setMessage(success)
       setDeleting(null)
       resource.reload()

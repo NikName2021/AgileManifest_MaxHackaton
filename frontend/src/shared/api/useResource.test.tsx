@@ -21,10 +21,10 @@ describe('background resource refresh', () => {
       expect(result.current.result).toEqual({ state: 'ready', data: ['previous'] }),
     )
     act(() => result.current.refresh())
-    expect(result.current.isRefreshing).toBe(true)
+    await waitFor(() => expect(result.current.isRefreshing).toBe(true))
     expect(result.current.result).toEqual({ state: 'ready', data: ['previous'] })
     await act(async () => reject(new ApiError('network')))
-    expect(result.current.isRefreshing).toBe(false)
+    await waitFor(() => expect(result.current.isRefreshing).toBe(false))
     expect(result.current.refreshError).toMatchObject({ kind: 'network' })
     expect(result.current.result).toEqual({ state: 'ready', data: ['previous'] })
     act(() => result.current.refresh())

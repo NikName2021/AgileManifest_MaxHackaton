@@ -36,7 +36,7 @@ export function VacancyLoading() {
 export function VacancyPreview({ vacancy }: { vacancy: Vacancy }) {
   const { candidate } = useSession()
   const regionName = useRegionName()
-  const profile = useResource(candidate.profile, 'preview-trust')
+  const profile = useResource(candidate.profile, 'account:profile')
   const n = vacancy.headcount ?? 0
   const word = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 'человека' : 'человек'
   const badges = displayedBadges(vacancy.badges, vacancy.studentFriendly)

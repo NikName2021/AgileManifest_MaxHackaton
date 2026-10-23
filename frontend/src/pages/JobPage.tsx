@@ -4,7 +4,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { ArrowLeft } from 'lucide-react'
 import { useSession } from '../features/session/context'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { ApiError } from '../shared/api/client'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
@@ -28,6 +28,7 @@ function ApplyForm({
   onExpand: () => void
 }) {
   const { candidate, mode } = useSession()
+  const invalidate = useInvalidateResources()
   const [contact, setContact] = useState(profile?.applicationContact ?? '')
   const [busy, setBusy] = useState(false),
     lock = useRef(false)
@@ -58,6 +59,7 @@ function ApplyForm({
         )
       } else {
         const result = await candidate.apply(job.id, contact)
+        invalidate()
         onSaved({
           ...job,
           canApply: false,
@@ -204,8 +206,8 @@ export function JobPage() {
         : Promise.reject(new ApiError('server', 404)),
     [candidate, id],
   )
-  const resource = useResource(load, id),
-    profile = useResource(candidate.profile, 'profile')
+  const resource = useResource(load, `worker:job:${id}`),
+    profile = useResource(candidate.profile, 'account:profile')
   useRefreshOnReturn(resource.refresh, busy)
   const { result } = resource
   const submitted = result.state === 'ready' && Boolean(result.data.myApplication)

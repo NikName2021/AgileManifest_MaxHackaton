@@ -15,13 +15,14 @@ import { candidateName, parsePositiveInteger } from '../features/applications/mo
 import { ApplicationDialog } from '../features/applications/ApplicationDialog'
 import { StageFilters } from '../features/applications/StageFilters'
 import { loadHiringSummary, loadVacancyHiringSummary } from '../features/overview/loadSummary'
-import { useResource } from '../shared/api/useResource'
+import { useResource, useInvalidateResources } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { RefreshStatus } from '../shared/ui/RefreshStatus'
 import { CandidateError, Loading, Pagination } from '../features/candidate/ui'
 
 export function ApplicationsPage() {
   const { applications, vacancies, mode, loadApplicationExamples } = useSession()
+  const invalidate = useInvalidateResources()
   const [params, setParams] = useSearchParams()
   const raw = params.get('status'),
     status = isApplicationStatus(raw) ? raw : undefined
@@ -36,7 +37,7 @@ export function ApplicationsPage() {
     },
     [applications, vacancyId, status, offset],
   )
-  const resource = useResource(load, `${vacancyId}:${status}:${offset}`)
+  const resource = useResource(load, `employer:applications:${vacancyId}:${status}:${offset}`)
   const options = useResource(vacancies.list, 'application-vacancies')
   const loadCounts = useCallback(
     (signal: AbortSignal) =>
@@ -45,7 +46,7 @@ export function ApplicationsPage() {
         : loadHiringSummary(applications, signal),
     [applications, vacancyId],
   )
-  const counts = useResource(loadCounts, String(vacancyId))
+  const counts = useResource(loadCounts, `employer:application-counts:${vacancyId}`)
   const [selected, setSelected] = useState<Application | null>(null)
   const [notice, setNotice] = useState('')
   const [sharing, setSharing] = useState(false)
@@ -109,6 +110,7 @@ export function ApplicationsPage() {
             setDemoBusy(true)
             try {
               await loadApplicationExamples()
+              invalidate()
               refresh()
               applicationChanged()
             } catch {

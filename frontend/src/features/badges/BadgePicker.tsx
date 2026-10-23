@@ -47,7 +47,7 @@ export function BadgePicker({
         : Promise.resolve([]),
     [query, exclude, mode],
   )
-  const suggestions = useResource(search, `${query}:${exclude}`)
+  const suggestions = useResource(search, `badge-suggestions:${query}:${exclude}`)
   const limit = result.state === 'ready' ? result.data.maxPerVacancy : 10
   const all = result.state === 'ready' ? result.data.groups.flatMap((g) => g.items) : []
   function toggle(key: string) {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
 import { hasForbiddenChars, isMeaningful, normalizeMultiLine, normalizeSingleLine, SALARY_MAX } from './text.js';
-import { BADGE_KEYS, MAX_BADGES_PER_VACANCY, shownBadgeCount } from './vacancies/badges.js';
+import { BADGE_KEYS, MAX_BADGES_PER_VACANCY } from './vacancies/badges.js';
 import { CONTACT_LINK_HOSTS, MAX_CONTACTS_PER_FIELD, findContactLike, normalizeContact, normalizeContactList } from './moderation.js';
 
 export const SCHEDULE_ENUM = z.enum(['seasonal', 'temporary', 'permanent']);
@@ -111,14 +111,6 @@ const vacancyBaseShape = {
     .optional(),
 };
 
-const BADGE_LIMIT_MESSAGE = `at most ${MAX_BADGES_PER_VACANCY} badges including student_friendly`;
-
-function checkBadgeCount(data: { badges?: string[]; student_friendly?: boolean }, ctx: z.RefinementCtx) {
-  if (shownBadgeCount(data.badges, data.student_friendly) > MAX_BADGES_PER_VACANCY) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: BADGE_LIMIT_MESSAGE, path: ['badges'] });
-  }
-}
-
 function checkSalaryRange<T extends { salary_min?: number | null; salary_max?: number | null }>(
   data: T,
   ctx: z.RefinementCtx
@@ -178,8 +170,7 @@ export const createVacancySchema = z
   .object(vacancyBaseShape)
   .strict()
   .superRefine(checkSalaryRange)
-  .superRefine(checkCardLength)
-  .superRefine(checkBadgeCount);
+  .superRefine(checkCardLength);
 
 // Межполевые проверки здесь невозможны (partial не видит сохранённых значений) —
 // они в checkMergedVacancyConstraints.
@@ -203,7 +194,12 @@ export const createApplicationSchema = z
 
 export const APPLICATION_STATUS_ENUM = z.enum(['new', 'contacted', 'invited', 'hired', 'rejected']);
 
-export const updateApplicationStatusSchema = z.object({ status: APPLICATION_STATUS_ENUM }).strict();
+// «Новый» — начальный этап, его ставит сервис при отклике; вручную вернуть отклик в «Новый» нельзя.
+export const EMPLOYER_STATUS_ENUM = z.enum(['contacted', 'invited', 'hired', 'rejected'], {
+  errorMap: () => ({ message: 'status must be one of: contacted, invited, hired, rejected' }),
+});
+
+export const updateApplicationStatusSchema = z.object({ status: EMPLOYER_STATUS_ENUM }).strict();
 
 // initData MAX — несколько сотен байт; потолок защищает проверку подписи от огромных строк.
 export const authMaxSchema = z
@@ -374,9 +370,6 @@ export function checkMergedVacancyConstraints(merged: {
     merged.salary_min > merged.salary_max
   ) {
     return { ok: false, field: 'salary_min', message: 'salary_min must be less than or equal to salary_max' };
-  }
-  if (shownBadgeCount(merged.badges, merged.student_friendly) > MAX_BADGES_PER_VACANCY) {
-    return { ok: false, field: 'badges', message: BADGE_LIMIT_MESSAGE };
   }
 
   const length = vacancyCardTextLength({

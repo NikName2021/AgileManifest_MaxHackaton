@@ -67,7 +67,7 @@ async function removeShowcase() {
 function checkData() {
   for (const v of VACANCIES) {
     for (const b of v.badges ?? []) if (!isBadgeKey(b)) throw new Error(`${v.key}: unknown badge ${b}`);
-    if (shownBadgeCount(v.badges, v.studentFriendly) > MAX_BADGES_PER_VACANCY) throw new Error(`${v.key}: too many badges`);
+    if (shownBadgeCount(v.badges) > MAX_BADGES_PER_VACANCY) throw new Error(`${v.key}: too many badges`);
     if (!normalizeRegion(v.region)) throw new Error(`${v.key}: region not recognised: ${v.region}`);
     // Те же правила модерации, что у API: контакты в тексте запрещены, контакт — в своём формате.
     for (const field of ['title', 'region', 'category', 'description']) {

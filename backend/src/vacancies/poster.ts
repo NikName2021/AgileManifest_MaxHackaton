@@ -47,9 +47,10 @@ export async function renderPosterSvg(vacancy: Vacancy, url: string): Promise<st
     `График: ${scheduleLabel(vacancy.schedule)}`,
     vacancy.regionCode ? `Где: ${vacancy.regionCode}` : null,
     vacancy.headcount ? `Нужно человек: ${vacancy.headcount}` : null,
+    vacancy.studentFriendly ? '🎓 Подходит студентам' : null,
   ].filter((l): l is string => l !== null).flatMap((l) => wrap(l, 38, 2));
   // На плакате — первые 4 бейджа, по два в строке: больше на листе A4 не читается.
-  const badges = resolveBadges(vacancy.badges, vacancy.studentFriendly).slice(0, 4);
+  const badges = resolveBadges(vacancy.badges).slice(0, 4);
   for (let i = 0; i < badges.length; i += 2) {
     details.push(badges.slice(i, i + 2).map((b) => `${b.emoji} ${b.label}`).join('   '));
   }

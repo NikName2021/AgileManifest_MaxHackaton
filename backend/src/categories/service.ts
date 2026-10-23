@@ -92,19 +92,25 @@ export function matchCategory(text: string): ResolvedCategory {
   return { name: OTHER_CATEGORY.name, match: 'other', detail };
 }
 
-// Сфера для сохранения в вакансии. Нераспознанный текст записывается в журнал промахов — по нему
-// команда добавляет синонимы, а вакансия получает «Другое» и исходный текст в category_detail.
-export async function resolveCategory(text: string): Promise<{ category: string; categoryDetail: string | null }> {
+export const UNKNOWN_CATEGORY_MESSAGE = 'category is not in the dictionary, pick one from GET /api/categories (or «Другое»)';
+
+// Нераспознанная сфера — в журнал промахов: по нему команда добавляет синонимы.
+export async function recordCategoryMiss(text: string): Promise<void> {
+  const detail = text.trim().replace(/\s+/g, ' ');
+  const normKey = normalizeForSearch(detail);
+  if (!normKey) return;
+  await db.categoryMiss.upsert({ where: { normKey }, update: { uses: { increment: 1 } }, create: { text: detail, normKey } });
+}
+
+// Сфера для сохранения в вакансии — только из справочника (название, синоним, опечатка, фраза или
+// явно «Другое»). null — текст не из словаря: вакансию с ним не сохраняем, текст пишем в журнал.
+export async function resolveCategory(text: string): Promise<{ category: string; categoryDetail: null } | null> {
   const resolved = matchCategory(text);
-  if (resolved.match === 'other' && resolved.detail) {
-    const normKey = normalizeForSearch(resolved.detail);
-    await db.categoryMiss.upsert({
-      where: { normKey },
-      update: { uses: { increment: 1 } },
-      create: { text: resolved.detail, normKey },
-    });
+  if (resolved.match === 'other') {
+    await recordCategoryMiss(text);
+    return null;
   }
-  return { category: resolved.name, categoryDetail: resolved.detail };
+  return { category: resolved.name, categoryDetail: null };
 }
 
 // Сфера для фильтра подписки или канала: только распознанная. null — текст не похож ни на одну
@@ -155,8 +161,9 @@ export async function backfillCategories(): Promise<number> {
     select: { id: true, category: true },
   });
   for (const row of rows) {
-    const { category, categoryDetail } = await resolveCategory(row.category);
-    await db.vacancy.update({ where: { id: row.id }, data: { category, categoryDetail } });
+    // Старые вакансии не удаляем: нераспознанная сфера становится «Другое» с исходным текстом.
+    const { name, detail } = matchCategory(row.category);
+    await db.vacancy.update({ where: { id: row.id }, data: { category: name, categoryDetail: detail } });
   }
   return rows.length;
 }

@@ -58,7 +58,8 @@ describe('сидер витрины', () => {
     // У владельца не было названия компании — на время демо он «Агрокомплекс «Южный»», а не имя из MAX.
     expect(harvest.employer).toMatchObject({ displayName: 'Агрокомплекс «Южный»', trusted: true, confirmedHires: 6 });
     expect(jobs.items.every((j: any) => j.employer.companyName === j.employer.displayName)).toBe(true);
-    expect(harvest.badges.map((b: any) => b.emoji)).toEqual(['🏠', '🍲', '🎫', '🎓']);
+    expect(harvest.badges.map((b: any) => b.emoji)).toEqual(['🏠', '🍲', '🎫']);
+    expect(harvest.studentFriendly).toBe(true);
     expect((await get(viewer, '/api/jobs?student_friendly=true')).total).toBeGreaterThanOrEqual(8);
     expect((await get(viewer, '/api/jobs/filters')).regions.length).toBeGreaterThanOrEqual(7);
 

@@ -86,7 +86,7 @@ function toJobDto(row: JobRow, viewerUserId: number, myApplication: MyApplicatio
     headcount: row.headcount,
     spotsLeft: row.headcount === null ? null : Math.max(0, row.headcount - row.hiredCount),
     studentFriendly: row.studentFriendly,
-    badges: resolveBadges(row.badges, row.studentFriendly),
+    badges: resolveBadges(row.badges),
     status: row.status,
     createdAt: row.createdAt,
     employer: { displayName: row.employerDisplayName, companyName: row.employerCompanyName, ...trust },
@@ -297,7 +297,7 @@ export async function listMyApplications(
     vacancy: {
       ...vacancy,
       contactInfo: CONTACT_OPEN_STATUSES.has(application.status) ? contactInfo : null,
-      badges: resolveBadges(vacancy.badges, vacancy.studentFriendly),
+      badges: resolveBadges(vacancy.badges),
       subject: regionDto(regionSubject),
       employer: { displayName: employer.companyName ?? employer.displayName, companyName: employer.companyName, ...trust.get(employerUserId)! },
     },

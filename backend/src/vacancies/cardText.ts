@@ -22,6 +22,7 @@ export interface VacancyCardFields {
 }
 
 export const TRUSTED_LINE = '✓ Надёжный работодатель';
+export const STUDENTS_LINE = '🎓 Подходит студентам';
 
 const RUB = new Intl.NumberFormat('ru-RU');
 
@@ -103,8 +104,7 @@ function capitalize(text: string): string {
 // Блоки: заголовок и отметка надёжности → оплата и условия → бейджи → описание → ссылка.
 export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: string | null = null): string {
   const place = [vacancy.regionCode || undefined, employmentLabel(vacancy.schedule)].filter(Boolean).join(' · ');
-  // «Подходит студентам» входит в строку бейджей (resolveBadges добавляет его по флагу).
-  const badges = badgesLine(resolveBadges(vacancy.badges, vacancy.studentFriendly));
+  const badges = badgesLine(resolveBadges(vacancy.badges));
 
   return joinBlocks([
     [`**${escapeMarkdown(vacancy.title)}**`, vacancy.trustedEmployer ? TRUSTED_LINE : undefined],
@@ -113,6 +113,8 @@ export function buildVacancyCardText(vacancy: VacancyCardFields, applyUrl: strin
       escapeMarkdown(place),
       // Общая квота набора, а не остаток свободных мест.
       vacancy.headcount ? `Набор: ${peopleCount(vacancy.headcount)}` : undefined,
+      // Отдельная отметка, не бейдж: по ней фильтруют каталог, подписки и каналы вузов.
+      vacancy.studentFriendly ? STUDENTS_LINE : undefined,
     ],
     [badges ? escapeMarkdown(badges) : undefined],
     [vacancy.description ? escapeMarkdown(vacancy.description) : undefined],

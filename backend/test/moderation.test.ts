@@ -56,9 +56,10 @@ describe('формат контакта', () => {
     expect(normalizeContact('@ivan_max')).toBe('@ivan_max');
     expect(normalizeContact('Ivan@Mail.ru')).toBe('ivan@mail.ru');
     expect(normalizeContact('max.ru/u/ivan')).toBe('https://max.ru/u/ivan');
-    // Telegram не принимаем — контакт для связи ведёт в MAX.
-    expect(normalizeContact('t.me/ivan')).toBeNull();
-    expect(normalizeContact('https://telegram.me/ivan')).toBeNull();
+    // Только MAX, телефон и e-mail: ссылки на другие мессенджеры и соцсети не принимаем.
+    for (const other of ['t.me/ivan', 'https://telegram.me/ivan', 'wa.me/79001234567', 'https://vk.com/ivan', 'ok.ru/profile/1']) {
+      expect(normalizeContact(other), other).toBeNull();
+    }
     expect(normalizeContact('https://max.ru/u/abc')).toBe('https://max.ru/u/abc');
     expect(normalizeContactList('+7 900 123-45-67; @ivan_max или ivan@mail.ru')).toBe('+7 900 123-45-67, @ivan_max, ivan@mail.ru');
   });

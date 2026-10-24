@@ -34,6 +34,10 @@ function setup(body: unknown, status = 200) {
   }
 }
 describe('applications API contract', () => {
+  it.each(['deferred', 'no_chat'])('preserves the %s notification reason', async (notification) => {
+    const { api } = setup({ ...dto, status: 'contacted', notified: false, notification })
+    expect(await api.updateStatus(3, 'contacted')).toMatchObject({ notification, notified: false })
+  })
   it('keeps nullable contact and name, drops chat and MAX IDs', () => {
     const parsed = parseApplication(dto)
     expect(parsed).toMatchObject({
@@ -98,8 +102,16 @@ describe('applications API contract', () => {
     expect(fetcher).toHaveBeenCalledOnce()
   })
   it('handles idempotent status responses without inventing delivery', async () => {
-    const { api } = setup({ ...dto, notified: false, unchanged: true })
-    expect(await api.updateStatus(3, 'new')).toMatchObject({ unchanged: true, notified: false })
+    const { api } = setup({ ...dto, status: 'contacted', notified: false, unchanged: true })
+    expect(await api.updateStatus(3, 'contacted')).toMatchObject({
+      unchanged: true,
+      notified: false,
+    })
+  })
+  it('rejects resetting an application to new without sending a request', async () => {
+    const { api, fetcher } = setup(dto)
+    await expect(api.updateStatus(3, 'new')).rejects.toMatchObject({ kind: 'contract' })
+    expect(fetcher).not.toHaveBeenCalled()
   })
   it('rejects missing notification flags and malformed pagination', async () => {
     const { api } = setup(dto)

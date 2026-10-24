@@ -1,3 +1,4 @@
+import { CONTACT_HINT, normalizeContact } from '../shared/contacts'
 import { Input } from '../shared/ui/Input'
 import { useRef, useState, type FormEvent } from 'react'
 import { Button } from '@maxhub/max-ui'
@@ -29,6 +30,10 @@ function ProfileForm({
     if (lock.current) return
     if (contact.trim().length > 200) {
       setMessage('Контакт должен быть не длиннее 200 символов.')
+      return
+    }
+    if (contact.trim() && !normalizeContact(contact)) {
+      setMessage(CONTACT_HINT)
       return
     }
     lock.current = true
@@ -71,7 +76,7 @@ function ProfileForm({
             setContact(event.target.value)
             setMessage('')
           }}
-          placeholder="+7 …, @имя или ссылка MAX"
+          placeholder="Телефон, @ник в MAX или ссылка на max.ru"
         />
       </div>
       <p>Чтобы удалить сохранённый контакт, очистите поле и сохраните.</p>

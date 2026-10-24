@@ -24,7 +24,7 @@ try {
       regionCode: 'Демонстрационный регион', category: 'Синтетические данные',
       schedule: 'seasonal', salaryMin: 40000, salaryMax: 60000,
       description: 'Синтетическая вакансия для проверки API. В MAX не публиковалась.',
-      contactInfo: 'demo-employer@example.invalid', status: 'published', publishedAt: new Date(),
+      contactInfo: '@demo_employer', status: 'published', publishedAt: new Date(),
       // No MAX chat IDs or fake card IDs. Disable reminder delivery for this fixture.
       reminderSentAt: new Date(),
     } });

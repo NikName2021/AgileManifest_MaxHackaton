@@ -76,7 +76,6 @@ html:has(dialog[open]) {
 }
 .max-root .sidebar-account {
   width: 100%;
-  padding: 16px 0;
   height: auto;
   justify-content: flex-start;
   border-radius: 0;
@@ -403,6 +402,11 @@ html:has(dialog[open]) {
 .application-person-summary > div {
   flex: 1;
 }
+.application-vacancy-link {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .application-person-summary p {
   margin: 4px 0;
   font-size: 13px;
@@ -475,10 +479,36 @@ html:has(dialog[open]) {
 .partner-settings label {
   font-size: 14px;
 }
+.vacancy-form .candidate-input > label {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
 .vacancy-form-aside {
   padding: 0;
   background: transparent;
   border: 0;
+}
+.vacancy-student-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+.vacancy-student-switch > span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.vacancy-student-switch .field-hint {
+  margin: 0;
 }
 .category-combobox {
   position: relative;
@@ -696,7 +726,7 @@ html:has(dialog[open]) {
     z-index: 20;
     background: var(--surface);
     border-top: 1px solid var(--border);
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    padding: 8px;
   }
   .app-shell.partner-shell .mobile-nav {
     grid-template-columns: 1fr;
@@ -892,7 +922,7 @@ html:has(dialog[open]) {
 .max-root .sidebar-account {
   display: flex;
   align-items: center;
-  padding: 16px 0;
+  padding: 16px 12px;
   border-radius: 14px;
   text-decoration: none;
   color: var(--text);

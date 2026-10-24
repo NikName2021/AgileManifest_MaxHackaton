@@ -198,13 +198,12 @@ export const BADGE_GROUPS: BadgeGroup[] = CATALOG.map(({ items, ...group }) => (
   items: items.map(([key, emoji, label]) => ({ key, emoji, label })),
 }));
 
-// Не больше 10 на вакансию — с отметкой «Подходит студентам» включительно, иначе карточка
-// превращается в набор значков.
+// Не больше 10 выбранных условий. Отдельный флаг «Подходит студентам» не занимает место.
 export const MAX_BADGES_PER_VACANCY = 10;
 
-// Сколько бейджей будет показано: выбранные плюс students_ok по флагу studentFriendly.
-export function shownBadgeCount(keys: string[] | null | undefined, studentFriendly = false): number {
-  return resolveBadges(keys, studentFriendly).length;
+// students_ok может приходить от старых клиентов; отдельный признак не входит в лимит условий.
+export function selectedBadgeCount(keys: string[] | null | undefined): number {
+  return new Set((keys ?? []).filter((key) => key !== 'students_ok')).size;
 }
 
 // Порядок справочника задаёт порядок показа: сначала жильё и питание — то, что важнее всего

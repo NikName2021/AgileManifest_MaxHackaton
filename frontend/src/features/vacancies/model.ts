@@ -1,3 +1,4 @@
+import { CONTACT_HINT, normalizeContactList } from '../../shared/contacts'
 import type { Vacancy, VacancyStatus } from '../../entities/hiring'
 import type { VacancyInput } from './api'
 import { ApiError } from '../../shared/api/client'
@@ -47,12 +48,17 @@ export type VacancyForm = Omit<
 export type FieldErrors = Partial<Record<keyof VacancyForm, string>>
 export function formValues(v?: Vacancy): VacancyForm {
   return {
-    badges: v?.badges?.map((b) => b.key).join(',') ?? '',
+    badges:
+      v?.badges
+        ?.filter((b) => b.key !== 'students_ok')
+        .map((b) => b.key)
+        .join(',') ?? '',
     headcount: v?.headcount?.toString() ?? '',
-    student_friendly: v?.studentFriendly ? 'yes' : '',
+    student_friendly:
+      v?.studentFriendly || v?.badges?.some((b) => b.key === 'students_ok') ? 'yes' : '',
     title: v?.title ?? '',
     region_code: v?.regionCode ?? '',
-    category: v?.category === 'Другое' && v.categoryDetail ? v.categoryDetail : (v?.category ?? ''),
+    category: v?.category ?? '',
     schedule: v?.schedule ?? 'seasonal',
     salary_min: v?.salaryMin?.toString() ?? '',
     salary_max: v?.salaryMax?.toString() ?? '',
@@ -65,12 +71,8 @@ export function validateForm(
   maxBadges = 10,
 ): { input: VacancyInput; errors: FieldErrors } {
   const errors: FieldErrors = {}
-  const badges = [...new Set(form.badges.split(',').filter(Boolean))]
-  if (
-    new Set([...badges, ...(form.student_friendly === 'yes' ? ['students_ok'] : [])]).size >
-    maxBadges
-  )
-    errors.badges = `Не больше ${maxBadges} бейджей вместе с «Подходит студентам»`
+  const badges = [...new Set(form.badges.split(',').filter((key) => key && key !== 'students_ok'))]
+  if (badges.length > maxBadges) errors.badges = `Не больше ${maxBadges} условий и преимуществ`
   const headcount = form.headcount.trim() ? Number(form.headcount) : null
   if (
     headcount !== null &&
@@ -90,7 +92,10 @@ export function validateForm(
     const field = key as keyof VacancyForm
     if (form[field].trim().length > limit) errors[field] = `Не больше ${limit} символов.`
   }
+  if (form.contact_info.trim() && !errors.contact_info && !normalizeContactList(form.contact_info))
+    errors.contact_info = `${CONTACT_HINT} До 3 контактов через запятую.`
   if (!form.title.trim()) errors.title = 'Укажите, кого вы ищете.'
+  if (!form.category.trim()) errors.category = 'Выберите сферу из списка или «Другое».'
   function amount(key: 'salary_min' | 'salary_max') {
     const value = form[key].replace(/\s/g, '')
     if (!value) return null
@@ -113,7 +118,7 @@ export function validateForm(
       student_friendly: form.student_friendly === 'yes',
       title: form.title.trim(),
       region_code: form.region_code.trim(),
-      category: form.category.trim() || 'Другое',
+      category: form.category.trim(),
       schedule: form.schedule,
       salary_min: min,
       salary_max: max,

@@ -9,14 +9,12 @@ import { loadBadgeCatalog, suggestBadges, type BadgeGroup } from './api'
 
 export function BadgePicker({
   value,
-  studentFriendly,
   onChange,
   error,
   onLimit,
 }: {
   value: string
-  studentFriendly: boolean
-  onChange: (keys: string[], student: boolean) => void
+  onChange: (keys: string[]) => void
   error?: string
   onLimit?: (limit: number) => void
 }) {
@@ -35,11 +33,8 @@ export function BadgePicker({
   const { result, reload } = useResource(load, 'badge-catalog')
   const [term, setTerm] = useState('')
   const query = useDebounce(term.trim(), 200)
-  const selected = new Set([
-    ...value.split(',').filter(Boolean),
-    ...(studentFriendly ? ['students_ok'] : []),
-  ])
-  const exclude = [value, studentFriendly ? 'students_ok' : ''].filter(Boolean).join(',')
+  const selected = new Set(value.split(',').filter((key) => key && key !== 'students_ok'))
+  const exclude = [...selected, 'students_ok'].join(',')
   const search = useCallback(
     (signal: AbortSignal) =>
       query
@@ -54,7 +49,7 @@ export function BadgePicker({
     const next = new Set(selected)
     if (next.has(key)) next.delete(key)
     else if (next.size < limit) next.add(key)
-    onChange([...next], next.has('students_ok'))
+    onChange([...next])
   }
   return (
     <section className="badge-picker" aria-label="Бейджи вакансии">
@@ -100,9 +95,11 @@ export function BadgePicker({
                 Повторить
               </Button>
             </p>
-          ) : suggestions.result.data.length ? (
+          ) : suggestions.result.data.some(
+              (b) => b.key !== 'students_ok' && !selected.has(b.key),
+            ) ? (
             suggestions.result.data
-              .filter((b) => !selected.has(b.key))
+              .filter((b) => b.key !== 'students_ok' && !selected.has(b.key))
               .map((b) => (
                 <Button
                   key={b.key}
@@ -120,7 +117,7 @@ export function BadgePicker({
           )}
         </div>
       )}
-      <p className="field-hint">До {limit} бейджей вместе с «Подходит студентам».</p>
+      <p className="field-hint">До {limit} условий и преимуществ.</p>
       {result.state === 'loading' && <p role="status">Загружаем условия…</p>}
       {result.state === 'error' && (
         <p role="alert">
@@ -131,15 +128,18 @@ export function BadgePicker({
         </p>
       )}
       {result.state === 'ready' &&
-        result.data.groups.map((group) => (
-          <BadgeChoices
-            key={group.key}
-            group={group}
-            selected={selected}
-            limit={limit}
-            toggle={toggle}
-          />
-        ))}
+        result.data.groups
+          .map((group) => ({ ...group, items: group.items.filter((b) => b.key !== 'students_ok') }))
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+            <BadgeChoices
+              key={group.key}
+              group={group}
+              selected={selected}
+              limit={limit}
+              toggle={toggle}
+            />
+          ))}
       {error && (
         <p role="alert" className="field-error">
           {error}

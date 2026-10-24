@@ -7,8 +7,10 @@ export function fieldError(error: unknown, field: string) {
   if (/4000/.test(message)) return 'Карточка не помещается в сообщение MAX — сократите описание'
   if (/letters or digits/.test(message)) return 'Напишите словами'
   if (field === 'contact_info')
-    return 'Укажите телефон, @ник, e-mail или ссылку на MAX / Telegram — до 3 через запятую'
-  if (field === 'badges') return 'Не больше 10 бейджей вместе с «Подходит студентам»'
+    return 'Укажите телефон, @ник в MAX или ссылку на max.ru — до 3 через запятую'
+  if (field === 'contact' || field === 'application_contact')
+    return 'Укажите телефон, @ник в MAX или ссылку на max.ru'
+  if (field === 'badges') return 'Не больше 10 условий и преимуществ'
   if (field === 'category' || field === 'categories') return 'Выберите сферу из списка или «Другое»'
   if (field === 'company_name') return 'До 120 символов, без ссылок и контактов'
   return 'Проверьте значение этого поля.'

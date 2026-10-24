@@ -69,6 +69,10 @@ function start(session = createPreviewSession(), path = '/vacancies') {
 function type(label: string, value: string) {
   fireEvent.change(screen.getByLabelText(label, { exact: false }), { target: { value } })
 }
+async function selectCategory(name = 'Общепит') {
+  fireEvent.focus(screen.getByRole('combobox', { name: 'Сфера деятельности' }))
+  fireEvent.click(await screen.findByRole('option', { name: new RegExp(name) }))
+}
 async function seed(session: Session) {
   return session.vacancies.create({
     title: 'Повар',
@@ -78,10 +82,86 @@ async function seed(session: Session) {
     salary_min: 50000,
     salary_max: null,
     description: 'За месяц',
-    contact_info: 'Связаться в MAX',
+    contact_info: '@employer_max',
   })
 }
 describe('employer vacancy workflow', () => {
+  it('rejects free-text categories and displays a server category error under the field', async () => {
+    const session = createPreviewSession()
+    const create = vi
+      .spyOn(session.vacancies, 'create')
+      .mockRejectedValueOnce(
+        new ApiError('server', 400, 'validation_error', ['category'], {
+          category: ['unknown category'],
+        }),
+      )
+    start(session, '/vacancies/new')
+    type('Название вакансии', 'Повар')
+    await selectCategory()
+    type('Сфера деятельности', 'Неизвестная сфера')
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+    expect(create).not.toHaveBeenCalled()
+    expect(screen.getByText('Выберите сферу из списка или «Другое».')).toBeInTheDocument()
+    await selectCategory('Другое')
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+    await waitFor(() => expect(create).toHaveBeenCalledOnce())
+    expect(create.mock.calls[0][0].category).toBe('Другое')
+    const input = screen.getByRole('combobox', { name: 'Сфера деятельности' })
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'))
+    expect(within(input.closest('.category-combobox')!).getByRole('alert')).toHaveTextContent(
+      'Выберите сферу из списка или «Другое»',
+    )
+  })
+  it.each(['draft', 'published', 'closed'] as const)(
+    'opens vacancy details from a %s vacancy in the list',
+    async (status) => {
+      const session = createPreviewSession()
+      const row = await seed(session)
+      if (status !== 'draft') await session.vacancies.publish(row.id)
+      if (status === 'closed') await session.vacancies.close(row.id)
+      const router = start(session)
+      const title = await screen.findByRole('link', { name: 'Повар' })
+      expect(title).toHaveAttribute('href', `/vacancies/${row.id}`)
+      expect(
+        screen.getByRole('link', {
+          name: `${status === 'draft' ? 'Продолжить' : 'Открыть вакансию'}: Повар`,
+        }),
+      ).toHaveAttribute('href', `/vacancies/${row.id}${status === 'draft' ? '/edit' : ''}`)
+      fireEvent.click(title)
+      await screen.findByRole('heading', {
+        name: status === 'draft' ? 'Всё выглядит верно?' : 'Детали вакансии',
+      })
+      expect(router.state.location.pathname).toBe(`/vacancies/${row.id}`)
+    },
+  )
+  it('saves the independent student switch and preserves it on edit and copy', async () => {
+    const session = createPreviewSession()
+    const create = vi.spyOn(session.vacancies, 'create')
+    const update = vi.spyOn(session.vacancies, 'update')
+    start(session, '/vacancies/new')
+    type('Название вакансии', 'Подработка')
+    await selectCategory()
+    const toggle = screen.getByLabelText('Подходит студентам')
+    expect(toggle).not.toBeChecked()
+    fireEvent.click(toggle)
+    expect(toggle).toBeChecked()
+    expect(screen.queryByRole('button', { name: /Подходит студентам/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+    await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
+    expect(create.mock.calls[0][0]).toMatchObject({ student_friendly: true, badges: [] })
+    fireEvent.click(screen.getByRole('link', { name: 'Создать копию' }))
+    await screen.findByRole('heading', { name: 'Копия вакансии' })
+    expect(screen.getByLabelText('Подходит студентам')).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+    await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
+    fireEvent.click(screen.getByRole('link', { name: 'Редактировать' }))
+    await screen.findByRole('heading', { name: 'Редактировать черновик' })
+    expect(screen.getByLabelText('Подходит студентам')).toBeChecked()
+    fireEvent.click(screen.getByLabelText('Подходит студентам'))
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
+    await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
+    expect(update.mock.calls.at(-1)?.[1]).toMatchObject({ student_friendly: false, badges: [] })
+  })
   it('searches titles with debounce, hides the removed sort control and keeps status filtering', async () => {
     const session = createPreviewSession()
     for (let i = 0; i < 6; i++) await seed(session)
@@ -259,7 +339,7 @@ describe('employer vacancy workflow', () => {
       expect(screen.getByLabelText(/Зарплата от/)).toHaveValue('50000')
       expect(screen.getByLabelText(/Зарплата до/)).toHaveValue('')
       expect(screen.getByLabelText(/Описание работы/)).toHaveValue('За месяц')
-      expect(screen.getByLabelText(/Контакт для связи/)).toHaveValue('Связаться в MAX')
+      expect(screen.getByLabelText(/Контакт для связи/)).toHaveValue('@employer_max')
       expect(create).not.toHaveBeenCalled()
       type('Название вакансии', 'Повар на новый сезон')
       fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
@@ -276,7 +356,7 @@ describe('employer vacancy workflow', () => {
         salary_min: 50000,
         salary_max: null,
         description: 'За месяц',
-        contact_info: 'Связаться в MAX',
+        contact_info: '@employer_max',
       })
       expect(update).not.toHaveBeenCalled()
       expect(publish).not.toHaveBeenCalled()
@@ -375,6 +455,7 @@ describe('employer vacancy workflow', () => {
     start(session, '/vacancies/new')
     type('Название вакансии', 'Повар')
     const region = screen.getByRole('combobox', { name: 'Регион' })
+    await selectCategory()
     await waitFor(() => expect(region).toBeEnabled())
     fireEvent.click(region)
     fireEvent.click(screen.getByRole('radio', { name: 'Тульская область' }))
@@ -405,8 +486,9 @@ describe('employer vacancy workflow', () => {
     const router = start(session)
     fireEvent.click(await screen.findByRole('link', { name: 'Создать вакансию' }))
     type('Название вакансии', 'Повар в кафе')
+    await selectCategory()
     type('Зарплата от', '50 000')
-    type('Контакт для связи', 'Анна, MAX')
+    type('Контакт для связи', '@anna_max')
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
     await screen.findByRole('heading', { name: 'Всё выглядит верно?' })
     expect(publish).not.toHaveBeenCalled()
@@ -460,6 +542,7 @@ describe('employer vacancy workflow', () => {
       .mockRejectedValueOnce(new ApiError('network'))
     start(session, '/vacancies/new')
     type('Название вакансии', 'Повар')
+    await selectCategory()
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить и проверить' }))
     expect(await screen.findByText('Проверьте значение этого поля.')).toBeInTheDocument()
     expect(screen.getByLabelText(/Название вакансии/)).toHaveValue('Повар')

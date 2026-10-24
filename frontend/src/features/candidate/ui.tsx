@@ -1,3 +1,4 @@
+import { fieldError } from '../../shared/api/fieldError'
 import { Button, Spinner } from '@maxhub/max-ui'
 import { ApiError } from '../../shared/api/client'
 import { config } from '../../shared/config'
@@ -16,7 +17,11 @@ function candidateError(error: unknown) {
   if (error.code === 'vacancy_unavailable' || error.status === 404)
     return 'Вакансия больше не доступна. Возможно, работодатель завершил поиск.'
   if (error.code === 'validation_error')
-    return 'Проверьте заполненные поля. Сервис не принял эти значения.'
+    return (
+      fieldError(error, 'contact') ??
+      fieldError(error, 'application_contact') ??
+      'Проверьте заполненные поля. Сервис не принял эти значения.'
+    )
   if (error.kind === 'forbidden') return 'Нет доступа к этим данным.'
   if (error.kind === 'network') return 'Не удалось связаться с сервисом. Проверьте подключение.'
   if (error.kind === 'contract') return 'Не удалось подтвердить ответ сервиса. Обновите данные.'

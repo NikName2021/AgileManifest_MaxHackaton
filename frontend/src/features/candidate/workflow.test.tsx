@@ -298,6 +298,32 @@ describe('cabinet selection and candidate flows', () => {
     expect(within(application).getByText('@candidate')).toBeVisible()
     expect(apply).toHaveBeenCalledExactlyOnceWith(1001, '@candidate')
   })
+  it('rejects Telegram and email before saving a profile or sending an application', async () => {
+    const session = createPreviewSession()
+    const save = vi.spyOn(session.candidate, 'saveContact')
+    const apply = vi.spyOn(session.candidate, 'apply')
+    const { router } = start(session, '/profile')
+    worker()
+    const profileContact = await screen.findByLabelText('Телефон или контакт в MAX')
+    for (const value of ['https://t.me/ivan', 'ivan@mail.ru']) {
+      fireEvent.change(profileContact, { target: { value } })
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить контакт' }))
+      expect(
+        await screen.findByText('Укажите телефон, @ник в MAX или ссылку на max.ru.'),
+      ).toBeInTheDocument()
+    }
+    expect(save).not.toHaveBeenCalled()
+    await act(() => router.navigate('/jobs/1001'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Откликнуться' }))
+    fireEvent.change(await screen.findByLabelText('Контакт для работодателя'), {
+      target: { value: 'https://telegram.me/ivan' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить отклик' }))
+    expect(
+      await screen.findByText('Укажите телефон, @ник в MAX или ссылку на max.ru.'),
+    ).toBeInTheDocument()
+    expect(apply).not.toHaveBeenCalled()
+  })
   it('checks an ambiguous POST before enabling retry and never posts automatically', async () => {
     const session = createPreviewSession(),
       original = session.candidate.apply

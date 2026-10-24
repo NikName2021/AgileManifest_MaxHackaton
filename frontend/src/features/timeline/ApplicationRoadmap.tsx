@@ -16,15 +16,10 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
   ]
   return (
     <section className="application-roadmap" aria-label="Этапы отклика">
-      <div className="roadmap-caption">
-        <strong>{timeline.outcome?.label ?? timeline.steps[currentIndex]?.label}</strong>
-        <span>
-          {terminal ? 'Рассмотрение завершено' : `${currentIndex + 1} из ${timeline.steps.length}`}
-        </span>
-      </div>
       <ol className="roadmap-track">
         {points.map((step, index) => {
           const state = terminal && step.state === 'current' ? 'done' : step.state
+          const isCurrent = step.key === (terminal?.key ?? timeline.current)
           const description = step.reachedAt
             ? new Date(step.reachedAt)
                 .toLocaleString('ru-RU', {
@@ -42,12 +37,17 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
                 : 'Время не указано'
           return (
             <li key={step.key} className={`roadmap-step ${state} stage-${step.key}`}>
+              {isCurrent && (
+                <strong className="roadmap-current-label">
+                  {timeline.outcome?.label ?? step.label}
+                </strong>
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 className="roadmap-point"
                 aria-label={`${step.label}. ${description}`}
-                aria-current={step.key === timeline.current && !terminal ? 'step' : undefined}
+                aria-current={isCurrent ? 'step' : undefined}
                 aria-describedby={active === step.key ? `${id}-${step.key}` : undefined}
                 onMouseEnter={() => setActive(step.key)}
                 onMouseLeave={() => setActive(null)}
@@ -88,6 +88,11 @@ export function ApplicationRoadmap({ timeline }: { timeline?: ApplicationTimelin
           )
         })}
       </ol>
+      <div className="roadmap-caption">
+        <span>
+          {terminal ? 'Рассмотрение завершено' : `${currentIndex + 1} из ${timeline.steps.length}`}
+        </span>
+      </div>
     </section>
   )
 }

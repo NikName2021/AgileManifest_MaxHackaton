@@ -2,11 +2,12 @@ import { Input } from '../shared/ui/Input'
 import { Select } from '../shared/ui/Select'
 import { RegionSelect } from '../shared/ui/RegionSelect'
 import { CategoryInput } from '../features/categories/CategoryInput'
+import { useCategories } from '../features/categories/useCategories'
 import { fieldError } from '../shared/api/fieldError'
 import { BadgePicker } from '../features/badges/BadgePicker'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useNavigate, useParams } from 'react-router-dom'
-import { Button, Textarea } from '@maxhub/max-ui'
+import { Button, Switch, Textarea } from '@maxhub/max-ui'
 import { ArrowRight } from 'lucide-react'
 import type { Vacancy } from '../entities/hiring'
 import { useSession } from '../features/session/context'
@@ -55,6 +56,7 @@ function ExistingVacancy({ id, copy }: { id: number; copy: boolean }) {
 }
 function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacancy }) {
   const { vacancies } = useSession()
+  const categories = useCategories()
   const invalidate = useInvalidateResources()
   const navigate = useNavigate()
   const returnId = vacancy?.id ?? source?.id
@@ -103,6 +105,16 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
     event.preventDefault()
     if (lock.current || uncertain) return
     const checked = validateForm(values, badgeLimit)
+    if (
+      values.category.trim() &&
+      (categories.result.state !== 'ready' ||
+        !categories.result.data.some((category) => category.name === values.category.trim()))
+    ) {
+      checked.errors.category =
+        categories.result.state === 'ready'
+          ? 'Выберите сферу из списка или «Другое».'
+          : 'Дождитесь загрузки списка сфер или повторите загрузку.'
+    }
     setErrors(checked.errors)
     if (Object.keys(checked.errors).length) {
       form.current
@@ -256,23 +268,34 @@ function VacancyEditor({ vacancy, source }: { vacancy?: Vacancy; source?: Vacanc
                 limit: 4000,
                 placeholder: 'Задачи, график, период оплаты, требования…',
               })}
+              <label className="vacancy-student-switch">
+                <span>
+                  <strong>Подходит студентам</strong>
+                  <span className="field-hint">Вакансия появится в подборке для студентов.</span>
+                </span>
+                <Switch
+                  aria-label="Подходит студентам"
+                  checked={values.student_friendly === 'yes'}
+                  onChange={(event) =>
+                    change('student_friendly', event.target.checked ? 'yes' : '')
+                  }
+                />
+              </label>
               <BadgePicker
                 value={values.badges}
-                studentFriendly={values.student_friendly === 'yes'}
                 error={errors.badges}
                 onLimit={setBadgeLimit}
-                onChange={(keys, student) => {
+                onChange={(keys) => {
                   setValues((previous) => ({
                     ...previous,
                     badges: keys.join(','),
-                    student_friendly: student ? 'yes' : '',
                   }))
                   setErrors((previous) => ({ ...previous, badges: undefined }))
                 }}
               />
               {field('contact_info', {
                 limit: 300,
-                placeholder: 'Телефон, @ник, e-mail или ссылка на MAX / Telegram',
+                placeholder: 'Телефон, @ник в MAX или ссылка на max.ru',
                 hint: 'Кандидат увидит контакт, когда вы его пригласите. До 3 контактов через запятую.',
               })}
             </section>

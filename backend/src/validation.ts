@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { vacancyCardTextLength, MAX_CARD_TEXT_LIMIT } from './vacancies/cardText.js';
 import { hasForbiddenChars, isMeaningful, normalizeMultiLine, normalizeSingleLine, SALARY_MAX } from './text.js';
-import { BADGE_KEYS, MAX_BADGES_PER_VACANCY, selectedBadgeCount } from './vacancies/badges.js';
+import { BADGE_KEYS, MAX_BADGES_PER_VACANCY, shownBadgeCount } from './vacancies/badges.js';
 import { CONTACT_LINK_HOSTS, MAX_CONTACTS_PER_FIELD, findContactLike, normalizeContact, normalizeContactList } from './moderation.js';
 
 export const SCHEDULE_ENUM = z.enum(['seasonal', 'temporary', 'permanent']);
@@ -33,9 +33,9 @@ function text(field: string, opts: { min?: number; max: number; multiline?: bool
     );
 }
 
-const CONTACT_FORMAT = `a phone (+7 900 123-45-67), MAX @username or a link to ${CONTACT_LINK_HOSTS.join(', ')}`;
+const CONTACT_FORMAT = `a phone (+7 900 123-45-67), @username, e-mail or a link to ${CONTACT_LINK_HOSTS.join(', ')}`;
 
-// Поле контакта: только телефон, @ник в MAX или ссылка на MAX — в едином виде.
+// Поле контакта: только телефон, @ник, e-mail или ссылка на мессенджер — в едином виде.
 function contactField(field: string, max: number) {
   return text(field, { min: 1, max, allowContacts: true }).transform((v, ctx) => {
     const contact = normalizeContact(v);
@@ -111,10 +111,10 @@ const vacancyBaseShape = {
     .optional(),
 };
 
-const BADGE_LIMIT_MESSAGE = `at most ${MAX_BADGES_PER_VACANCY} badges`;
+const BADGE_LIMIT_MESSAGE = `at most ${MAX_BADGES_PER_VACANCY} badges including student_friendly`;
 
 function checkBadgeCount(data: { badges?: string[]; student_friendly?: boolean }, ctx: z.RefinementCtx) {
-  if (selectedBadgeCount(data.badges) > MAX_BADGES_PER_VACANCY) {
+  if (shownBadgeCount(data.badges, data.student_friendly) > MAX_BADGES_PER_VACANCY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: BADGE_LIMIT_MESSAGE, path: ['badges'] });
   }
 }
@@ -203,9 +203,7 @@ export const createApplicationSchema = z
 
 export const APPLICATION_STATUS_ENUM = z.enum(['new', 'contacted', 'invited', 'hired', 'rejected']);
 
-export const APPLICATION_STATUS_UPDATE_ENUM = APPLICATION_STATUS_ENUM.exclude(['new']);
-
-export const updateApplicationStatusSchema = z.object({ status: APPLICATION_STATUS_UPDATE_ENUM }).strict();
+export const updateApplicationStatusSchema = z.object({ status: APPLICATION_STATUS_ENUM }).strict();
 
 // initData MAX — несколько сотен байт; потолок защищает проверку подписи от огромных строк.
 export const authMaxSchema = z
@@ -377,7 +375,7 @@ export function checkMergedVacancyConstraints(merged: {
   ) {
     return { ok: false, field: 'salary_min', message: 'salary_min must be less than or equal to salary_max' };
   }
-  if (selectedBadgeCount(merged.badges) > MAX_BADGES_PER_VACANCY) {
+  if (shownBadgeCount(merged.badges, merged.student_friendly) > MAX_BADGES_PER_VACANCY) {
     return { ok: false, field: 'badges', message: BADGE_LIMIT_MESSAGE };
   }
 

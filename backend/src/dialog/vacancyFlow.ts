@@ -137,7 +137,7 @@ export const vacancyFlow: DialogFlow = {
         },
         { key: 'salary', prompt: 'Какая вилка зарплаты? Например «40000-60000», или напишите «не знаю» — подскажу ориентир по рынку.', parse: parseSalary },
         { key: 'requirements', prompt: 'Кратко — какие требования к кандидату? Если неважно, напишите «нет».', parse: textAnswer(4000, true) },
-        { key: 'contact', prompt: 'Контакт для связи: телефон, @ник в MAX или ссылка на MAX. Его увидят только кандидаты, которых вы пригласите.', parse: contactAnswer },
+        { key: 'contact', prompt: 'Контакт для связи: телефон, @ник или ссылка на MAX. Его увидят только кандидаты, которых вы пригласите.', parse: contactAnswer },
     ],
 
     async onComplete(chatId, data) {

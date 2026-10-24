@@ -48,15 +48,15 @@ async function published(payload: object = {}) {
 }
 
 describe('формат контакта', () => {
-  it('телефон, @ник в MAX, ссылка на MAX — в едином виде', () => {
+  it('телефон, @ник, e-mail, ссылка на мессенджер — в едином виде', () => {
     expect(normalizeContact('8 (900) 123-45-67')).toBe('+7 900 123-45-67');
     expect(normalizeContact('+79001234567')).toBe('+7 900 123-45-67');
     expect(normalizeContact('+375 29 123-45-67')).toBe('+375291234567');
     expect(normalizeContact('@ivan_max')).toBe('@ivan_max');
-    expect(normalizeContact('Ivan@Mail.ru')).toBeNull();
-    expect(normalizeContact('t.me/ivan')).toBeNull();
+    expect(normalizeContact('Ivan@Mail.ru')).toBe('ivan@mail.ru');
+    expect(normalizeContact('t.me/ivan')).toBe('https://t.me/ivan');
     expect(normalizeContact('https://max.ru/u/abc')).toBe('https://max.ru/u/abc');
-    expect(normalizeContactList('+7 900 123-45-67; @ivan_max или max.ru/u/ivan')).toBe('+7 900 123-45-67, @ivan_max, https://max.ru/u/ivan');
+    expect(normalizeContactList('+7 900 123-45-67; @ivan_max или ivan@mail.ru')).toBe('+7 900 123-45-67, @ivan_max, ivan@mail.ru');
   });
 
   it('мусор, выдуманные номера и чужие сайты отклоняются', () => {
@@ -80,16 +80,6 @@ describe('формат контакта', () => {
 });
 
 describe('модерация в API', () => {
-  it('Telegram и почта отклоняются в контактах работодателя и работника', async () => {
-    const v = await published();
-    for (const contact of ['https://t.me/ivan', 'https://telegram.me/ivan', 'ivan@mail.ru']) {
-      expectFieldError(await inject(A, 'POST', '/api/vacancies', { title: 'Повар', contact_info: contact }), 'contact_info');
-      expectFieldError(await inject(A, 'PATCH', `/api/vacancies/${v.id}`, { contact_info: contact }), 'contact_info');
-      expectFieldError(await inject(B, 'POST', '/api/applications', { vacancy_id: v.id, contact }), 'contact');
-      expectFieldError(await inject(B, 'PATCH', '/api/me', { application_contact: contact }), 'application_contact');
-    }
-  });
-
   it('вакансия: ссылки и контакты запрещены везде, кроме contact_info', async () => {
     expectFieldError(await inject(A, 'POST', '/api/vacancies', { title: 'Бариста t.me/coffee' }), 'title');
     expectFieldError(await inject(A, 'POST', '/api/vacancies', { title: 'Бариста', description: 'Звоните 8 900 123 45 67' }), 'description');
@@ -158,8 +148,6 @@ describe('модерация в боте', () => {
     await message(A, 'Опыт не нужен');
     await message(A, '8787878787878');
     expect(lastReply(A)).toContain('Не похоже на контакт');
-    await message(A, 't.me/coffee_hr');
-    expect(lastReply(A)).toContain('Не похоже на контакт');
     await message(A, '89001234567, @coffee_hr');
     const vacancy = await db.vacancy.findFirstOrThrow({ where: { employerUserId: A.user.id } });
     expect(vacancy).toMatchObject({ category: 'Общепит', description: 'Опыт не нужен', contactInfo: '+7 900 123-45-67, @coffee_hr' });
@@ -174,9 +162,6 @@ describe('модерация в боте', () => {
       payload: { update_type: 'bot_started', chat_id: B.user.chatId, user: { user_id: B.user.maxUserId }, payload: `apply_${v.id}` },
     });
     await message(B, '8787878787878');
-    expect(lastReply(B)).toContain('Не понял контакт');
-    expect(await db.application.count()).toBe(0);
-    await message(B, 'https://telegram.me/ivan');
     expect(lastReply(B)).toContain('Не понял контакт');
     expect(await db.application.count()).toBe(0);
     await message(B, '8 900 111 22 33');

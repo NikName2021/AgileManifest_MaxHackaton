@@ -1,16 +1,17 @@
 // Модерация пользовательского текста — общая для REST (validation.ts) и диалога бота.
-// Контакт — это только телефон, @ник в MAX или ссылка на MAX. Во всех
+// Контакт — это только телефон, @ник, e-mail или ссылка на мессенджер из белого списка. Во всех
 // остальных полях (название, описание, регион…) ссылки, телефоны, почта и @ники запрещены: контакт
 // работодателя открывается кандидату только после приглашения, и обходить это через описание нельзя.
 
-// Ссылки в контактах — только на MAX.
-export const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru'];
+// Ссылки в контактах — только на мессенджеры и соцсети, где можно написать человеку.
+export const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru', 't.me', 'telegram.me', 'vk.com', 'vk.ru', 'm.vk.com', 'ok.ru', 'wa.me'];
 // Сколько контактов можно указать в одном поле контакта вакансии (через запятую).
 export const MAX_CONTACTS_PER_FIELD = 3;
 
-export const CONTACT_FORMAT_HINT = 'телефон (+7 900 123-45-67), @ник в MAX или ссылка на max.ru';
+export const CONTACT_FORMAT_HINT = 'телефон (+7 900 123-45-67), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me';
 
 const HANDLE = /^@[A-Za-z][A-Za-z0-9_.]{2,31}$/;
+const EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$/;
 const LINK = /^(?:https?:\/\/)?([A-Za-z0-9.-]+)(\/[^\s]+)$/i;
 
 // Российский номер: +7/8/7 и 10 цифр, код начинается с 3–9 (000 и 1xx не бывает). Иностранный —
@@ -38,6 +39,7 @@ export function normalizeContact(raw: string): string | null {
   const phone = normalizePhone(value);
   if (phone) return phone;
   if (HANDLE.test(value)) return value;
+  if (EMAIL.test(value)) return value.toLowerCase();
   const link = LINK.exec(value);
   if (link && CONTACT_LINK_HOSTS.includes(link[1].toLowerCase())) return `https://${link[1].toLowerCase()}${link[2]}`;
   return null;

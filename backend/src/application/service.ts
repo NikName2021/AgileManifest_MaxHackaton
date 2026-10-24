@@ -1,12 +1,14 @@
 import { db } from '../db.js';
 import { maxApi, type InlineButton } from '../max/client.js';
 import { escapeMarkdown } from '../markdown.js';
-import { APPLICATION_CONTACT_MAX_LENGTH, APPLICATION_STATUS_UPDATE_ENUM } from '../validation.js';
+import { APPLICATION_CONTACT_MAX_LENGTH } from '../validation.js';
 import { markViewed, recordEvents, type EventType } from './timeline.js';
 import { hasForbiddenChars, normalizeSingleLine } from '../text.js';
 import { CONTACT_FORMAT_HINT, normalizeContact } from '../moderation.js';
 import { knownChannelId } from '../channels/service.js';
 import type { Application, User, Vacancy } from '@prisma/client';
+
+const VALID_STATUSES = ['new', 'contacted', 'invited', 'hired', 'rejected'];
 
 function statusLabel(status: string): string {
     const labels: Record<string, string> = {
@@ -272,7 +274,7 @@ export async function handleStatusChangeFromChat(
     applicationId: number,
     status: string
 ) {
-    if (!APPLICATION_STATUS_UPDATE_ENUM.safeParse(status).success) return;
+    if (!VALID_STATUSES.includes(status)) return;
 
     const application = await db.application.findUnique({
         where: { id: applicationId },
@@ -306,7 +308,6 @@ export interface ApplyStatusChangeResult {
 
 // Общая точка для REST и кнопок в чате. Сбой доставки в MAX не откатывает статус — только notified: false.
 export async function applyStatusChange(applicationId: number, status: string): Promise<ApplyStatusChangeResult> {
-    APPLICATION_STATUS_UPDATE_ENUM.parse(status);
     // Условный UPDATE: при двух одновременных одинаковых сменах уведомление уйдёт один раз.
     const changed = await db.application.updateMany({
         where: { id: applicationId, status: { not: status } },

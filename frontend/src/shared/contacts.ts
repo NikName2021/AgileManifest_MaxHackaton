@@ -1,4 +1,4 @@
-// Keep contact formats in sync with backend/src/moderation.ts.
+// Frontend contact policy; the expected API contract is documented in backend-integration-requirements.md.
 export const CONTACT_HINT = 'Укажите телефон, @ник в MAX или ссылку на max.ru.'
 const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru']
 const MAX_CONTACTS_PER_FIELD = 3

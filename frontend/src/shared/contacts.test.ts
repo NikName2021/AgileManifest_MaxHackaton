@@ -3,6 +3,7 @@ import { normalizeContact, normalizeContactList } from './contacts'
 import { formValues, validateForm } from '../features/vacancies/model'
 
 describe('phone and MAX contacts', () => {
+  const vacancy = { ...formValues(), title: 'Повар', category: 'Общепит' }
   it.each([
     't.me/ivan',
     'https://t.me/ivan',
@@ -16,9 +17,7 @@ describe('phone and MAX contacts', () => {
   ])('rejects %s in worker and employer contacts', (value) => {
     expect(normalizeContact(value)).toBeNull()
     expect(normalizeContactList(`@ivan_max, ${value}`)).toBeNull()
-    expect(
-      validateForm({ ...formValues(), title: 'Повар', contact_info: value }).errors.contact_info,
-    ).toBeTruthy()
+    expect(validateForm({ ...vacancy, contact_info: value }).errors.contact_info).toBeTruthy()
   })
   it.each([
     '+7 900 123-45-67',
@@ -29,12 +28,10 @@ describe('phone and MAX contacts', () => {
     'https://web.max.ru/ivan',
   ])('accepts %s', (value) => {
     expect(normalizeContact(value)).not.toBeNull()
-    expect(validateForm({ ...formValues(), title: 'Повар', contact_info: value }).errors).toEqual(
-      {},
-    )
+    expect(validateForm({ ...vacancy, contact_info: value }).errors).toEqual({})
   })
   it('keeps optional empty employer contact and up to three allowed contacts', () => {
-    expect(validateForm({ ...formValues(), title: 'Повар' }).errors).toEqual({})
+    expect(validateForm(vacancy).errors).toEqual({})
     expect(normalizeContactList('89001234567; @ivan_max или max.ru/u/ivan')).toBe(
       '+7 900 123-45-67, @ivan_max, https://max.ru/u/ivan',
     )

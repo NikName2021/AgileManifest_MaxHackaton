@@ -102,7 +102,7 @@ describe('данные кандидата в API работодателя', () =
     expect(byVacancy[0].candidate).toEqual(summary);
     expect(patched.candidate).toEqual(summary);
     expect(patched.vacancy).toEqual({ id, title: 'Повар', status: 'published' });
-    expect(patched).toMatchObject({ id: created.id, vacancyId: id, candidateUserId: B.user.id, status: 'contacted', notified: false, unchanged: false });
+    expect(patched).toMatchObject({ id: created.id, vacancyId: id, candidateUserId: B.user.id, status: 'contacted', notified: true, notification: 'sent', notifyAt: null, unchanged: false });
 
     const raw = JSON.stringify([list, byVacancy, patched]);
     for (const leaked of ['dialogChatId', 'applicationContact', '@private_contact', '"chatId"']) {

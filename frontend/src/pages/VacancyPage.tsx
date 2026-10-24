@@ -334,7 +334,6 @@ function VacancyDetails({ id }: { id: number }) {
           {vacancy.status !== 'closed' && (
             <Button
               variant="secondary"
-              className="close-vacancy"
               type="button"
               disabled={busy || needsRefresh}
               onClick={() => setConfirm('close')}

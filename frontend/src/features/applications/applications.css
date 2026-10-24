@@ -529,3 +529,21 @@
 .shift-summary p {
   margin: 0;
 }
+.shift-attendance-confirmed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 4px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--stage-hired-bg);
+  color: var(--stage-hired);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+.shift-attendance-confirmed svg {
+  flex-shrink: 0;
+}

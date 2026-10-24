@@ -23,6 +23,7 @@ export interface StatusResult {
   application: Application
   notified: boolean
   unchanged: boolean
+  notification?: string
 }
 export interface ApplicationRepository {
   stats?(
@@ -40,6 +41,7 @@ export interface ApplicationRepository {
 }
 
 export const statuses: ApplicationStatus[] = ['new', 'contacted', 'invited', 'hired', 'rejected']
+export const editableStatuses = statuses.filter((status) => status !== 'new')
 export function isApplicationStatus(value: unknown): value is ApplicationStatus {
   return typeof value === 'string' && statuses.includes(value as ApplicationStatus)
 }
@@ -197,7 +199,7 @@ export function createApplicationRepository(
       return { vacancy, items: body.map((item) => parseApplication(item, vacancy)) }
     },
     async updateStatus(applicationId, status) {
-      if (!isApplicationStatus(status)) throw new ApiError('contract')
+      if (!isApplicationStatus(status) || status === 'new') throw new ApiError('contract')
       const value = record(
         await request(`${root}/applications/${id(applicationId)}`, {
           method: 'PATCH',
@@ -216,6 +218,7 @@ export function createApplicationRepository(
         application,
         notified: value.notified,
         unchanged: value.unchanged === true,
+        ...(typeof value.notification === 'string' ? { notification: value.notification } : {}),
         ...(value.vacancyClosed !== undefined
           ? { vacancyClosed: value.vacancyClosed as boolean }
           : {}),

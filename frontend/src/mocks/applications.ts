@@ -53,6 +53,7 @@ export function createPreviewApplications(vacancies: VacancyRepository) {
       }
     },
     async updateStatus(id, status) {
+      if (status === 'new') throw new ApiError('contract')
       const row = rows.get(id)
       if (!row) throw new ApiError('server', 404, 'not_found')
       const unchanged = row.status === status

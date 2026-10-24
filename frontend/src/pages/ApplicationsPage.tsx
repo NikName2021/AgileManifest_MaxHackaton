@@ -150,13 +150,6 @@ export function ApplicationsPage() {
           />
         </div>
       ) : null}
-      {vacancyId && (
-        <p>
-          <Link className="text-link" to={`/vacancies/${vacancyId}`}>
-            Открыть вакансию
-          </Link>
-        </p>
-      )}
       <RefreshStatus
         refreshing={resource.isRefreshing}
         failed={!!resource.refreshError}

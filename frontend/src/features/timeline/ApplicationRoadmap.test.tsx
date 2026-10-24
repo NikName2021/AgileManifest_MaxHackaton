@@ -26,6 +26,22 @@ function timeline(): ApplicationTimeline {
   }
 }
 describe('application roadmap', () => {
+  it.each(timelineKeys)('places the current label at the %s point', (key) => {
+    const data = timeline()
+    const currentIndex = timelineKeys.indexOf(key)
+    data.current = key
+    data.steps = data.steps.map((step, index) => ({
+      ...step,
+      state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'upcoming',
+    }))
+    render(<ApplicationRoadmap timeline={data} />)
+    const label = screen.getByText(labels[currentIndex], { exact: true })
+    expect(label).toHaveClass('roadmap-current-label')
+    expect(label.closest('li')).toBe(
+      screen.getByRole('button', { name: new RegExp(labels[currentIndex]) }).closest('li'),
+    )
+    expect(label.closest('li')).toHaveClass('current')
+  })
   it('keeps skipped stages distinct and exposes date and time on focus and tap', () => {
     const data = parseTimeline(timeline())
     render(<ApplicationRoadmap timeline={data} />)
@@ -69,6 +85,13 @@ describe('application roadmap', () => {
       expect(
         screen.getByRole('button', { name: /Рассмотрение завершено/ }).closest('li'),
       ).toHaveClass('terminal')
+      expect(screen.getByRole('button', { name: /Рассмотрение завершено/ })).toHaveAttribute(
+        'aria-current',
+        'step',
+      )
+      expect(document.querySelector('.roadmap-current-label')?.closest('li')).toHaveClass(
+        'terminal',
+      )
     },
   )
   it('rejects invalid server steps and does not invent events when history is absent', () => {

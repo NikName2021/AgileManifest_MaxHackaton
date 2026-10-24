@@ -1,5 +1,5 @@
 import { escapeMarkdown } from '../markdown.js';
-import { NO_CATEGORY, resolveCategory } from '../categories/service.js';
+import { matchCategory, NO_CATEGORY, recordCategoryMiss } from '../categories/service.js';
 import { OWNER_KEY, type DialogFlow } from './types.js';
 import { normalizeRegion } from '../regions/dictionary.js';
 import { employerTrust } from '../employers/trust.js';
@@ -24,6 +24,21 @@ function textAnswer(max: number, multiline = false) {
         if (contactLike) return { ok: false as const, error: contactLikeErrorRu(contactLike) };
         return { ok: true as const, value };
     };
+}
+
+// Сфера — только из словаря: синоним, опечатка и фраза относятся к сфере, остальное переспрашиваем.
+function categoryAnswer(raw: string) {
+    const checked = textAnswer(100)(raw);
+    if (!checked.ok) return checked;
+    const resolved = matchCategory(checked.value);
+    if (resolved.match === 'other') {
+        recordCategoryMiss(checked.value).catch((err) => console.error('failed to record category miss', err));
+        return {
+            ok: false as const,
+            error: 'Не нашёл такую сферу. Выберите кнопкой или напишите иначе — например, «кафе», «теплица», «стройка» или «Другое».',
+        };
+    }
+    return { ok: true as const, value: resolved.name };
 }
 
 function contactAnswer(raw: string) {
@@ -123,7 +138,7 @@ export const vacancyFlow: DialogFlow = {
                 [{ text: 'Гостиницы и туризм', value: 'Гостиницы и туризм' }, { text: 'Торговля', value: 'Торговля' }],
                 [{ text: 'Склад и логистика', value: 'Склад и логистика' }, { text: 'Строительство', value: 'Строительство' }],
             ],
-            parse: textAnswer(100),
+            parse: categoryAnswer,
         },
         { key: 'region', prompt: 'В каком регионе или городе нужен человек?', parse: textAnswer(100) },
         {
@@ -165,9 +180,8 @@ export const vacancyFlow: DialogFlow = {
                 title: data.title,
                 regionCode: data.region,
                 regionSubject: normalizeRegion(data.region),
-                // Сессии, начатые до появления шага, — без сферы. Синоним, опечатка и фраза относятся к
-                // сфере справочника, нераспознанное — «Другое» с исходным текстом.
-                ...(data.category ? await resolveCategory(data.category) : { category: NO_CATEGORY, categoryDetail: null }),
+                // Сессии, начатые до появления шага, — без сферы; иначе сфера уже проверена по словарю.
+                category: data.category ?? NO_CATEGORY,
                 schedule: data.schedule,
                 salaryMin: data.salary?.min ?? null,
                 salaryMax: data.salary?.max ?? null,

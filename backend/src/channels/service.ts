@@ -171,8 +171,7 @@ export function matchesChannel(channel: PartnerChannel, vacancy: Vacancy, truste
   if (channel.schedule && channel.schedule !== vacancy.schedule) return false;
   if (channel.salaryFrom !== null && (vacancy.salaryMax ?? vacancy.salaryMin ?? -1) < channel.salaryFrom) return false;
   if (channel.trustedOnly && !trusted) return false;
-  // «Подходит студентам» — и флаг, и бейдж: фильтр по бейджу его тоже учитывает.
-  const badges = new Set(resolveBadges(vacancy.badges, vacancy.studentFriendly).map((b) => b.key));
+  const badges = new Set(vacancy.badges);
   return channel.badges.every((key) => badges.has(key));
 }
 

@@ -10,6 +10,7 @@ import { app } from '../src/server.js';
 import { settleBroadcasts } from '../src/vacancies/broadcast.js';
 import { db } from '../src/db.js';
 import { findContactLike, normalizeContact, normalizeContactList } from '../src/moderation.js';
+import { sendPendingCandidateNotificationsOnce } from '../src/application/notify.js';
 import { createUser, resetDb, sendMessageMock, sentTo, webhookHeaders, type TestUser } from './helpers.js';
 
 beforeAll(async () => {
@@ -54,7 +55,11 @@ describe('формат контакта', () => {
     expect(normalizeContact('+375 29 123-45-67')).toBe('+375291234567');
     expect(normalizeContact('@ivan_max')).toBe('@ivan_max');
     expect(normalizeContact('Ivan@Mail.ru')).toBe('ivan@mail.ru');
-    expect(normalizeContact('t.me/ivan')).toBe('https://t.me/ivan');
+    expect(normalizeContact('max.ru/u/ivan')).toBe('https://max.ru/u/ivan');
+    // Только MAX, телефон и e-mail: ссылки на другие мессенджеры и соцсети не принимаем.
+    for (const other of ['t.me/ivan', 'https://telegram.me/ivan', 'wa.me/79001234567', 'https://vk.com/ivan', 'ok.ru/profile/1']) {
+      expect(normalizeContact(other), other).toBeNull();
+    }
     expect(normalizeContact('https://max.ru/u/abc')).toBe('https://max.ru/u/abc');
     expect(normalizeContactList('+7 900 123-45-67; @ivan_max или ivan@mail.ru')).toBe('+7 900 123-45-67, @ivan_max, ivan@mail.ru');
   });
@@ -125,6 +130,8 @@ describe('контакт работодателя', () => {
     expect(await contactFor()).toBeNull();
     await inject(A, 'PATCH', `/api/applications/${application.id}`, { status: 'hired' });
     expect(await contactFor()).toBe('@coffee_hr');
+    // Этапы меняли подряд — итоговое сообщение уходит по окончании окна антиспама.
+    await sendPendingCandidateNotificationsOnce(new Date(Date.now() + 3 * 60 * 1000));
     expect(sentTo('chat-B').at(-1)?.[1]).toContain('Контакт работодателя: @coffee\\_hr');
   });
 });

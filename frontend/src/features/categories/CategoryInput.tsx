@@ -5,7 +5,7 @@ import { useDebounce } from '../../shared/hooks/useDebounce'
 import { useResource } from '../../shared/api/useResource'
 import { useSession } from '../session/context'
 import { useCategories } from './useCategories'
-import { categoryLabel, suggestCategories } from './api'
+import { suggestCategories } from './api'
 
 export function CategoryInput({
   value,
@@ -32,7 +32,12 @@ export function CategoryInput({
   const directory = catalog.result.state === 'ready' ? catalog.result.data : []
   const response =
     query === value.trim() && suggestions.result.state === 'ready' ? suggestions.result.data : null
-  const options = searching && value.trim() ? (response?.items ?? []) : directory
+  const options =
+    searching && value.trim()
+      ? (response?.items ?? []).filter((item) =>
+          directory.some((entry) => entry.name === item.name),
+        )
+      : directory
   const choose = (name: string) => {
     onChange(name)
     setOpen(false)
@@ -58,7 +63,7 @@ export function CategoryInput({
         aria-invalid={!!error}
         value={value}
         maxLength={100}
-        placeholder="Выберите сферу или напишите своими словами"
+        placeholder="Найдите и выберите сферу из списка"
         onFocus={() => {
           setSearching(false)
           setOpen(true)
@@ -112,7 +117,7 @@ export function CategoryInput({
             <p role="status">Ищем сферу…</p>
           )}
           {response?.resolved.match === 'other' && !options.length && (
-            <p>Можно сохранить свой вариант в сфере «Другое».</p>
+            <p>Сфера не найдена. Выберите вариант из списка или явно укажите «Другое».</p>
           )}
         </div>
       )}
@@ -123,9 +128,9 @@ export function CategoryInput({
       >
         {error ||
           (response?.resolved.match === 'other'
-            ? 'Сфера не найдена — вакансия попадёт в 📌 Другое'
+            ? 'Выберите сферу из списка. «Другое» нужно выбрать отдельно.'
             : response && response.resolved.match !== 'exact'
-              ? `Будет сохранено как ${categoryLabel(response.resolved.name, null, directory)}`
+              ? 'Выберите подходящую сферу из предложенных вариантов.'
               : '')}
       </small>
       {(catalog.result.state === 'error' || suggestions.result.state === 'error') && (

@@ -683,12 +683,9 @@ html:has(dialog[open]) {
 .roadmap-caption {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   font-size: 12px;
-}
-.roadmap-caption strong {
-  font-weight: 500;
 }
 .roadmap-caption > span {
   font-size: 11px;
@@ -699,7 +696,31 @@ html:has(dialog[open]) {
   display: flex;
   list-style: none;
   padding: 0;
-  margin: 10px -5px 0;
+  margin: 40px -5px 0;
+}
+.roadmap-current-label {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 21px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: clamp(100px, 30vw, 220px);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.roadmap-step:first-child .roadmap-current-label {
+  left: 8px;
+  transform: none;
+  text-align: left;
+}
+.roadmap-step:last-child .roadmap-current-label {
+  left: auto;
+  right: 8px;
+  transform: none;
+  text-align: right;
 }
 .roadmap-step {
   position: relative;

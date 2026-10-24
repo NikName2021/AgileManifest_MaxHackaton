@@ -175,8 +175,7 @@ export function VacanciesPage() {
             {visible.map((v) => {
               const data = summary(v.id),
                 fresh = data?.stages.new ?? 0
-              const target =
-                v.status === 'draft' ? `/vacancies/${v.id}/edit` : `/applications?vacancy=${v.id}`
+              const target = `/vacancies/${v.id}`
               return (
                 <article
                   key={v.id}
@@ -229,8 +228,8 @@ export function VacanciesPage() {
                       className="icon-button"
                     >
                       <Link
-                        to={target}
-                        aria-label={`${v.status === 'draft' ? 'Продолжить' : v.status === 'closed' ? 'История откликов' : 'Открыть отклики'}: ${v.title}`}
+                        to={v.status === 'draft' ? `${target}/edit` : target}
+                        aria-label={`${v.status === 'draft' ? 'Продолжить' : 'Открыть вакансию'}: ${v.title}`}
                       >
                         {v.status === 'draft' ? <Pencil size={18} /> : <ArrowRight size={18} />}
                       </Link>

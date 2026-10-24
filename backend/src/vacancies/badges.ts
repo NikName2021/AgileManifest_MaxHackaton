@@ -131,7 +131,6 @@ const CATALOG: CatalogGroup[] = [
     label: 'Кому подходит',
     emoji: '🎓',
     items: [
-      ['students_ok', '🎓', 'Подходит студентам', 'студент, учащимся, на каникулы, летняя подработка'],
       ['no_experience', '🌱', 'Без опыта', 'новичкам, научим, без навыков'],
       ['pensioners_ok', '👵', 'Пенсионерам', 'пенсионер, возраст не важен'],
       ['from_16', '🧒', 'С 16 лет', 'подросткам, несовершеннолетним, школьникам'],
@@ -198,13 +197,13 @@ export const BADGE_GROUPS: BadgeGroup[] = CATALOG.map(({ items, ...group }) => (
   items: items.map(([key, emoji, label]) => ({ key, emoji, label })),
 }));
 
-// Не больше 10 на вакансию — с отметкой «Подходит студентам» включительно, иначе карточка
-// превращается в набор значков.
+// Не больше 10 на вакансию, иначе карточка превращается в набор значков. «Подходит студентам» — не
+// бейдж, а отдельная отметка student_friendly, в лимит не входит.
 export const MAX_BADGES_PER_VACANCY = 10;
 
-// Сколько бейджей будет показано: выбранные плюс students_ok по флагу studentFriendly.
-export function shownBadgeCount(keys: string[] | null | undefined, studentFriendly = false): number {
-  return resolveBadges(keys, studentFriendly).length;
+// Сколько бейджей будет показано (неизвестные ключи не считаются).
+export function shownBadgeCount(keys: string[] | null | undefined): number {
+  return resolveBadges(keys).length;
 }
 
 // Порядок справочника задаёт порядок показа: сначала жильё и питание — то, что важнее всего
@@ -213,11 +212,8 @@ const ORDERED: BadgeDef[] = BADGE_GROUPS.flatMap((g) => g.items);
 const BY_KEY = new Map(ORDERED.map((b) => [b.key, b]));
 export const BADGE_KEYS = ORDERED.map((b) => b.key) as [string, ...string[]];
 
-// Отметка «Подходит студентам» хранится и флагом studentFriendly (фильтры, каналы вузов) —
-// флаг всегда показывается и бейджем, чтобы не было двух разных отметок об одном и том же.
-export function resolveBadges(keys: string[] | null | undefined, studentFriendly = false): BadgeDef[] {
+export function resolveBadges(keys: string[] | null | undefined): BadgeDef[] {
   const set = new Set(keys ?? []);
-  if (studentFriendly) set.add('students_ok');
   return ORDERED.filter((b) => set.has(b.key));
 }
 

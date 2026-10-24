@@ -1,6 +1,6 @@
 import { useInvalidateResources } from '../../shared/api/useResource'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { useBeforeUnload, useBlocker } from 'react-router-dom'
+import { Link, useBeforeUnload, useBlocker } from 'react-router-dom'
 import { Button } from '@maxhub/max-ui'
 import { X } from 'lucide-react'
 import { CandidateContacts } from './CandidateContacts'
@@ -9,7 +9,7 @@ import { Pill } from '../../shared/ui/Pill'
 import { displayDate, initials } from '../../shared/format'
 import { applicationLabels, type Application, type ApplicationStatus } from '../../entities/hiring'
 import { useSession } from '../session/context'
-import { statuses } from './api'
+import { editableStatuses } from './api'
 import {
   applicationError,
   candidateName,
@@ -164,7 +164,11 @@ export function ApplicationDialog({
       <div className="application-person-summary">
         <span className="candidate-avatar">{initials(candidateName(current))}</span>
         <div>
-          <strong>{current.vacancy.title}</strong>
+          <strong>
+            <Link className="application-vacancy-link" to={`/vacancies/${current.vacancy.id}`}>
+              {current.vacancy.title}
+            </Link>
+          </strong>
           <p>{displayDate(current.createdAt)}</p>
         </div>
         <Pill tone={current.status}>{applicationLabels[current.status]}</Pill>
@@ -205,7 +209,7 @@ export function ApplicationDialog({
           </div>
         )}
         <div className="stage-filters" role="group" aria-label="Изменить этап">
-          {statuses.map((status) => (
+          {editableStatuses.map((status) => (
             <Button
               key={status}
               variant="secondary"

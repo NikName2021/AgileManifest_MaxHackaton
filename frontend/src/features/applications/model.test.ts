@@ -24,7 +24,7 @@ describe('candidate data and notification semantics', () => {
     expect(candidateContact(phoneOnly)).toBe('+7 000 000-00-00')
     expect(candidateContact({ ...phoneOnly, contact: 'Напишите в MAX' })).toBe('Напишите в MAX')
   })
-  it.each<ApplicationStatus>(['new', 'contacted'])(
+  it.each<ApplicationStatus>(['new'])(
     'does not treat notified=false as failure for %s',
     (status) => {
       expect(
@@ -35,7 +35,7 @@ describe('candidate data and notification semantics', () => {
       ).toMatchObject({ tone: 'success' })
     },
   )
-  it.each<ApplicationStatus>(['invited', 'hired', 'rejected'])(
+  it.each<ApplicationStatus>(['contacted', 'invited', 'hired', 'rejected'])(
     'warns about notification failure while preserving saved %s',
     (status) => {
       const notice = statusNotice(
@@ -60,6 +60,23 @@ describe('candidate data and notification semantics', () => {
       'Уведомление отправлено в MAX',
     )
     expect(statusNotice({ ...result, unchanged: false }, true).text).toContain('Это демо')
+  })
+  it.each([
+    ['deferred', 'neutral', 'через пару минут'],
+    ['no_chat', 'warning', 'Кандидат не запускал бота'],
+  ])('explains the %s notification result', (notification, tone, text) => {
+    const notice = statusNotice(
+      {
+        application: { ...application, status: 'contacted' },
+        notified: false,
+        unchanged: false,
+        notification,
+      },
+      false,
+    )
+    expect(notice).toMatchObject({ tone, text: expect.stringContaining(text) })
+    expect(notice.text).toContain('сохранён')
+    expect(notice.text).not.toContain('Уведомление не отправлено')
   })
   it('rejects invalid deep-link identifiers without coercing partial numbers', () => {
     for (const value of [null, '', '-1', '1x', '1.5', '1e3', '9007199254740992'])

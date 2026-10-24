@@ -1,3 +1,4 @@
+import { CONTACT_HINT, normalizeContact } from '../shared/contacts'
 import { Input } from '../shared/ui/Input'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
@@ -40,6 +41,10 @@ function ApplyForm({
     if (lock.current || (!check && (uncertain || !job.canApply))) return
     if (!check && (!contact.trim() || contact.trim().length > 200)) {
       setInvalid('Укажите контакт для связи: от 1 до 200 символов.')
+      return
+    }
+    if (!check && !normalizeContact(contact)) {
+      setInvalid(CONTACT_HINT)
       return
     }
     lock.current = true
@@ -157,7 +162,7 @@ function ApplyForm({
                   setContact(event.target.value)
                   setInvalid('')
                 }}
-                placeholder="Телефон, @имя или ссылка MAX"
+                placeholder="Телефон, @ник в MAX или ссылка на max.ru"
                 aria-invalid={!!invalid}
                 aria-describedby="contact-help"
               />

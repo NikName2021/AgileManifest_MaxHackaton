@@ -21,7 +21,7 @@ import { Button } from '@maxhub/max-ui'
 import { useResource } from '../shared/api/useResource'
 import { useRefreshOnReturn } from '../shared/api/useRefreshOnReturn'
 import { useTheme } from '../features/appearance/context'
-import { PullToRefresh } from '../shared/ui/PullToRefresh'
+import { PageRefresh } from '../shared/ui/PageRefresh'
 
 const employerNavigation = [
   { to: '/vacancies', label: 'Мои вакансии', icon: BriefcaseBusiness },
@@ -199,7 +199,7 @@ export function Shell() {
           tabIndex={-1}
         >
           <div className="page-tools">
-            <PullToRefresh key={pathname + search} target={main} />
+            <PageRefresh key={pathname + search} />
             <div className="mobile-account-actions">
               {themeButton}
               <Button

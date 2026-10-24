@@ -9,7 +9,7 @@ export function candidateContact(application: Application) {
   return application.contact?.trim() || application.candidate.phone?.trim() || ''
 }
 export function notificationExpected(status: ApplicationStatus) {
-  return status === 'invited' || status === 'hired' || status === 'rejected'
+  return status !== 'new'
 }
 export interface StatusNotice {
   tone: 'success' | 'warning' | 'neutral'
@@ -23,6 +23,16 @@ export function statusNotice(result: StatusResult, demo: boolean): StatusNotice 
     }
   const saved = `Статус «${applicationLabels[result.application.status]}» сохранён.${result.vacancyClosed ? ' Все места заняты — вакансия автоматически закрыта. Остальные кандидаты на этапах «Новый» и «На связи» завершили отбор.' : ''}`
   if (demo) return { tone: 'success', text: `${saved} Это демо: сообщения в MAX не отправляются.` }
+  if (result.notification === 'deferred')
+    return {
+      tone: 'neutral',
+      text: `${saved} Кандидату придёт сообщение через пару минут с итоговым этапом.`,
+    }
+  if (result.notification === 'no_chat')
+    return {
+      tone: 'warning',
+      text: `${saved} Кандидат не запускал бота. Попросите его нажать «Начать» в боте MAX.`,
+    }
   if (result.notified) return { tone: 'success', text: `${saved} Уведомление отправлено в MAX.` }
   if (notificationExpected(result.application.status))
     return {

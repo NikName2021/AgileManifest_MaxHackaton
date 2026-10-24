@@ -3,12 +3,13 @@
 // остальных полях (название, описание, регион…) ссылки, телефоны, почта и @ники запрещены: контакт
 // работодателя открывается кандидату только после приглашения, и обходить это через описание нельзя.
 
-// Ссылки в контактах — только на мессенджеры и соцсети, где можно написать человеку.
-export const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru', 't.me', 'telegram.me', 'vk.com', 'vk.ru', 'm.vk.com', 'ok.ru', 'wa.me'];
+// Ссылки в контактах — только на MAX. Сервис работает в MAX, поэтому связь ведём туда же: кроме
+// ссылки MAX контактом может быть только телефон, @ник в MAX или e-mail.
+export const CONTACT_LINK_HOSTS = ['max.ru', 'web.max.ru'];
 // Сколько контактов можно указать в одном поле контакта вакансии (через запятую).
 export const MAX_CONTACTS_PER_FIELD = 3;
 
-export const CONTACT_FORMAT_HINT = 'телефон (+7 900 123-45-67), @ник, e-mail или ссылка на max.ru, t.me, vk.com, ok.ru, wa.me';
+export const CONTACT_FORMAT_HINT = 'телефон (+7 900 123-45-67), @ник в MAX, e-mail или ссылка на профиль в MAX';
 
 const HANDLE = /^@[A-Za-z][A-Za-z0-9_.]{2,31}$/;
 const EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$/;
@@ -83,4 +84,24 @@ const CONTACT_LIKE_RU: Record<ContactLikeKind, string> = {
 
 export function contactLikeErrorRu(kind: ContactLikeKind): string {
   return `Уберите ${CONTACT_LIKE_RU[kind]}: ссылки и контакты в этом поле запрещены. Контакт указывается отдельно и открывается кандидату после приглашения.`;
+}
+
+const MAX_PROFILE_HOSTS = new Set(['max.ru', 'web.max.ru']);
+
+// Ссылка на профиль или диалог в MAX, которую кандидат сам оставил в контакте отклика: только https
+// и только max.ru / web.max.ru. Из maxUserId адрес не собирается — правила для этого в MAX нет.
+export function maxContactUrl(contact: string | null): string | null {
+  if (!contact) return null;
+  for (const part of contact.split(/[\s,;]+/)) {
+    let url: URL;
+    try {
+      url = new URL(part);
+    } catch {
+      continue;
+    }
+    if (url.protocol === 'https:' && MAX_PROFILE_HOSTS.has(url.hostname) && !url.username && !url.password && url.pathname.length > 1) {
+      return url.href;
+    }
+  }
+  return null;
 }

@@ -97,17 +97,42 @@ describe('данные кандидата в API работодателя', () =
     const byVacancy = (await app.inject({ method: 'GET', url: `/api/vacancies/${id}/applications`, headers: A.auth })).json();
     const patched = (await app.inject({ method: 'PATCH', url: `/api/applications/${created.id}`, headers: A.auth, payload: { status: 'contacted' } })).json();
 
-    const summary = { id: B.user.id, maxUserId: 'max-B', displayName: 'B', phone: null };
+    const summary = { id: B.user.id, maxUserId: 'max-B', displayName: 'B', phone: null, maxContactUrl: null };
     expect(list.items[0].candidate).toEqual(summary);
     expect(byVacancy[0].candidate).toEqual(summary);
     expect(patched.candidate).toEqual(summary);
     expect(patched.vacancy).toEqual({ id, title: 'Повар', status: 'published' });
-    expect(patched).toMatchObject({ id: created.id, vacancyId: id, candidateUserId: B.user.id, status: 'contacted', notified: false, unchanged: false });
+    expect(patched).toMatchObject({ id: created.id, vacancyId: id, candidateUserId: B.user.id, status: 'contacted', notified: true, notification: 'sent', notifyAt: null, unchanged: false });
 
     const raw = JSON.stringify([list, byVacancy, patched]);
     for (const leaked of ['dialogChatId', 'applicationContact', '@private_contact', '"chatId"']) {
       expect(raw).not.toContain(leaked);
     }
+  });
+
+  it('maxContactUrl — ссылка MAX из контакта отклика: только https и только max.ru / web.max.ru', async () => {
+    const id = await publishedVacancy(A);
+    // Ссылку MAX в сохранённом контакте профиля работодатель не получает — только из контакта отклика.
+    await db.user.update({ where: { id: B.user.id }, data: { applicationContact: 'https://max.ru/u/private' } });
+    const created = (await app.inject({ method: 'POST', url: '/api/applications', headers: B.auth, payload: { vacancy_id: id, contact: 'max.ru/u/b_profile' } })).json();
+    expect(created.contact).toBe('https://max.ru/u/b_profile');
+
+    const list = (await app.inject({ method: 'GET', url: '/api/applications', headers: A.auth })).json();
+    const byVacancy = (await app.inject({ method: 'GET', url: `/api/vacancies/${id}/applications`, headers: A.auth })).json();
+    const patched = (await app.inject({ method: 'PATCH', url: `/api/applications/${created.id}`, headers: A.auth, payload: { status: 'contacted' } })).json();
+    for (const candidate of [list.items[0].candidate, byVacancy[0].candidate, patched.candidate]) {
+      expect(candidate.maxContactUrl).toBe('https://max.ru/u/b_profile');
+    }
+    expect(JSON.stringify(list)).not.toContain('private');
+
+    // Старые отклики могли сохранить контакт как есть — чужой домен, http и t.me ссылкой MAX не считаются.
+    for (const contact of ['http://max.ru/u/x', 'https://max.ru.evil.com/u/x', 'https://user:pass@max.ru/u/x', 'https://t.me/x', 'https://max.ru/', '+7 900 111-22-33']) {
+      await db.application.update({ where: { id: created.id }, data: { contact } });
+      const res = (await app.inject({ method: 'GET', url: '/api/applications', headers: A.auth })).json();
+      expect(res.items[0].candidate.maxContactUrl, contact).toBeNull();
+    }
+    await db.application.update({ where: { id: created.id }, data: { contact: '+7 900 111-22-33, https://web.max.ru/u/b' } });
+    expect((await app.inject({ method: 'GET', url: '/api/applications', headers: A.auth })).json().items[0].candidate.maxContactUrl).toBe('https://web.max.ru/u/b');
   });
 });
 

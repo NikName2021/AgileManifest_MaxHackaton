@@ -12,6 +12,7 @@ export const maxApiMock = {
   getMe: vi.fn(async () => ({})),
   registerCommands: vi.fn(async () => ({})),
   sendMessage: sendMessageMock,
+  sendMessageToUser: vi.fn(async (_userId: string, _text: string) => ({})),
   answerCallback: vi.fn(async () => ({})),
   createSubscription: vi.fn(async () => ({})),
   listSubscriptions: vi.fn(async () => ({ subscriptions: [] })),

@@ -108,6 +108,17 @@ export const maxApi = {
     );
   },
 
+  // Сообщение пользователю по его user_id — когда личного чата с ботом в базе нет (человек открыл
+  // только мини-приложение). Доставит ли MAX такое сообщение без нажатия «Начать», зависит от MAX.
+  sendMessageToUser: async (userId: string, text: string) => {
+    await throttlePerChat(`user:${userId}`);
+    return maxRequest<SendMessageResult>(
+      '/messages',
+      { method: 'POST', body: JSON.stringify({ text, format: 'markdown' }) },
+      { user_id: userId },
+    );
+  },
+
   // Без подтверждения нажатия кнопка у пользователя «крутится» до таймаута.
   answerCallback: (callbackId: string, message?: { text: string; buttons?: InlineButton[][] }) =>
     maxRequest(

@@ -90,6 +90,41 @@ function chooseStatus(value: string) {
 
 afterEach(() => vi.useRealTimers())
 describe('employer applications workflow', () => {
+  it('keeps new as a filter but never offers it as a status change', async () => {
+    const session = await seeded()
+    start(session, '/applications?status=new')
+    const dialog = await openFirst()
+    const stages = within(dialog.getByRole('group', { name: 'Изменить этап' }))
+    expect(stages.queryByRole('button', { name: 'Новый' })).not.toBeInTheDocument()
+    expect(stages.getAllByRole('button')).toHaveLength(4)
+    chooseStatus('contacted')
+    await waitFor(() =>
+      expect(stages.getByRole('button', { name: 'На связи' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    )
+    expect(stages.queryByRole('button', { name: 'Новый' })).not.toBeInTheDocument()
+    const changed = await session.applications.list({ status: 'contacted', limit: 20, offset: 0 })
+    await expect(
+      session.applications.updateStatus(changed.items[0].id, 'new'),
+    ).rejects.toMatchObject({
+      kind: 'contract',
+    })
+  })
+  it('opens vacancy details through the vacancy title in the application dialog', async () => {
+    const session = await seeded()
+    const page = await session.applications.list({ limit: 20, offset: 0 })
+    const vacancy = page.items[0].vacancy
+    const router = start(session)
+    const dialog = await openFirst()
+    const link = dialog.getByRole('link', { name: vacancy.title })
+    expect(link).toHaveAttribute('href', `/vacancies/${vacancy.id}`)
+    fireEvent.click(link)
+    await screen.findByRole('heading', { name: 'Карточка вакансии' })
+    expect(router.state.location.pathname).toBe(`/vacancies/${vacancy.id}`)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
   it('offers separate email and profile phone actions, copies the selected contact and never changes the hiring stage', async () => {
     const session = await seeded()
     const page = await session.applications.list({ limit: 20, offset: 0 })
@@ -166,7 +201,7 @@ describe('employer applications workflow', () => {
     })
     start(session)
     let dialog = await openFirst()
-    expect(dialog.getAllByRole('link')).toHaveLength(1)
+    expect(dialog.getAllByRole('link', { name: /Позвонить/ })).toHaveLength(1)
     expect(
       dialog.queryByRole('button', { name: 'Копировать телефон профиля' }),
     ).not.toBeInTheDocument()
@@ -180,7 +215,9 @@ describe('employer applications workflow', () => {
     fireEvent.focus(window)
     await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(previousCalls))
     dialog = await openFirst()
-    expect(dialog.queryByRole('link')).not.toBeInTheDocument()
+    expect(dialog.getAllByRole('link')).toEqual([
+      dialog.getByRole('link', { name: page.items[0].vacancy.title }),
+    ])
     expect(dialog.getByRole('button', { name: 'Контакт' })).toBeInTheDocument()
     expect(dialog.getByRole('button', { name: 'Контакт' })).toBeEnabled()
   })
@@ -244,6 +281,7 @@ describe('employer applications workflow', () => {
     const list = vi.spyOn(session.applications, 'list')
     start(session, `/applications?vacancy=${vacancy.id}`)
     await screen.findByText('1–20 из 23')
+    expect(screen.queryByRole('link', { name: 'Открыть вакансию' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Далее' }))
     await screen.findByText('21–23 из 23')
     fireEvent.click(screen.getByRole('button', { name: /Новый/ }))

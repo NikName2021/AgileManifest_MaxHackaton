@@ -9,7 +9,7 @@ import { previewBadgeCatalog } from '../../mocks/badges'
 import { formValues, validateForm } from '../vacancies/model'
 
 describe('vacancy benefits', () => {
-  it('counts students in the ten-item limit and releases a slot when deselected', async () => {
+  it('keeps students out of the picker and counts only selected benefits', async () => {
     function Form() {
       const [keys, setKeys] = useState(
         previewBadgeCatalog.groups
@@ -19,34 +19,26 @@ describe('vacancy benefits', () => {
           .map((b) => b.key)
           .join(','),
       )
-      const [student, setStudent] = useState(true)
       return (
         <SessionContext value={createPreviewSession()}>
           <BadgePicker
             value={keys}
-            studentFriendly={student}
-            onChange={(next, flag) => {
+            onChange={(next) => {
               setKeys(next.join(','))
-              setStudent(flag)
             }}
           />
         </SessionContext>
       )
     }
     render(<Form />)
-    const students = await screen.findByRole('button', {
-      name: /Подходит студентам/,
-      pressed: true,
-    })
-    expect(students).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('10 / 10')).toBeInTheDocument()
-    const another = screen.getByRole('button', { name: /Выплаты раз в неделю/ })
-    expect(another).toBeDisabled()
-    fireEvent.click(students)
+    const another = await screen.findByRole('button', { name: /Выплаты раз в неделю/ })
+    expect(screen.queryByRole('button', { name: /Подходит студентам/ })).not.toBeInTheDocument()
+    expect(screen.getByText('9 / 10')).toBeInTheDocument()
     expect(another).toBeEnabled()
     fireEvent.click(another)
     expect(screen.getByText('10 / 10')).toBeInTheDocument()
-    expect(students).toBeDisabled()
+    fireEvent.click(another)
+    expect(screen.getByText('9 / 10')).toBeInTheDocument()
   })
   it('preserves keys on edit/copy, deduplicates students and submits an empty list on removal', () => {
     const catalog = parseBadgeCatalog(previewBadgeCatalog)
@@ -61,8 +53,24 @@ describe('vacancy benefits', () => {
       badges: 'housing_free,students_ok',
     }
     expect(validateForm(base).input).toMatchObject({
-      badges: ['housing_free', 'students_ok'],
+      badges: ['housing_free'],
       student_friendly: true,
+    })
+    const ten = catalog.groups
+      .flatMap((g) => g.items)
+      .filter((b) => b.key !== 'students_ok')
+      .slice(0, 10)
+      .map((b) => b.key)
+      .join(',')
+    expect(validateForm({ ...base, category: 'Общепит', badges: ten }).errors).toEqual({})
+    const legacy = formValues({ studentFriendly: false, badges: items } as Parameters<
+      typeof formValues
+    >[0])
+    expect(legacy.student_friendly).toBe('yes')
+    expect(legacy.badges).toBe('housing_free')
+    expect(validateForm({ ...legacy, title: 'Повар', student_friendly: '' }).input).toMatchObject({
+      badges: ['housing_free'],
+      student_friendly: false,
     })
     expect(
       validateForm({

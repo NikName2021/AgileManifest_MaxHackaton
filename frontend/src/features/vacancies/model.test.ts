@@ -4,6 +4,14 @@ import { ApiError } from '../../shared/api/client'
 import type { Vacancy } from '../../entities/hiring'
 
 describe('vacancy form validation', () => {
+  it('requires an explicit category and keeps legacy Other as a catalog selection', () => {
+    const result = validateForm({ ...formValues(), title: 'Повар' })
+    expect(result.errors.category).toBeTruthy()
+    expect(result.input.category).not.toBe('Другое')
+    expect(
+      formValues({ category: 'Другое', categoryDetail: 'Ремонт обуви' } as Vacancy).category,
+    ).toBe('Другое')
+  })
   it('accepts a crew target and refuses zero, fractions and excessive targets', () => {
     for (const headcount of ['0', '-1', '1.5', '1001'])
       expect(
@@ -37,15 +45,16 @@ describe('vacancy form validation', () => {
     const { input, errors } = validateForm({
       ...formValues(),
       title: ' Повар ',
+      category: 'Общепит',
       salary_min: '50 000',
-      contact_info: ' Имя ',
+      contact_info: ' @ivan_max ',
     })
     expect(errors).toEqual({})
     expect(input).toMatchObject({
       title: 'Повар',
       salary_min: 50000,
       salary_max: null,
-      contact_info: 'Имя',
+      contact_info: '@ivan_max',
       description: null,
     })
   })

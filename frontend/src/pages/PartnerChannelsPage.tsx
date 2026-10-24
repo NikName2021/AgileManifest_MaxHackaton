@@ -245,7 +245,6 @@ function ChannelSettings({
         )}
         <BadgePicker
           value={badges.join(',')}
-          studentFriendly={false}
           onChange={setBadges}
           error={fieldError(error, 'badges')}
         />

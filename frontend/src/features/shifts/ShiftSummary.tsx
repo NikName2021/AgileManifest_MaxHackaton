@@ -1,4 +1,5 @@
 import type { Shift } from './model'
+import { CheckCircle2 } from 'lucide-react'
 
 export function ShiftSummary({ shift, worker = false }: { shift: Shift; worker?: boolean }) {
   if (!shift.startAt) return null
@@ -13,7 +14,8 @@ export function ShiftSummary({ shift, worker = false }: { shift: Shift; worker?:
         })}{' '}
         МСК
       </strong>
-      <span>
+      <span className={shift.attendance === 'confirmed' ? 'shift-attendance-confirmed' : undefined}>
+        {shift.attendance === 'confirmed' && <CheckCircle2 size={18} aria-hidden="true" />}
         {shift.attendance === 'confirmed'
           ? 'Выход подтверждён'
           : shift.attendance === 'declined'

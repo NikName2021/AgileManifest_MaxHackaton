@@ -529,7 +529,7 @@
 .shift-summary p {
   margin: 0;
 }
-.shift-attendance-confirmed {
+.shift-attendance {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -538,12 +538,40 @@
   margin: 4px 0;
   padding: 8px 12px;
   border-radius: 8px;
-  background: var(--stage-hired-bg);
-  color: var(--stage-hired);
+  background: #f1f5f9;
+  color: #475569;
   font-size: 14px;
   font-weight: 700;
   line-height: 20px;
 }
-.shift-attendance-confirmed svg {
+.shift-attendance svg {
   flex-shrink: 0;
+}
+.shift-attendance-confirmed {
+  background: var(--stage-hired-bg);
+  color: var(--stage-hired);
+}
+.shift-attendance-pending {
+  background: #fef3c7;
+  color: #854d0e;
+}
+.shift-attendance-declined {
+  background: #fee2e2;
+  color: #991b1b;
+}
+:root[data-app-theme='dark'] .shift-attendance {
+  background: #343b4b;
+  color: #e2e8f0;
+}
+:root[data-app-theme='dark'] .shift-attendance-confirmed {
+  background: var(--stage-hired-bg);
+  color: var(--stage-hired);
+}
+:root[data-app-theme='dark'] .shift-attendance-pending {
+  background: #49360f;
+  color: #fde68a;
+}
+:root[data-app-theme='dark'] .shift-attendance-declined {
+  background: #4c2028;
+  color: #fecaca;
 }

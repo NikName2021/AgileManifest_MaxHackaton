@@ -17,6 +17,63 @@ function renderPage(session = createPreviewSession()) {
 }
 
 describe('partner autopublication', () => {
+  it('checks again despite fresh cache, shows progress and displays newly connected channels', async () => {
+    const session = createPreviewSession()
+    const channels = await session.partners!.list()
+    let finish!: (value: typeof channels) => void
+    const list = vi
+      .spyOn(session.partners!, 'list')
+      .mockResolvedValueOnce([])
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+    renderPage(session)
+    await screen.findByText('Каналы ещё не подключены')
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить подключение каналов' }))
+    expect(screen.getByRole('button', { name: 'Проверяем подключение…' })).toBeDisabled()
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    await act(async () => finish(channels))
+    expect(
+      await screen.findByText('Проверка завершена. Подключённых каналов и чатов: 1.'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByRole('switch', { name: 'Автопубликация в канал' }),
+    ).toBeInTheDocument()
+  })
+
+  it('explains an empty connection check next to the button', async () => {
+    const session = createPreviewSession()
+    vi.spyOn(session.partners!, 'list').mockResolvedValue([])
+    renderPage(session)
+    await screen.findByText('Каналы ещё не подключены')
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить подключение каналов' }))
+    expect(await screen.findByText(/Подключённые каналы пока не найдены/)).toBeInTheDocument()
+  })
+
+  it('shows refresh failures with cached channels and allows a successful retry', async () => {
+    const session = createPreviewSession()
+    const channels = await session.partners!.list()
+    const list = vi
+      .spyOn(session.partners!, 'list')
+      .mockResolvedValueOnce(channels)
+      .mockRejectedValueOnce(new ApiError('network'))
+      .mockResolvedValue(channels)
+    renderPage(session)
+    await screen.findByRole('switch', { name: 'Автопубликация в канал' })
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить подключение каналов' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось связаться с сервисом')
+    expect(screen.getByRole('switch', { name: 'Автопубликация в канал' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить подключение каналов' }))
+    expect(
+      await screen.findByText('Проверка завершена. Подключённых каналов и чатов: 1.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(3)
+  })
+
   it('keeps the switch available while paused and persists both transitions with filters', async () => {
     const session = createPreviewSession()
     const update = vi.spyOn(session.partners!, 'update')

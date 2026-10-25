@@ -46,6 +46,7 @@ export function useResource<T>(load: (signal: AbortSignal) => Promise<T>, key: s
       result.state === 'ready' && !query.isFetching ? (query.error ?? undefined) : undefined,
     reload: refresh,
     refresh,
+    refetch: query.refetch,
     replace: useCallback(
       (data: T) => {
         void client.cancelQueries({ queryKey, exact: true })

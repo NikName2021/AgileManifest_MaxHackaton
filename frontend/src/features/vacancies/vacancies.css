@@ -278,6 +278,9 @@
   gap: 28px;
   align-items: start;
 }
+.vacancy-detail-layout {
+  grid-template-columns: minmax(0, 1fr) 440px;
+}
 .vacancy-form,
 .vacancy-preview {
   background: var(--surface);
@@ -523,11 +526,18 @@
   margin-top: 24px;
   flex-wrap: wrap;
 }
+@media (max-width: 1280px) {
+  .vacancy-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 1120px) {
   .vacancy-editor-layout,
   .vacancy-detail-layout {
-    grid-template-columns: minmax(0, 1fr) 250px;
     gap: 20px;
+  }
+  .vacancy-editor-layout {
+    grid-template-columns: minmax(0, 1fr) 250px;
   }
   .vacancy-form,
   .vacancy-preview {

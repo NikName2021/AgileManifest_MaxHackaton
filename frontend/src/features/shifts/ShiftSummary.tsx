@@ -1,8 +1,16 @@
 import type { Shift } from './model'
-import { CheckCircle2 } from 'lucide-react'
+import { CalendarClock, CheckCircle2, Clock3, XCircle } from 'lucide-react'
 
 export function ShiftSummary({ shift, worker = false }: { shift: Shift; worker?: boolean }) {
-  if (!shift.startAt) return null
+  if (!shift.startAt)
+    return (
+      <div className="shift-summary">
+        <span className="shift-attendance shift-attendance-unscheduled">
+          <CalendarClock size={18} aria-hidden="true" />
+          Выход ещё не назначен
+        </span>
+      </div>
+    )
   return (
     <div className="shift-summary">
       <strong>
@@ -14,8 +22,14 @@ export function ShiftSummary({ shift, worker = false }: { shift: Shift; worker?:
         })}{' '}
         МСК
       </strong>
-      <span className={shift.attendance === 'confirmed' ? 'shift-attendance-confirmed' : undefined}>
-        {shift.attendance === 'confirmed' && <CheckCircle2 size={18} aria-hidden="true" />}
+      <span className={`shift-attendance shift-attendance-${shift.attendance ?? 'pending'}`}>
+        {shift.attendance === 'confirmed' ? (
+          <CheckCircle2 size={18} aria-hidden="true" />
+        ) : shift.attendance === 'declined' ? (
+          <XCircle size={18} aria-hidden="true" />
+        ) : (
+          <Clock3 size={18} aria-hidden="true" />
+        )}
         {shift.attendance === 'confirmed'
           ? 'Выход подтверждён'
           : shift.attendance === 'declined'

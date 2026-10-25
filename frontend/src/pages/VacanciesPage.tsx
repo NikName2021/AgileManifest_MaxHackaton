@@ -107,7 +107,7 @@ export function VacanciesPage() {
   }
   return (
     <>
-      <div className="page-heading vacancies-heading">
+      <div className="page-heading vacancies-heading vacancies-list-heading">
         <div>
           <div className="eyebrow">КАБИНЕТ РАБОТОДАТЕЛЯ</div>
           <h1>Мои вакансии</h1>

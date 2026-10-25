@@ -301,7 +301,13 @@ function ChannelSettings({
 export function PartnerChannelsPage() {
   const { partners } = useSession()
   const load = useCallback((signal: AbortSignal) => partners!.list(signal), [partners])
-  const { result, reload, refresh } = useResource(load, 'partner-channels')
+  const { result, refresh, refetch, isRefreshing, refreshError } = useResource(
+    load,
+    'partner-channels',
+  )
+  const [checking, setChecking] = useState(false)
+  const [checkNotice, setCheckNotice] = useState('')
+  const checkLock = useRef(false)
   const [editingIds, setEditingIds] = useState<Set<number>>(new Set())
   const onEditing = useCallback(
     (id: number, active: boolean) =>
@@ -314,6 +320,28 @@ export function PartnerChannelsPage() {
     [],
   )
   useRefreshOnReturn(refresh, editingIds.size > 0)
+  async function checkConnection() {
+    if (checkLock.current || editingIds.size > 0) return
+    checkLock.current = true
+    setChecking(true)
+    setCheckNotice('')
+    try {
+      const checked = await refetch({ cancelRefetch: false })
+      if (!checked.isError && checked.data) {
+        const connected = checked.data.filter((channel) => !channel.removed).length
+        setCheckNotice(
+          connected
+            ? `Проверка завершена. Подключённых каналов и чатов: ${connected}.`
+            : 'Подключённые каналы пока не найдены. Проверьте, что бот добавлен в канал с правом публикации и вы вошли в кабинет с того же аккаунта MAX.',
+        )
+      }
+    } finally {
+      checkLock.current = false
+      setChecking(false)
+    }
+  }
+  const checkBusy = checking || isRefreshing || result.state === 'loading'
+  const checkError = result.state === 'error' ? result.error : refreshError
   return (
     <>
       <div className="page-heading">
@@ -340,13 +368,27 @@ export function PartnerChannelsPage() {
           включает рассылку.
         </p>
         <div className="partner-actions">
-          <Button variant="secondary" onClick={reload}>
-            Проверить подключение каналов
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={checkBusy || editingIds.size > 0}
+            aria-busy={checkBusy}
+            onClick={() => void checkConnection()}
+          >
+            {checkBusy ? 'Проверяем подключение…' : 'Проверить подключение каналов'}
           </Button>
         </div>
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          hidden={checkBusy || checkError !== undefined || !checkNotice}
+        >
+          {!checkBusy && checkError === undefined && checkNotice}
+        </div>
+        {!checkBusy && checkError !== undefined && <CandidateError error={checkError} />}
       </section>
       {result.state === 'loading' && <Loading />}
-      {result.state === 'error' && <CandidateError error={result.error} retry={reload} />}
       {result.state === 'ready' &&
         (result.data.length ? (
           <div className="partner-grid">

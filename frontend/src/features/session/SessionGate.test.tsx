@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SessionGate } from './SessionGate'
 import { useSession } from './context'
@@ -8,10 +8,9 @@ import { config } from '../../shared/config'
 vi.mock('../../shared/max/bridge', () => ({ loadBridge: vi.fn() }))
 vi.mock('../../shared/config', () => ({
   config: {
-    allowPreview: true,
     authPath: '/api/auth/max',
     apiBaseUrl: 'https://api.example.test',
-    botUrl: null,
+    botUrl: 'https://max.ru/test_bot',
   },
 }))
 // Test the gate independently of MAX UI's rendering implementation.
@@ -53,12 +52,13 @@ function Content() {
   )
 }
 beforeEach(() => {
-  config.allowPreview = true
+  window.history.replaceState(null, '', '/#WebAppData=signed-fixture&WebAppPlatform=web')
   config.authPath = '/api/auth/max'
   window.WebApp = undefined
   vi.mocked(loadBridge).mockResolvedValue(bridge)
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(credentials))))
 })
+afterEach(() => window.history.replaceState(null, '', '/'))
 describe('launch and authorization states', () => {
   it('does not expire the session when the public benchmark endpoint rejects a request', async () => {
     const fetcher = vi
@@ -110,28 +110,36 @@ describe('launch and authorization states', () => {
     expect(screen.getByText('Подключаем рабочее пространство')).toBeInTheDocument()
     expect(await screen.findByText('Рабочее пространство: Мой кабинет; max')).toBeInTheDocument()
   })
-  it('requires explicit preview choice outside MAX without calling backend', async () => {
+  it('does not expose private content when the MAX bridge has no initData', async () => {
     vi.mocked(loadBridge).mockResolvedValue({ ...bridge, initData: '' })
     render(
       <SessionGate>
         <Content />
       </SessionGate>,
     )
-    fireEvent.click(await screen.findByRole('button', { name: 'Открыть демо' }))
-    expect(
-      await screen.findByText('Рабочее пространство: Демо-кабинет; preview'),
-    ).toBeInTheDocument()
+    await screen.findByRole('link', { name: 'Перейти в MAX' })
+    expect(screen.queryByRole('button', { name: 'Открыть демо' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Рабочее пространство:/)).not.toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalled()
+    expect(loadBridge).toHaveBeenCalled()
   })
-  it('does not offer preview in production configuration', async () => {
-    config.allowPreview = false
+  it('shows the public welcome page without demo access outside MAX', () => {
+    window.history.replaceState(null, '', '/')
     vi.mocked(loadBridge).mockResolvedValue({ ...bridge, initData: '' })
     render(
       <SessionGate>
         <Content />
       </SessionGate>,
     )
-    await screen.findByText('Вход в Сезон')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Новый сезон.')
+    expect(screen.getByRole('link', { name: 'Перейти в MAX' })).toHaveAttribute(
+      'href',
+      config.botUrl,
+    )
+    expect(screen.getByTitle('QR-код для перехода в бот Сезон в MAX')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'О нас' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Частые вопросы' })).toBeInTheDocument()
+    expect(loadBridge).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Открыть демо' })).not.toBeInTheDocument()
     expect(fetch).not.toHaveBeenCalled()
   })

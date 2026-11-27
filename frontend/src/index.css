@@ -932,18 +932,6 @@ a.primary-button {
   gap: 12px;
   margin-top: 24px;
 }
-.preview-entry {
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
-  margin-top: 8px;
-}
-.preview-entry p {
-  font-size: 12px;
-  margin-bottom: 12px;
-}
-.preview-entry button {
-  width: 100%;
-}
 .entry-footer {
   grid-column: 1 / -1;
   font-size: 12px;

@@ -16,6 +16,8 @@ import { createTeamRepository } from '../team/api'
 import { createSubscriptionRepository } from '../subscriptions/api'
 import { createPartnerRepository } from '../partners/api'
 import { ResourceProvider } from '../../shared/api/ResourceProvider'
+import { hasMaxLaunch } from './launch'
+import { WelcomePage } from './WelcomePage'
 
 type Issue =
   | 'outside'
@@ -55,7 +57,9 @@ const messages: Record<Issue, [string, string]> = {
 }
 
 export function SessionGate({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<State>({ kind: 'loading' })
+  const [state, setState] = useState<State>(() =>
+    hasMaxLaunch() ? { kind: 'loading' } : { kind: 'issue', issue: 'outside' },
+  )
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
@@ -63,6 +67,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
       if (!controller.signal.aborted) setState(next)
     }
     async function start() {
+      if (!hasMaxLaunch()) {
+        update({ kind: 'issue', issue: 'outside' })
+        return
+      }
       let bridge
       try {
         bridge = await loadBridge()
@@ -117,24 +125,19 @@ export function SessionGate({ children }: { children: ReactNode }) {
     return () => controller.abort()
   }, [attempt])
 
-  async function openPreview() {
-    if (!import.meta.env.DEV) return
-    if (!config.allowPreview || window.WebApp?.initData) return
-    const { createPreviewSession } = await import('../../mocks/session')
-    setState({ kind: 'ready', session: createPreviewSession() })
-  }
   if (state.kind === 'ready')
     return (
       <SessionContext value={state.session}>
         <ResourceProvider>{children}</ResourceProvider>
       </SessionContext>
     )
+  if (state.kind === 'issue' && state.issue === 'outside') {
+    return <WelcomePage />
+  }
   const isLoading = state.kind === 'loading'
   const message = isLoading
     ? ['Подключаем рабочее пространство', 'Проверяем запуск в MAX. Это займёт несколько секунд.']
     : messages[state.issue]
-  const canPreview =
-    config.allowPreview && state.kind === 'issue' && ['outside', 'bridge'].includes(state.issue)
   return (
     <main className="entry-page">
       <div className="entry-brand">
@@ -189,14 +192,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
             >
               Повторить подключение
             </Button>
-            {canPreview && (
-              <div className="preview-entry">
-                <p>Локальный просмотр интерфейса без входа и отправки данных.</p>
-                <Button className="primary-button" onClick={() => void openPreview()}>
-                  Открыть демо <ArrowRight size={18} />
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </section>

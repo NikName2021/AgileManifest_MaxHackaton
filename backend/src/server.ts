@@ -13,6 +13,7 @@ import { registerTeamRoutes } from './team/routes.js';
 import { registerPosterRoutes } from './vacancies/posterRoutes.js';
 import { registerSubscriptionRoutes } from './subscriptions/routes.js';
 import { registerChannelRoutes } from './channels/routes.js';
+import { registerTrudvsemRoutes } from './trudvsem/routes.js';
 import { startChannelDigests } from './channels/service.js';
 import { setShift, startShiftReminders } from './shifts/service.js';
 import { normalizeRegion } from './regions/dictionary.js';
@@ -68,6 +69,7 @@ registerTeamRoutes(app);
 registerPosterRoutes(app);
 registerSubscriptionRoutes(app);
 registerChannelRoutes(app);
+registerTrudvsemRoutes(app);
 
 // Ссылка для ручной пересылки — в том числе для карточек, отправленных до появления ссылки в тексте.
 // null — вакансия не опубликована или username бота неизвестен.

@@ -75,6 +75,14 @@ export function findContactLike(text: string): ContactLikeKind | null {
   return null;
 }
 
+// Вырезать ссылки, телефоны, почту и @ники из чужого текста (импорт вакансий с «Работы России»):
+// там контакты в описании — норма, а у нас они идут только в поле контакта.
+export function removeContactLike(text: string): string {
+  let result = text;
+  for (const { re } of CONTACT_LIKE) result = result.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'), ' ');
+  return result;
+}
+
 const CONTACT_LIKE_RU: Record<ContactLikeKind, string> = {
   link: 'ссылку',
   phone: 'номер телефона',

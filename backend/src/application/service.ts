@@ -39,8 +39,8 @@ export function funnelButtons(applicationId: number): InlineButton[][] {
 
 // Откуда пришёл отклик: card — кнопка на карточке в чате, link — ссылка без метки, qr — QR-объявление,
 // subscription — рассылка по подписке, channel — канал партнёра, miniapp — мини-приложение,
-// team — ответ на приглашение «Моей бригады».
-export type ApplicationSource = 'card' | 'link' | 'qr' | 'subscription' | 'channel' | 'miniapp' | 'team';
+// team — ответ на приглашение «Моей бригады»; trudvsem — письмо об отклике с «Работы России».
+export type ApplicationSource = 'card' | 'link' | 'qr' | 'subscription' | 'channel' | 'miniapp' | 'team' | 'trudvsem';
 
 export type CreateApplicationError = 'not_found' | 'vacancy_unavailable' | 'self_application_forbidden' | 'already_applied';
 

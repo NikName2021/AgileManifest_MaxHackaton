@@ -1643,6 +1643,207 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/trudvsem/company-vacancies:
+    get:
+      summary: >
+        Вакансии компании на «Работе России» по ИНН или ОГРН (открытые данные портала) — для импорта
+        в «Сезон». importedVacancyId — уже импортированная вакансия этого работодателя. Портал
+        отвечает медленно (до 15–25 с) — показывайте загрузку.
+      operationId: previewTrudvsemCompany
+      parameters:
+        - name: company
+          in: query
+          schema: { type: string, maxLength: 20 }
+          description: ИНН (10/12 цифр) или ОГРН (13/15 цифр); не передан — ИНН из прошлого импорта
+      responses:
+        '200':
+          description: Вакансии компании (до 50)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, items]
+                properties:
+                  company:
+                    type: object
+                    nullable: true
+                    properties:
+                      name: { type: string, nullable: true }
+                      inn: { type: string, nullable: true }
+                      ogrn: { type: string, nullable: true }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [externalId, title, salaryMin, salaryMax, region, category, externalUrl, importedVacancyId]
+                      properties:
+                        externalId: { type: string }
+                        title: { type: string }
+                        salaryMin: { type: integer, nullable: true }
+                        salaryMax: { type: integer, nullable: true }
+                        region: { type: string }
+                        category: { type: string, description: Сфера из справочника «Сезона» }
+                        externalUrl: { type: string, nullable: true }
+                        importedVacancyId: { type: integer, nullable: true }
+        '400':
+          description: Неверный ИНН / ОГРН (поле company)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: «Работа России» недоступна (upstream_error)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/vacancies/import/trudvsem:
+    post:
+      summary: >
+        Импорт вакансий компании с «Работы России» черновиками «Сезона». Данные заново берутся с
+        портала на сервере. Контакты из текста вырезаются (они идут в contact_info), сфера — из
+        справочника, условия графика превращаются в бейджи, описание укорачивается под лимит
+        карточки MAX. Повторный импорт дублей не создаёт. Черновик дальше публикуется обычным
+        POST /api/vacancies/{id}/publish.
+      operationId: importTrudvsemVacancies
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                company: { type: string, maxLength: 20, description: 'ИНН или ОГРН; не передан — ИНН из прошлого импорта' }
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items: { type: string }
+                  description: externalId из предпросмотра; не передан — все ещё не импортированные
+      responses:
+        '201':
+          description: Результат импорта
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [created, skipped]
+                properties:
+                  created:
+                    type: array
+                    items: { $ref: '#/components/schemas/Vacancy' }
+                  skipped:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        externalId: { type: string }
+                        reason: { type: string, enum: [already_imported, not_found, invalid] }
+        '400':
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: «Работа России» недоступна (upstream_error)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/me/inbound-email:
+    get:
+      summary: >
+        Персональный адрес для писем об откликах с «Работы России» (Email-to-Funnel): работодатель
+        добавляет его в уведомления личного кабинета портала, и отклики попадают в воронку «Сезона»
+        с source = trudvsem. enabled = false — функция не настроена на сервере.
+      operationId: getInboundEmail
+      responses:
+        '200':
+          description: Адрес
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboundEmailAddress' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/me/inbound-email/rotate:
+    post:
+      summary: Выдать новый адрес; старый перестаёт принимать письма
+      operationId: rotateInboundEmail
+      responses:
+        '200':
+          description: Новый адрес
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboundEmailAddress' }
+        '401':
+          description: Не авторизован
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /webhook/inbound-email:
+    post:
+      summary: >
+        Почтовый шлюз (MTA или сервис входящей почты) пересылает письмо целиком. Заголовок
+        X-Inbound-Secret = INBOUND_EMAIL_SECRET. Получатель — из ?to= или заголовков Delivered-To /
+        X-Original-To / To. Принимаются только письма портала (trudvsem.ru); повтор по Message-ID не
+        обрабатывается. Кандидат заводится как внешний (без чата MAX), работодателю приходит
+        сообщение с кнопками воронки.
+      operationId: inboundEmailWebhook
+      security: []
+      parameters:
+        - { name: to, in: query, schema: { type: string }, description: Адрес получателя из конверта SMTP }
+        - { name: X-Inbound-Secret, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          message/rfc822:
+            schema: { type: string }
+          text/plain:
+            schema: { type: string }
+      responses:
+        '200':
+          description: Итог разбора
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [created, duplicate, unmatched, rejected] }
+                  reason: { type: string, enum: [unknown_recipient, not_trudvsem, vacancy_not_found] }
+                  applicationId: { type: integer }
+                  vacancyId: { type: integer }
+        '400':
+          description: Пустое тело
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Неверный секрет
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: INBOUND_EMAIL_SECRET не задан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/benchmark:
     get:
       summary: Рыночный бенчмарк по зарплате (кэш, потом trudvsem.ru «Работа России»)
@@ -1786,6 +1987,13 @@ components:
           type: string
           nullable: true
           description: Что написал работодатель, если сфера не распознана (category = «Другое»)
+        externalSource:
+          type: string
+          nullable: true
+          enum: [trudvsem, null]
+          description: Откуда импортирована вакансия; trudvsem — «Работа России»
+        externalId: { type: string, nullable: true, description: id вакансии на портале }
+        externalUrl: { type: string, nullable: true, description: Ссылка на вакансию на портале }
         schedule:
           type: string
           enum: [seasonal, temporary, permanent]
@@ -2359,6 +2567,13 @@ components:
         name: { type: string, example: Общепит, description: 'Это значение передаётся в category вакансии, подписки и канала' }
         emoji: { type: string, example: 🍽️ }
         vacancies: { type: integer, description: Опубликованных вакансий в сфере сейчас }
+
+    InboundEmailAddress:
+      type: object
+      required: [address, enabled]
+      properties:
+        address: { type: string, nullable: true, example: 3f9a1c2b4d5e6f70@in.sezon.example }
+        enabled: { type: boolean }
 
     CategorySuggestion:
       allOf:

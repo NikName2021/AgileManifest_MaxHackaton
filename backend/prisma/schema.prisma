@@ -14,6 +14,10 @@ model User {
   displayName        String?  @map("display_name")
   // Название компании работодателя для карточек и каталога; без него показывается displayName.
   companyName        String?  @map("company_name")
+  // ИНН компании для импорта вакансий с «Работы России» (trudvsem/import.ts).
+  companyInn         String?  @map("company_inn")
+  // Персональный адрес для писем об откликах с «Работы России» (<token>@INBOUND_EMAIL_DOMAIN).
+  inboundEmailToken  String?  @unique @map("inbound_email_token")
   phone              String?
   // Контакт для предзаполнения формы отклика; не путать с phone (номер из MAX).
   applicationContact String?  @map("application_contact")
@@ -43,6 +47,10 @@ model Vacancy {
   category        String
   // Что написал работодатель, если сфера не распознана и вакансия отнесена к «Другое».
   categoryDetail  String?   @map("category_detail")
+  // Откуда импортирована вакансия: trudvsem — «Работа России» (externalId — её id на портале).
+  externalSource  String?   @map("external_source")
+  externalId      String?   @map("external_id")
+  externalUrl     String?   @map("external_url")
   schedule        String
   salaryMin       Int?      @map("salary_min")
   salaryMax       Int?      @map("salary_max")
@@ -71,6 +79,7 @@ model Vacancy {
   applications Application[]
   teamInvites  TeamInvite[]
 
+  @@unique([employerUserId, externalSource, externalId])
   // GET /api/jobs
   @@index([status, createdAt(sort: Desc), id(sort: Desc)])
   // Фильтр каталога ?badges= (оператор @>).
@@ -267,4 +276,19 @@ model CategoryMiss {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("category_misses")
+}
+
+// Письма об откликах, пришедшие на персональный адрес работодателя (trudvsem/inboundEmail.ts).
+// Текст письма не храним — только итог разбора; messageId защищает от повторной обработки.
+model InboundEmail {
+  id             Int      @id @default(autoincrement())
+  messageId      String   @unique @map("message_id")
+  employerUserId Int?     @map("employer_user_id")
+  // created | duplicate | unmatched | rejected
+  status         String
+  reason         String?
+  applicationId  Int?     @map("application_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("inbound_emails")
 }

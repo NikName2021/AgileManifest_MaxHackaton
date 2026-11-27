@@ -26,4 +26,9 @@ export const config = {
   frontendOrigin: process.env.FRONTEND_ORIGIN,
   // Сколько разных людей должны подтвердить выход на работу, чтобы работодатель стал «надёжным».
   trustedEmployerMinHires: Number(process.env.TRUSTED_EMPLOYER_MIN_HIRES ?? 5),
+  // Входящая почта об откликах с «Работы России»: домен персональных адресов (<token>@домен; MX
+  // домена ведёт на почтовый шлюз) и секрет, с которым шлюз вызывает /webhook/inbound-email.
+  // Не заданы — функция выключена.
+  inboundEmailDomain: process.env.INBOUND_EMAIL_DOMAIN?.trim() || null,
+  inboundEmailSecret: process.env.INBOUND_EMAIL_SECRET?.trim() || '',
 };
